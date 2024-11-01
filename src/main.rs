@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
+use fundsp::hacker::*;
 use macroquad::prelude::*;
 
 #[macroquad::main("Synth Tracker")]
@@ -15,14 +16,19 @@ async fn main() {
         .expect("no supported output config")
         .with_max_sample_rate()
         .into();
-    let sample_rate = config.sample_rate.0 as f32;
-    let mut phase = 0;
+    let mut osc = sine_hz(440.0);
+    osc.set_sample_rate(config.sample_rate.0 as f64);
     let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
-            for sample in data.iter_mut() {
-                *sample = (((phase as f32) / sample_rate * 440.0) % 2.0 - 1.0) * 0.1;
-                phase += 1;
+            // there's probably a better way to do this
+            let mut i = 0;
+            let len = data.len();
+            while i < len {
+                let (l, r) = osc.get_stereo();
+                data[i] = l;
+                data[i+1] = r;
+                i += 2;
             }
         },
         move |err| {
