@@ -1,11 +1,16 @@
 #![windows_subsystem = "windows"]
 
+use midir::{MidiInput};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use macroquad::prelude::*;
 
 #[macroquad::main("Synth Tracker")]
 async fn main() {
+    // init midi
+    let midi_in = MidiInput::new("midir test input").unwrap();
+    let ports: Vec<String> = midi_in.ports().iter().map(|p| midi_in.port_name(p).unwrap()).collect();
+
     // init audio
     let host = cpal::default_host();
     let device = host.default_output_device()
@@ -46,7 +51,9 @@ async fn main() {
         draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
         draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
 
-        draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
+        for (i, port) in ports.iter().enumerate() {
+            draw_text(port, 20.0, 20.0 * (i + 1) as f32, 30.0, DARKGRAY);
+        }
 
         next_frame().await
     }
