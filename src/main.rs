@@ -1,4 +1,11 @@
-#![windows_subsystem = "windows"]
+// disable console in windows release builds
+#![cfg_attr(
+    all(
+        target_os = "windows",
+        not(debug_assertions),
+    ),
+    windows_subsystem = "windows"
+)]
 
 use midir::{MidiInput};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
