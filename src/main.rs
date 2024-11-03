@@ -1,21 +1,40 @@
 // disable console in windows release builds
-#![cfg_attr(
-    all(
-        target_os = "windows",
-        not(debug_assertions),
-    ),
-    windows_subsystem = "windows"
-)]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use midir::{MidiInput};
+use midir::MidiInput;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
-use macroquad::prelude::*;
+use eframe::egui;
 
-#[macroquad::main("Synth Tracker")]
-async fn main() {
+const APP_NAME: &str = "Synth Tracker";
+
+struct MyApp {
+    ports: Vec<String>,
+    env_input: Shared,
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("MIDI input ports:");
+            for port in self.ports.iter() {
+                ui.label(port);
+            }
+            ctx.input(|input| {
+                if input.key_pressed(egui::Key::Space) {
+                    self.env_input.set(1.0);
+                }
+                if input.key_released(egui::Key::Space) {
+                    self.env_input.set(0.0);
+                }
+            })
+        });
+    }
+}
+
+fn main() -> eframe::Result {
     // init midi
-    let midi_in = MidiInput::new("midir test input").unwrap();
+    let midi_in = MidiInput::new(&format!("{} input", APP_NAME)).unwrap();
     let ports: Vec<String> = midi_in.ports().iter().map(|p| midi_in.port_name(p).unwrap()).collect();
     let port = &midi_in.ports()[0];
 
@@ -61,7 +80,7 @@ async fn main() {
         let f = f.clone();
         _conn_in = midi_in.connect(
             port,
-            "synth tracker",
+            APP_NAME,
             move |_, message, _| {
                 match message[0] & 0xf0 {
                     0b10000000 => {
@@ -81,38 +100,19 @@ async fn main() {
         println!("listening on {}", ports[0]);
     }
 
-    // main loop
-    loop {
-        // handle input
-        for key in get_keys_pressed().iter() {
-            match key {
-                KeyCode::Key0 => f.set(27.5),
-                KeyCode::Key1 => f.set(55.0),
-                KeyCode::Key2 => f.set(110.0),
-                KeyCode::Key3 => f.set(220.0),
-                KeyCode::Key4 => f.set(440.0),
-                KeyCode::Space => env_input.set(1.0),
-                _ => (),
-            }
-        }
-        for key in get_keys_released().iter() {
-            match key {
-                KeyCode::Space => env_input.set(0.0),
-                _ => (),
-            }
-        }
-
-        // draw
-        clear_background(RED);
-
-        draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
-        draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
-        draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
-
-        for (i, port) in ports.iter().enumerate() {
-            draw_text(port, 20.0, 20.0 * (i + 1) as f32, 30.0, DARKGRAY);
-        }
-
-        next_frame().await
-    }
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        APP_NAME,
+        options,
+        Box::new(|_cc| {
+            // This gives us image support:
+            Ok(Box::new(MyApp {
+                ports: ports,
+                env_input: env_input,
+            }))
+        }),
+    )
 }
