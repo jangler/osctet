@@ -41,7 +41,7 @@ impl Nominal {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Tuning {
     scale: Vec<f32>,
     arrow_steps: u8,

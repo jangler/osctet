@@ -5,36 +5,37 @@ use midir::MidiInput;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui;
+use pitch::Tuning;
 
 pub mod pitch;
-pub mod keyboard;
+pub mod input;
 
 const APP_NAME: &str = "Synth Tracker";
 
 struct MyApp {
-    ports: Vec<String>,
+    tuning: pitch::Tuning,
+    text: Vec<String>,
     f: Shared,
     env_input: Shared,
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let tuning = pitch::Tuning::divide(2.0, 12, 1).unwrap();
         let octave = 4;
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("MIDI input ports:");
-            for port in self.ports.iter() {
-                ui.label(port);
+            for line in self.text.iter() {
+                ui.label(line);
             }
             ctx.input(|input| {
                 for evt in input.events.iter() {
                     match evt {
                         egui::Event::Key { physical_key, pressed, .. } => {
                             if let Some(key) = physical_key {
-                                if let Some(note) = keyboard::note_from_key(key) {
+                                if let Some(note) = input::note_from_key(key, &self.tuning, octave) {
                                     if *pressed {
-                                        let note = pitch::Note { equave: octave + note.equave, ..note };
-                                        self.f.set(midi_hz(tuning.midi_pitch(&note)));
+                                        self.text.push(format!("{}", &note));
+                                        self.f.set(midi_hz(self.tuning.midi_pitch(&note)));
                                         self.env_input.set(1.0);
                                     } else {
                                         self.env_input.set(0.0);
@@ -92,10 +93,12 @@ fn main() -> eframe::Result {
     stream.play().unwrap();
 
     // handle MIDI input
+    let tuning = Tuning::divide(2.0, 5, 1).unwrap();
     let _conn_in;
     if ports.len() > 0 {
         let env_input = env_input.clone();
         let f = f.clone();
+        let tuning = tuning.clone();
         _conn_in = midi_in.connect(
             port,
             APP_NAME,
@@ -107,7 +110,8 @@ fn main() -> eframe::Result {
                     },
                     0b10010000 => {
                         // note on
-                        f.set(midi_hz(message[1] as f32));
+                        let note = input::note_from_midi(message[1] as i8, &tuning);
+                        f.set(midi_hz(tuning.midi_pitch(&note)));
                         env_input.set(1.0);
                     },
                     _ => (),
@@ -128,9 +132,10 @@ fn main() -> eframe::Result {
         Box::new(|_cc| {
             // This gives us image support:
             Ok(Box::new(MyApp {
-                ports: ports,
-                f: f,
-                env_input: env_input,
+                tuning,
+                text: ports,
+                f,
+                env_input,
             }))
         }),
     )
