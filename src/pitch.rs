@@ -10,7 +10,7 @@ fn cents(ratio: f32) -> f32 {
 }
 
 #[derive(Clone, Copy)]
-enum Nominal {
+pub enum Nominal {
     A, B, C, D, E, F, G
 }
 
@@ -42,13 +42,13 @@ impl Nominal {
 }
 
 #[derive(Debug, PartialEq)]
-struct Tuning {
+pub struct Tuning {
     scale: Vec<f32>,
     arrow_steps: u8,
 }
 
 impl Tuning {
-    fn divide(ratio: f32, steps: u16, arrow_steps: u8) -> Result<Tuning> {
+    pub fn divide(ratio: f32, steps: u16, arrow_steps: u8) -> Result<Tuning> {
         if ratio <= 1.0 {
             bail!("ratio must be greater than 1");
         }
@@ -75,28 +75,34 @@ impl Tuning {
         octaves * self.scale.len() as i32 + fifths * self.generator_steps()
     }
 
-    fn midi_pitch(&self, pitch: &Pitch) -> f32 {
+    pub fn midi_pitch(&self, note: &Note) -> f32 {
         let equave = self.scale.last().unwrap() / 100.0;
-        let steps = self.nominal_steps(pitch.nominal) +
-            self.sharp_steps() * pitch.demisharps as i32 / 2 +
-            self.arrow_steps as i32 * pitch.arrows as i32;
+        let steps = self.nominal_steps(note.nominal) +
+            self.sharp_steps() * note.demisharps as i32 / 2 +
+            self.arrow_steps as i32 * note.arrows as i32;
         let len = self.scale.len() as i32;
         let scale_index = (steps - 1).rem_euclid(len) as usize;
         let step_equaves = (steps - 1).div_euclid(len);
         REFERENCE_MIDI_PITCH +
-            equave * (pitch.equave as i32 - 4 + step_equaves) as f32
+            equave * (note.equave as i32 - 4 + step_equaves) as f32
             + self.scale[scale_index] / 100.0
     }
 }
 
-struct Pitch {
-    arrows: i8,
-    nominal: Nominal,
-    demisharps: i8,
-    equave: i8,
+pub struct Note {
+    pub arrows: i8,
+    pub nominal: Nominal,
+    pub demisharps: i8,
+    pub equave: i8,
 }
 
-impl fmt::Display for Pitch {
+impl Note {
+    pub fn new(arrows: i8, nominal: Nominal, demisharps: i8, equave: i8) -> Note {
+        Note { arrows, nominal, demisharps, equave }
+    }
+}
+
+impl fmt::Display for Note {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let arrow_str = "^".repeat(max(0, self.arrows) as usize) +
             &"v".repeat(max(0, -self.arrows) as usize);
@@ -120,7 +126,7 @@ impl fmt::Display for Pitch {
 mod tests {
     use super::*;
     
-    const A4: Pitch = Pitch {
+    const A4: Note = Note {
         arrows: 0,
         nominal: Nominal::A,
         equave: 4,
@@ -176,19 +182,19 @@ mod tests {
     fn test_tuning_midi_pitch() {
         let t = Tuning::divide(2.0, 12, 1).unwrap();
         assert_eq!(t.midi_pitch(&A4), 69.0);
-        assert_eq!(t.midi_pitch(&Pitch { arrows: 1, ..A4 }), 70.0);
-        assert_eq!(t.midi_pitch(&Pitch { nominal: Nominal::B, ..A4 }), 71.0);
-        assert_eq!(t.midi_pitch(&Pitch { nominal: Nominal::C, ..A4 }), 60.0);
-        assert_eq!(t.midi_pitch(&Pitch { equave: 5, ..A4 }), 81.0);
-        assert_eq!(t.midi_pitch(&Pitch { demisharps: 1, ..A4 }), 69.0);
-        assert_eq!(t.midi_pitch(&Pitch { demisharps: -1, ..A4 }), 69.0);
-        assert_eq!(t.midi_pitch(&Pitch { demisharps: 2, ..A4 }), 70.0);
+        assert_eq!(t.midi_pitch(&Note { arrows: 1, ..A4 }), 70.0);
+        assert_eq!(t.midi_pitch(&Note { nominal: Nominal::B, ..A4 }), 71.0);
+        assert_eq!(t.midi_pitch(&Note { nominal: Nominal::C, ..A4 }), 60.0);
+        assert_eq!(t.midi_pitch(&Note { equave: 5, ..A4 }), 81.0);
+        assert_eq!(t.midi_pitch(&Note { demisharps: 1, ..A4 }), 69.0);
+        assert_eq!(t.midi_pitch(&Note { demisharps: -1, ..A4 }), 69.0);
+        assert_eq!(t.midi_pitch(&Note { demisharps: 2, ..A4 }), 70.0);
     }
 
     #[test]
-    fn test_pitch_display() {
+    fn test_note_display() {
         assert_eq!(format!("{}", A4), "A4");
-        assert_eq!(format!("{}", Pitch { demisharps: 2, ..A4 }), "A#4");
-        assert_eq!(format!("{}", Pitch { arrows: -1, demisharps: 2, ..A4 }), "vA#4");
+        assert_eq!(format!("{}", Note { demisharps: 2, ..A4 }), "A#4");
+        assert_eq!(format!("{}", Note { arrows: -1, demisharps: 2, ..A4 }), "vA#4");
     }
 }
