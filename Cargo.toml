@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 eframe = "0.29.1"
 cpal = "0.15.3"
-fundsp = "0.20.0"
+fundsp = { version = "0.20.0", default-features = false, features = ["std"] }
 midir = "0.10.0"
