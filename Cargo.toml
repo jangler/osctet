@@ -8,3 +8,4 @@ eframe = "0.29.1"
 cpal = "0.15.3"
 fundsp = { version = "0.20.0", default-features = false, features = ["std"] }
 midir = "0.10.0"
+anyhow = "1.0.92"

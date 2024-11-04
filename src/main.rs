@@ -6,6 +6,8 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui;
 
+pub mod pitch;
+
 const APP_NAME: &str = "Synth Tracker";
 
 struct MyApp {
