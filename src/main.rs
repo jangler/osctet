@@ -155,16 +155,21 @@ impl App {
     }
 
     fn handle_midi(&self, message: &[u8]) {
+        // FIXME: invalid MIDI could crash this
         match message[0] & 0xf0 {
             0b10000000 => {
                 // note off
                 self.gate.set(0.0);
             },
             0b10010000 => {
-                // note on
-                let note = input::note_from_midi(message[1] as i8, &self.tuning);
-                self.f.set(midi_hz(self.tuning.midi_pitch(&note)));
-                self.gate.set(1.0);
+                // note on, unless velocity is zero
+                if message[2] != 0 {
+                    let note = input::note_from_midi(message[1] as i8, &self.tuning);
+                    self.f.set(midi_hz(self.tuning.midi_pitch(&note)));
+                    self.gate.set(1.0);
+                } else {
+                    self.gate.set(0.0);
+                }
             },
             _ => (),
         }
