@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::mpsc::{channel, Sender, Receiver};
-use std::error::Error;
 use std::collections::VecDeque;
 
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
@@ -11,8 +10,8 @@ use fundsp::hacker::*;
 use eframe::egui;
 use anyhow::{bail, Result};
 
-pub mod pitch;
-pub mod input;
+mod pitch;
+mod input;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -98,7 +97,7 @@ struct App {
 
 impl App {
     fn new(f: Shared, gate: Shared) -> Self {
-        let mut app = App {
+        let app = App {
             tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
             messages: MessageBuffer::new(100),
             f,
@@ -140,7 +139,9 @@ impl App {
                             &port,
                             APP_NAME,
                             move |_, message, tx| {
-                                tx.send(message.to_vec());
+                                if let Err(e) = tx.send(message.to_vec()) {
+                                    println!("{}", e);
+                                }
                                 ctx.request_repaint();
                             },
                             tx,
@@ -216,7 +217,10 @@ impl eframe::App for App {
                                 self.messages.push(format!("Connected to {} for MIDI input", name));
                             });
                         },
-                        Err(e) => self.messages.report(&e),
+                        Err(e) => {
+                            self.midi.port_selection = None;
+                            self.messages.report(&e);
+                        },
                     }
                 }
             }
