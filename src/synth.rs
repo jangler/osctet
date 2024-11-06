@@ -2,6 +2,7 @@ use core::f64;
 use std::collections::HashMap;
 
 use fundsp::hacker::*;
+use funutd::math::wave;
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum KeyOrigin {
@@ -25,11 +26,44 @@ pub enum PlayMode {
 }
 
 impl PlayMode {
+    pub const VARIANTS: [PlayMode; 3] = [Self::Poly, Self::Mono, Self::SingleTrigger];
+
     pub fn name(&self) -> &str {
         match self {
             Self::Poly => "Poly",
             Self::Mono => "Mono",
             Self::SingleTrigger => "Single trigger",
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum Waveform {
+    Sawtooth,
+    Pulse,
+    Triangle,
+    Sine,
+}
+
+impl Waveform {
+    pub const VARIANTS: [Waveform; 4] = [Self::Sawtooth, Self::Pulse, Self::Triangle, Self::Sine];
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Sawtooth => "Sawtooth",
+            Self::Pulse => "Pulse",
+            Self::Triangle => "Triangle",
+            Self::Sine => "Sine",
+        }
+    }
+
+    fn make_node(&self, freq: &Shared, glide_time: f32, duty: &Shared) -> Net {
+        // have to compensate for different volumes. the sine is so loud!
+        match self {
+            Self::Sawtooth => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> saw())),
+            Self::Pulse => Net::wrap(Box::new((var(freq) >> follow(glide_time) | var(duty)) >> pulse())),
+            Self::Triangle => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> triangle() * 2.0)),
+            Self::Sine => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> sine() * 0.5)),
         }
     }
 }
@@ -82,17 +116,17 @@ impl Synth {
 }
 
 pub struct Oscillator {
-    pub gain: Shared,
+    pub level: Shared,
     pub env: ADSR,
+    pub waveform: Waveform,
 }
 
 impl Oscillator {
     fn new() -> Self {
-        let gain = shared(0.2);
-        let env = ADSR::new();
         Self {
-            gain,
-            env,
+            level: shared(0.5),
+            env: ADSR::new(),
+            waveform: Waveform::Sawtooth,
         }
     }
 }
@@ -107,16 +141,17 @@ pub struct ADSR {
 impl ADSR {
     fn new() -> Self {
         Self {
-            attack: 0.5,
-            decay: 0.5,
-            sustain: 0.5,
-            release: 0.5,
+            attack: 0.01,
+            decay: 1.0,
+            sustain: 1.0,
+            release: 0.01,
         }
     }
 }
 
 struct Voice {
     freq: Shared,
+    duty: Shared,
     gate: Shared,
     release_time: f32,
     event_id: EventId,
@@ -125,14 +160,16 @@ struct Voice {
 impl Voice {
     fn new(pitch: f32, glide_time: f32, oscs: &[Oscillator], seq: &mut Sequencer) -> Self {
         let freq = shared(midi_hz(pitch));
+        let duty = shared(0.5);
         let gate = shared(1.0);
         let f = |i: usize| {
-            (var(&freq) >> follow(glide_time) >> saw()) * var(&oscs[i].gain) *
+            (oscs[i].waveform.make_node(&freq, glide_time, &duty)) * var(&oscs[i].level) *
                 (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release))
         };
         let unit = f(0);
         Self {
             freq,
+            duty,
             gate,
             release_time: oscs[0].env.release,
             event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(unit)),

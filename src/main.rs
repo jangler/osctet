@@ -1,6 +1,7 @@
 // disable console in windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::ops::RangeInclusive;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
 
@@ -8,9 +9,9 @@ use config::Config;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
-use eframe::egui;
+use eframe::egui::{self, Ui};
 use anyhow::{bail, Result};
-use synth::{Key, KeyOrigin, PlayMode, Synth};
+use synth::{Key, KeyOrigin, PlayMode, Synth, Waveform};
 
 mod pitch;
 mod input;
@@ -184,7 +185,6 @@ impl App {
             loop {
                 match rx.try_recv() {
                     Ok(v) => {
-
                         // FIXME: invalid MIDI could crash this
                         // FIXME: this shouldn't all be inlined here
                         match v[0] & 0xf0 {
@@ -220,6 +220,14 @@ impl App {
                 }
             }
         }
+    }
+}
+
+fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &str) {
+    let mut val = var.value();
+    ui.add(egui::Slider::new(&mut val, range).text(text));
+    if val != var.value() {
+        var.set_value(val);
     }
 }
 
@@ -274,13 +282,19 @@ impl eframe::App for App {
 
         // message panel
         egui::CentralPanel::default().show(ctx, |ui| {
-            // gain slider
-            let shared_gain = &self.synth.oscs[0].gain;
-            let mut gain = shared_gain.value();
-            ui.add(egui::Slider::new(&mut gain, 0.0..=1.0).text("Gain"));
-            if gain != shared_gain.value() {
-                shared_gain.set_value(gain);
-            }
+            // oscillator controlls
+            shared_slider(ui, &self.synth.oscs[0].level, 0.0..=1.0, "Level");
+            egui::ComboBox::from_label("Waveform")
+                .selected_text(self.synth.oscs[0].waveform.name())
+                .show_ui(ui, |ui| {
+                    for variant in Waveform::VARIANTS {
+                        ui.selectable_value(&mut self.synth.oscs[0].waveform, variant, variant.name());
+                    }
+                });
+            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.decay, 0.0..=10.0).text("Decay").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.sustain, 0.0..=1.0).text("Sustain"));
+            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.release, 0.0..=10.0).text("Release").logarithmic(true));
 
             // glide time slider
             // FIXME: this doesn't update voices that are already playing
@@ -290,7 +304,7 @@ impl eframe::App for App {
             egui::ComboBox::from_label("Play mode")
                 .selected_text(self.synth.play_mode.name())
                 .show_ui(ui, |ui| {
-                    for variant in [PlayMode::Poly, PlayMode::Mono, PlayMode::SingleTrigger] {
+                    for variant in PlayMode::VARIANTS {
                         ui.selectable_value(&mut self.synth.play_mode, variant, variant.name());
                     }
                 });
