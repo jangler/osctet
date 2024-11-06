@@ -4,6 +4,7 @@
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
 
+use config::Config;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
@@ -12,6 +13,7 @@ use anyhow::{bail, Result};
 
 mod pitch;
 mod input;
+mod config;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -95,19 +97,30 @@ struct App {
     gate: Shared,
     octave: i8,
     midi: Midi,
+    config: Config,
 }
 
 impl App {
     fn new(f: Shared, gate: Shared) -> Self {
-        let app = App {
+        let mut messages = MessageBuffer::new(100);
+        let config = match Config::load() {
+            Ok(c) => c,
+            Err(e) => {
+                messages.push(format!("Could not load config: {}", &e));
+                Config::default()
+            },
+        };
+        let mut midi = Midi::new();
+        midi.port_selection = config.default_midi_input.clone();
+        App {
             tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
-            messages: MessageBuffer::new(100),
+            messages,
             f,
             gate,
             octave: 4,
-            midi: Midi::new(),
-        };
-        app
+            midi,
+            config,
+        }
     }
 
     fn handle_ui_event(&mut self, evt: &egui::Event) {
@@ -204,11 +217,11 @@ impl eframe::App for App {
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             if self.midi.input.is_some() {
                 egui::ComboBox::from_label("MIDI input port")
-                    .selected_text(self.midi.port_name.clone().unwrap_or("".to_string()))
+                    .selected_text(self.midi.port_name.clone().unwrap_or("(none)".to_string()))
                     .show_ui(ui, |ui| {
                         let input = self.midi.input.as_ref().unwrap();
                         for p in input.ports() {
-                            let name = input.port_name(&p).unwrap_or(String::from(""));
+                            let name = input.port_name(&p).unwrap_or(String::from("(unknown)"));
                             ui.selectable_value(&mut self.midi.port_selection, Some(name.clone()), name);
                         }
                     });
@@ -223,6 +236,10 @@ impl eframe::App for App {
                             self.midi.port_name.as_ref().inspect(|name| {
                                 self.messages.push(format!("Connected to {} for MIDI input", name));
                             });
+                            self.config.default_midi_input = self.midi.port_name.clone();
+                            if let Err(e) = self.config.save() {
+                                self.messages.push(format!("Error saving config: {}", e));
+                            };
                         },
                         Err(e) => {
                             self.midi.port_selection = None;
