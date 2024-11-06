@@ -10,10 +10,12 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui;
 use anyhow::{bail, Result};
+use synth::Synth;
 
 mod pitch;
 mod input;
 mod config;
+mod synth;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -93,15 +95,14 @@ impl Midi {
 struct App {
     tuning: pitch::Tuning,
     messages: MessageBuffer,
-    f: Shared,
-    gate: Shared,
+    synth: Synth,
     octave: i8,
     midi: Midi,
     config: Config,
 }
 
 impl App {
-    fn new(f: Shared, gate: Shared) -> Self {
+    fn new(synth: Synth) -> Self {
         let mut messages = MessageBuffer::new(100);
         let config = match Config::load() {
             Ok(c) => c,
@@ -115,8 +116,7 @@ impl App {
         App {
             tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
             messages,
-            f,
-            gate,
+            synth,
             octave: 4,
             midi,
             config,
@@ -125,15 +125,17 @@ impl App {
 
     fn handle_ui_event(&mut self, evt: &egui::Event) {
         match evt {
-            egui::Event::Key { physical_key, pressed, .. } => {
+            egui::Event::Key { physical_key, pressed, repeat, .. } => {
                 if let Some(key) = physical_key {
                     if let Some(note) = input::note_from_key(key, &self.tuning, self.octave) {
-                        if *pressed {
+                        if *pressed && !*repeat {
                             self.messages.report(&note);
-                            self.f.set(midi_hz(self.tuning.midi_pitch(&note)));
-                            self.gate.set(1.0);
-                        } else {
-                            self.gate.set(0.0);
+                            for osc in self.synth.oscs.iter_mut() {
+                                osc.freq.set(midi_hz(self.tuning.midi_pitch(&note)));
+                            }
+                            self.synth.gate.set(1.0);
+                        } else if !*pressed {
+                            self.synth.gate.set(0.0);
                         }
                     }
                 }
@@ -169,24 +171,37 @@ impl App {
         }
     }
 
-    fn handle_midi(&self, message: &[u8]) {
-        // FIXME: invalid MIDI could crash this
-        match message[0] & 0xf0 {
-            0b10000000 => {
-                // note off
-                self.gate.set(0.0);
-            },
-            0b10010000 => {
-                // note on, unless velocity is zero
-                if message[2] != 0 {
-                    let note = input::note_from_midi(message[1] as i8, &self.tuning);
-                    self.f.set(midi_hz(self.tuning.midi_pitch(&note)));
-                    self.gate.set(1.0);
-                } else {
-                    self.gate.set(0.0);
+    fn handle_midi(&mut self) {
+        if let Some(rx) = &self.midi.rx {
+            loop {
+                match rx.try_recv() {
+                    Ok(v) => {
+                        // FIXME: invalid MIDI could crash this
+                        // FIXME: this shouldn't all be inlined here
+                        match v[0] & 0xf0 {
+                            0b10000000 => {
+                                // note off
+                                self.synth.gate.set(0.0);
+                            },
+                            0b10010000 => {
+                                // note on, unless velocity is zero
+                                if v[2] != 0 {
+                                    let note = input::note_from_midi(v[1] as i8, &self.tuning);
+                                    for osc in self.synth.oscs.iter_mut() {
+                                        osc.freq.set(midi_hz(self.tuning.midi_pitch(&note)));
+                                    }
+                                    self.synth.gate.set(1.0);
+                                } else {
+                                    self.synth.gate.set(0.0);
+                                }
+                            },
+                            _ => (),
+                        }
+                        self.messages.push(format!("Received MIDI message: {:?}", &v));
+                    },
+                    Err(_) => break,
                 }
-            },
-            _ => (),
+            }
         }
     }
 }
@@ -201,17 +216,7 @@ impl eframe::App for App {
         });
 
         // process MIDI input
-        if let Some(rx) = &self.midi.rx {
-            loop {
-                match rx.try_recv() {
-                    Ok(v) => {
-                        self.handle_midi(&v);
-                        self.messages.push(format!("Received MIDI message: {:?}", &v));
-                    },
-                    Err(_) => break,
-                }
-            }
-        }
+        self.handle_midi();
 
         // bottom panel
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
@@ -252,6 +257,12 @@ impl eframe::App for App {
 
         // message panel
         egui::CentralPanel::default().show(ctx, |ui| {
+            let shared_gain = &self.synth.oscs[0].gain;
+            let mut gain = shared_gain.value();
+            ui.add(egui::Slider::new(&mut gain, 0.0..=1.0).text("Gain"));
+            if gain != shared_gain.value() {
+                shared_gain.set_value(gain);
+            }
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for line in self.messages.iter() {
                     ui.label(line);
@@ -272,11 +283,10 @@ fn main() -> eframe::Result {
         .expect("no supported output config")
         .with_max_sample_rate()
         .into();
-    let f = shared(440.0);
-    let env_input = shared(0.0);
-    let mut osc = (var(&f) >> follow(0.01) >> saw() * 0.2) >>
-        moog_hz(1_000.0, 0.0) * (var(&env_input) >> adsr_live(0.1, 0.5, 0.5, 0.5));
-    osc.set_sample_rate(config.sample_rate.0 as f64);
+    let mut net = Net::new(0, 1);
+    let synth = Synth::new();
+    net.chain(synth.oscs[0].unit.to_owned());
+    net.set_sample_rate(config.sample_rate.0 as f64);
     let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
@@ -284,7 +294,7 @@ fn main() -> eframe::Result {
             let mut i = 0;
             let len = data.len();
             while i < len {
-                let (l, r) = osc.get_stereo();
+                let (l, r) = net.get_stereo();
                 data[i] = l;
                 data[i+1] = r;
                 i += 2;
@@ -305,8 +315,7 @@ fn main() -> eframe::Result {
         APP_NAME,
         options,
         Box::new(|_cc| {
-            // This gives us image support:
-            Ok(Box::new(App::new(f, env_input)))
+            Ok(Box::new(App::new(synth)))
         }),
     )
 }
