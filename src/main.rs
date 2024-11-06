@@ -10,7 +10,7 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui;
 use anyhow::{bail, Result};
-use synth::{Key, KeyOrigin, Synth};
+use synth::{Key, KeyOrigin, PlayMode, Synth};
 
 mod pitch;
 mod input;
@@ -274,12 +274,24 @@ impl eframe::App for App {
 
         // message panel
         egui::CentralPanel::default().show(ctx, |ui| {
+            // gain slider
             let shared_gain = &self.synth.oscs[0].gain;
             let mut gain = shared_gain.value();
             ui.add(egui::Slider::new(&mut gain, 0.0..=1.0).text("Gain"));
             if gain != shared_gain.value() {
                 shared_gain.set_value(gain);
             }
+
+            // play mode control
+            egui::ComboBox::from_label("Play mode")
+                .selected_text(self.synth.play_mode.name())
+                .show_ui(ui, |ui| {
+                    for variant in [PlayMode::Poly, PlayMode::Mono, PlayMode::SingleTrigger] {
+                        ui.selectable_value(&mut self.synth.play_mode, variant, variant.name());
+                    }
+                });
+
+            // message area
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for line in self.messages.iter() {
                     ui.label(line);

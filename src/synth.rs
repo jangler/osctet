@@ -17,8 +17,26 @@ pub struct Key {
     pub key: u8,
 }
 
+#[derive(PartialEq, Clone, Copy)]
+pub enum PlayMode {
+    Poly,
+    Mono,
+    SingleTrigger,
+}
+
+impl PlayMode {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Poly => "Poly",
+            Self::Mono => "Mono",
+            Self::SingleTrigger => "Single trigger",
+        }
+    }
+}
+
 pub struct Synth {
     pub oscs: [Oscillator; 1],
+    pub play_mode: PlayMode,
     voices: HashMap<Key, Voice>,
 }
 
@@ -27,11 +45,31 @@ impl Synth {
         Self {
             oscs: [Oscillator::new()],
             voices: HashMap::new(),
+            play_mode: PlayMode::Poly,
         }
     }
 
     pub fn note_on(&mut self, key: Key, pitch: f32, seq: &mut Sequencer) {
-        self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+        match self.play_mode {
+            PlayMode::Poly => {
+                self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+            },
+            PlayMode::Mono => {
+                for voice in self.voices.values_mut() {
+                    voice.off(seq);
+                }
+                self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+            },
+            PlayMode::SingleTrigger => {
+                if self.voices.is_empty() {
+                    self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+                } else {
+                    let voice = self.voices.drain().map(|(_, v)| v).next().unwrap();
+                    voice.freq.set(midi_hz(pitch));
+                    self.voices.insert(key, voice);
+                }
+            },
+        }
     }
 
     pub fn note_off(&mut self, key: Key, seq: &mut Sequencer) {
