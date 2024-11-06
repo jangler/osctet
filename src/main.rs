@@ -43,6 +43,8 @@ impl MessageBuffer {
 }
 
 struct Midi {
+    // Keep one input around for listing ports. If we need to connect, we'll
+    // create a new input just for that (see Boddlnagg/midir#90).
     input: Option<MidiInput>,
     port_name: Option<String>,
     port_selection: Option<String>,
@@ -139,9 +141,9 @@ impl App {
                             &port,
                             APP_NAME,
                             move |_, message, tx| {
-                                if let Err(e) = tx.send(message.to_vec()) {
-                                    println!("{}", e);
-                                }
+                                // ignore the error here, it probably just means that the user
+                                // changed ports
+                                let _ = tx.send(message.to_vec());
                                 ctx.request_repaint();
                             },
                             tx,
