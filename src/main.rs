@@ -11,7 +11,7 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Ui};
 use anyhow::{bail, Result};
-use synth::{Key, KeyOrigin, PlayMode, Synth, Waveform};
+use synth::{FilterType, Key, KeyOrigin, PlayMode, Synth, Waveform};
 
 mod pitch;
 mod input;
@@ -223,9 +223,9 @@ impl App {
     }
 }
 
-fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &str) {
+fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &str, log: bool) {
     let mut val = var.value();
-    ui.add(egui::Slider::new(&mut val, range).text(text));
+    ui.add(egui::Slider::new(&mut val, range).text(text).logarithmic(log));
     if val != var.value() {
         var.set_value(val);
     }
@@ -282,9 +282,22 @@ impl eframe::App for App {
 
         // message panel
         egui::CentralPanel::default().show(ctx, |ui| {
-            // oscillator controlls
-            shared_slider(ui, &self.synth.oscs[0].level, 0.0..=1.0, "Level");
-            shared_slider(ui, &self.synth.oscs[0].duty, 0.0..=1.0, "Duty");
+            // play mode control
+            egui::ComboBox::from_label("Play mode")
+                .selected_text(self.synth.play_mode.name())
+                .show_ui(ui, |ui| {
+                    for variant in PlayMode::VARIANTS {
+                        ui.selectable_value(&mut self.synth.play_mode, variant, variant.name());
+                    }
+                });
+
+            // glide time slider
+            // FIXME: this doesn't update voices that are already playing
+            ui.add(egui::Slider::new(&mut self.synth.glide_time, 0.0..=0.5).text("Glide"));
+
+            ui.add(egui::Label::new("Osc 1"));
+            shared_slider(ui, &self.synth.oscs[0].level, 0.0..=1.0, "Level", false);
+            shared_slider(ui, &self.synth.oscs[0].duty, 0.0..=1.0, "Duty", false);
             egui::ComboBox::from_label("Waveform")
                 .selected_text(self.synth.oscs[0].waveform.name())
                 .show_ui(ui, |ui| {
@@ -297,18 +310,22 @@ impl eframe::App for App {
             ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.sustain, 0.0..=1.0).text("Sustain"));
             ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.release, 0.0..=10.0).text("Release").logarithmic(true));
 
-            // glide time slider
-            // FIXME: this doesn't update voices that are already playing
-            ui.add(egui::Slider::new(&mut self.synth.glide_time, 0.0..=0.5).text("Glide"));
-
-            // play mode control
-            egui::ComboBox::from_label("Play mode")
-                .selected_text(self.synth.play_mode.name())
+            ui.add(egui::Label::new("Filter"));
+            egui::ComboBox::from_label("Type")
+                .selected_text(self.synth.filter.filter_type.name())
                 .show_ui(ui, |ui| {
-                    for variant in PlayMode::VARIANTS {
-                        ui.selectable_value(&mut self.synth.play_mode, variant, variant.name());
+                    for variant in FilterType::VARIANTS {
+                        ui.selectable_value(&mut self.synth.filter.filter_type, variant, variant.name());
                     }
                 });
+            shared_slider(ui, &self.synth.filter.cutoff, 0.0..=20_000.0, "Cutoff", false);
+            shared_slider(ui, &self.synth.filter.resonance, 0.1..=1.0, "Resonance", false);
+            shared_slider(ui, &self.synth.filter.key_tracking, 0.0..=1.0, "Key tracking", false);
+            shared_slider(ui, &self.synth.filter.env_level, -3.0..=3.0, "Envelope level", false);
+            ui.add(egui::Slider::new(&mut self.synth.filter.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.filter.env.decay, 0.0..=10.0).text("Decay").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.filter.env.sustain, 0.0..=1.0).text("Sustain"));
+            ui.add(egui::Slider::new(&mut self.synth.filter.env.release, 0.0..=10.0).text("Release").logarithmic(true));
 
             // message area
             egui::ScrollArea::vertical().show(ui, |ui| {

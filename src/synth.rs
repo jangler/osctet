@@ -2,7 +2,6 @@ use core::f64;
 use std::collections::HashMap;
 
 use fundsp::hacker::*;
-use funutd::math::wave;
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum KeyOrigin {
@@ -68,8 +67,30 @@ impl Waveform {
     }
 }
 
+#[derive(PartialEq, Clone, Copy)]
+pub enum FilterType {
+    Lowpass,
+    Highpass,
+    Bandpass,
+    Notch,
+}
+
+impl FilterType {
+    pub const VARIANTS: [FilterType; 4] = [Self::Lowpass, Self::Highpass, Self::Bandpass, Self::Notch];
+    
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Lowpass => "Lowpass",
+            Self::Highpass => "Highpass",
+            Self::Bandpass => "Bandpass",
+            Self::Notch => "Notch",
+        }
+    }
+}
+
 pub struct Synth {
     pub oscs: [Oscillator; 1],
+    pub filter: Filter,
     pub play_mode: PlayMode,
     pub glide_time: f32,
     voices: HashMap<Key, Voice>,
@@ -79,6 +100,7 @@ impl Synth {
     pub fn new() -> Self {
         Self {
             oscs: [Oscillator::new()],
+            filter: Filter::new(),
             play_mode: PlayMode::Poly,
             glide_time: 0.05,
             voices: HashMap::new(),
@@ -88,17 +110,17 @@ impl Synth {
     pub fn note_on(&mut self, key: Key, pitch: f32, seq: &mut Sequencer) {
         match self.play_mode {
             PlayMode::Poly => {
-                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, seq));
+                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, &self.filter, seq));
             },
             PlayMode::Mono => {
                 for voice in self.voices.values_mut() {
                     voice.off(seq);
                 }
-                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, seq));
+                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, &self.filter, seq));
             },
             PlayMode::SingleTrigger => {
                 if self.voices.is_empty() {
-                    self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, seq));
+                    self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, &self.filter, seq));
                 } else {
                     let voice = self.voices.drain().map(|(_, v)| v).next().unwrap();
                     voice.freq.set(midi_hz(pitch));
@@ -133,6 +155,38 @@ impl Oscillator {
     }
 }
 
+pub struct Filter {
+    pub filter_type: FilterType,
+    pub cutoff: Shared,
+    pub resonance: Shared,
+    pub key_tracking: Shared,
+    pub env: ADSR,
+    pub env_level: Shared,
+}
+
+impl Filter {
+    fn new() -> Self {
+        Self {
+            cutoff: shared(440.0),
+            resonance: shared(0.1),
+            key_tracking: shared(0.0),
+            filter_type: FilterType::Lowpass,
+            env: ADSR::new(),
+            env_level: shared(0.0),
+        }
+    }
+
+    fn make_net(&self, note_freq: &Shared) -> Net {
+        // TODO: envelope
+        (pass() | var(&self.cutoff) * (var(note_freq) * (1.0/261.6) * var(&self.key_tracking) + 1.0) | var(&self.resonance)) >> match self.filter_type {
+            FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
+            FilterType::Highpass => Net::wrap(Box::new(highpass())),
+            FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
+            FilterType::Notch => Net::wrap(Box::new(notch())),
+        }
+    }
+}
+
 pub struct ADSR {
     pub attack: f32,
     pub decay: f32,
@@ -159,12 +213,13 @@ struct Voice {
 }
 
 impl Voice {
-    fn new(pitch: f32, glide_time: f32, oscs: &[Oscillator], seq: &mut Sequencer) -> Self {
+    fn new(pitch: f32, glide_time: f32, oscs: &[Oscillator], filter: &Filter, seq: &mut Sequencer) -> Self {
         let freq = shared(midi_hz(pitch));
         let gate = shared(1.0);
         let f = |i: usize| {
             (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * var(&oscs[i].level) *
-                (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release))
+                (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release)) >>
+                filter.make_net(&freq)
         };
         let unit = f(0);
         Self {
