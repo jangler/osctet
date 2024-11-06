@@ -149,7 +149,9 @@ impl App {
         match self.midi.selected_port() {
             Some(port) => {
                 match self.midi.new_input() {
-                    Ok(input) => {
+                    Ok(mut input) => {
+                        // ignore SysEx, time, and active sensing
+                        input.ignore(midir::Ignore::All);
                         let (tx, rx) = channel();
                         self.midi.rx = Some(rx);
                         Ok(input.connect(
