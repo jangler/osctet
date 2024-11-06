@@ -10,7 +10,7 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui;
 use anyhow::{bail, Result};
-use synth::Synth;
+use synth::{Key, KeyOrigin, Synth};
 
 mod pitch;
 mod input;
@@ -129,12 +129,17 @@ impl App {
                 if let Some(key) = physical_key {
                     if let Some(note) = input::note_from_key(key, &self.tuning, self.octave) {
                         if *pressed && !*repeat {
-                            for osc in self.synth.oscs.iter_mut() {
-                                osc.freq.set(midi_hz(self.tuning.midi_pitch(&note)));
-                            }
-                            self.synth.gate.set(1.0);
+                            self.synth.note_on(Key {
+                                origin: KeyOrigin::Keyboard,
+                                channel: 0,
+                                key: key.name().bytes().next().unwrap_or(0),
+                            }, self.tuning.midi_pitch(&note));
                         } else if !*pressed {
-                            self.synth.gate.set(0.0);
+                            self.synth.note_off(Key {
+                                origin: KeyOrigin::Keyboard,
+                                channel: 0,
+                                key: key.name().bytes().next().unwrap_or(0),
+                            });
                         }
                     }
                 }
@@ -177,23 +182,33 @@ impl App {
             loop {
                 match rx.try_recv() {
                     Ok(v) => {
+
                         // FIXME: invalid MIDI could crash this
                         // FIXME: this shouldn't all be inlined here
                         match v[0] & 0xf0 {
                             0b10000000 => {
                                 // note off
-                                self.synth.gate.set(0.0);
+                                self.synth.note_off(Key{
+                                    origin: KeyOrigin::Midi,
+                                    channel: v[0] & 0xf,
+                                    key: v[1],
+                                });
                             },
                             0b10010000 => {
                                 // note on, unless velocity is zero
                                 if v[2] != 0 {
                                     let note = input::note_from_midi(v[1] as i8, &self.tuning);
-                                    for osc in self.synth.oscs.iter_mut() {
-                                        osc.freq.set(midi_hz(self.tuning.midi_pitch(&note)));
-                                    }
-                                    self.synth.gate.set(1.0);
+                                    self.synth.note_on(Key {
+                                        origin: KeyOrigin::Midi,
+                                        channel: v[0] & 0xf,
+                                        key: v[1],
+                                    }, self.tuning.midi_pitch(&note));
                                 } else {
-                                    self.synth.gate.set(0.0);
+                                    self.synth.note_off(Key {
+                                        origin: KeyOrigin::Midi,
+                                        channel: v[0] & 0xf,
+                                        key: v[1],
+                                    });
                                 }
                             },
                             _ => (),

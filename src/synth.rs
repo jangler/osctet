@@ -1,8 +1,23 @@
 use fundsp::hacker::*;
 
+#[derive(PartialEq)]
+pub enum KeyOrigin {
+    Keyboard,
+    Midi,
+    Pattern,
+}
+
+#[derive(PartialEq)]
+pub struct Key {
+    pub origin: KeyOrigin,
+    pub channel: u8,
+    pub key: u8,
+}
+
 pub struct Synth {
-    pub gate: Shared,
     pub oscs: [Oscillator; 1],
+    gate: Shared,
+    held_key: Option<Key>,
 }
 
 impl Synth {
@@ -12,6 +27,24 @@ impl Synth {
         Self {
             gate,
             oscs,
+            held_key: None,
+        }
+    }
+
+    pub fn note_on(&mut self, key: Key, pitch: f32) {
+        for osc in self.oscs.iter() {
+            osc.freq.set(midi_hz(pitch));
+        }
+        self.gate.set(1.0);
+        self.held_key = Some(key);
+    }
+
+    pub fn note_off(&mut self, key: Key) {
+        if let Some(held_key) = &mut self.held_key {
+            if key == *held_key {
+                self.gate.set(0.0);
+                self.held_key = None;
+            }
         }
     }
 }
