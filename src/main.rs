@@ -129,7 +129,6 @@ impl App {
                 if let Some(key) = physical_key {
                     if let Some(note) = input::note_from_key(key, &self.tuning, self.octave) {
                         if *pressed && !*repeat {
-                            self.messages.report(&note);
                             for osc in self.synth.oscs.iter_mut() {
                                 osc.freq.set(midi_hz(self.tuning.midi_pitch(&note)));
                             }
@@ -199,7 +198,6 @@ impl App {
                             },
                             _ => (),
                         }
-                        self.messages.push(format!("Received MIDI message: {:?}", &v));
                     },
                     Err(_) => break,
                 }
