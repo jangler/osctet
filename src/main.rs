@@ -96,13 +96,14 @@ struct App {
     tuning: pitch::Tuning,
     messages: MessageBuffer,
     synth: Synth,
+    seq: Sequencer,
     octave: i8,
     midi: Midi,
     config: Config,
 }
 
 impl App {
-    fn new(synth: Synth) -> Self {
+    fn new(synth: Synth, seq: Sequencer) -> Self {
         let mut messages = MessageBuffer::new(100);
         let config = match Config::load() {
             Ok(c) => c,
@@ -117,6 +118,7 @@ impl App {
             tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
             messages,
             synth,
+            seq,
             octave: 4,
             midi,
             config,
@@ -133,13 +135,13 @@ impl App {
                                 origin: KeyOrigin::Keyboard,
                                 channel: 0,
                                 key: key.name().bytes().next().unwrap_or(0),
-                            }, self.tuning.midi_pitch(&note));
+                            }, self.tuning.midi_pitch(&note), &mut self.seq);
                         } else if !*pressed {
                             self.synth.note_off(Key {
                                 origin: KeyOrigin::Keyboard,
                                 channel: 0,
                                 key: key.name().bytes().next().unwrap_or(0),
-                            });
+                            }, &mut self.seq);
                         }
                     }
                 }
@@ -192,7 +194,7 @@ impl App {
                                     origin: KeyOrigin::Midi,
                                     channel: v[0] & 0xf,
                                     key: v[1],
-                                });
+                                }, &mut self.seq);
                             },
                             0b10010000 => {
                                 // note on, unless velocity is zero
@@ -202,13 +204,13 @@ impl App {
                                         origin: KeyOrigin::Midi,
                                         channel: v[0] & 0xf,
                                         key: v[1],
-                                    }, self.tuning.midi_pitch(&note));
+                                    }, self.tuning.midi_pitch(&note), &mut self.seq);
                                 } else {
                                     self.synth.note_off(Key {
                                         origin: KeyOrigin::Midi,
                                         channel: v[0] & 0xf,
                                         key: v[1],
-                                    });
+                                    }, &mut self.seq);
                                 }
                             },
                             _ => (),
@@ -298,10 +300,10 @@ fn main() -> eframe::Result {
         .expect("no supported output config")
         .with_max_sample_rate()
         .into();
-    let mut net = Net::new(0, 1);
     let synth = Synth::new();
-    net.chain(synth.oscs[0].unit.to_owned());
-    net.set_sample_rate(config.sample_rate.0 as f64);
+    let mut seq = Sequencer::new(false, 1);
+    seq.set_sample_rate(config.sample_rate.0 as f64);
+    let mut backend = BlockRateAdapter::new(Box::new(seq.backend()));
     let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
@@ -309,7 +311,7 @@ fn main() -> eframe::Result {
             let mut i = 0;
             let len = data.len();
             while i < len {
-                let (l, r) = net.get_stereo();
+                let (l, r) = backend.get_stereo();
                 data[i] = l;
                 data[i+1] = r;
                 i += 2;
@@ -330,7 +332,7 @@ fn main() -> eframe::Result {
         APP_NAME,
         options,
         Box::new(|_cc| {
-            Ok(Box::new(App::new(synth)))
+            Ok(Box::new(App::new(synth, seq)))
         }),
     )
 }

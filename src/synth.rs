@@ -1,13 +1,16 @@
+use core::f64;
+use std::collections::HashMap;
+
 use fundsp::hacker::*;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub enum KeyOrigin {
     Keyboard,
     Midi,
     Pattern,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq, Hash)]
 pub struct Key {
     pub origin: KeyOrigin,
     pub channel: u8,
@@ -16,58 +19,40 @@ pub struct Key {
 
 pub struct Synth {
     pub oscs: [Oscillator; 1],
-    gate: Shared,
-    held_key: Option<Key>,
+    voices: HashMap<Key, Voice>,
 }
 
 impl Synth {
     pub fn new() -> Self {
-        let gate = shared(0.0);
-        let oscs = [Oscillator::new(&gate)];
         Self {
-            gate,
-            oscs,
-            held_key: None,
+            oscs: [Oscillator::new()],
+            voices: HashMap::new(),
         }
     }
 
-    pub fn note_on(&mut self, key: Key, pitch: f32) {
-        for osc in self.oscs.iter() {
-            osc.freq.set(midi_hz(pitch));
-        }
-        self.gate.set(1.0);
-        self.held_key = Some(key);
+    pub fn note_on(&mut self, key: Key, pitch: f32, seq: &mut Sequencer) {
+        self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
     }
 
-    pub fn note_off(&mut self, key: Key) {
-        if let Some(held_key) = &mut self.held_key {
-            if key == *held_key {
-                self.gate.set(0.0);
-                self.held_key = None;
-            }
+    pub fn note_off(&mut self, key: Key, seq: &mut Sequencer) {
+        if let Some(voice) = self.voices.remove(&key) {
+            voice.off(seq);
         }
     }
 }
 
 pub struct Oscillator {
-    pub freq: Shared,
     pub gain: Shared,
     pub env: ADSR,
-    pub unit: Box<dyn AudioUnit>,
 }
 
 impl Oscillator {
-    fn new(gate: &Shared) -> Self {
-        let freq = shared(440.0);
+    fn new() -> Self {
         let gain = shared(0.2);
         let env = ADSR::new();
-        let unit = (var(&freq) >> saw()) * var(&gain) *
-            (var(gate) >> adsr_live(env.attack, env.decay, env.sustain, env.release));
         Self {
-            freq,
             gain,
             env,
-            unit: Box::new(unit),
         }
     }
 }
@@ -82,10 +67,40 @@ pub struct ADSR {
 impl ADSR {
     fn new() -> Self {
         Self {
-            attack: 0.1,
-            decay: 0.1,
+            attack: 0.5,
+            decay: 0.5,
             sustain: 0.5,
-            release: 0.1,
+            release: 0.5,
         }
+    }
+}
+
+struct Voice {
+    freq: Shared,
+    gate: Shared,
+    release_time: f32,
+    event_id: EventId,
+}
+
+impl Voice {
+    fn new(pitch: f32, oscs: &[Oscillator], seq: &mut Sequencer) -> Self {
+        let freq = shared(midi_hz(pitch));
+        let gate = shared(1.0);
+        let f = |i: usize| {
+            (var(&freq) >> saw()) * var(&oscs[i].gain) *
+                (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release))
+        };
+        let unit = f(0);
+        Self {
+            freq,
+            gate,
+            release_time: oscs[0].env.release,
+            event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(unit)),
+        }
+    }
+
+    fn off(&self, seq: &mut Sequencer) {
+        self.gate.set(0.0);
+        seq.edit_relative(self.event_id, self.release_time as f64, 0.0);
     }
 }
