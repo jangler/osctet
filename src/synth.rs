@@ -57,7 +57,7 @@ impl Waveform {
         }
     }
 
-    fn make_node(&self, freq: &Shared, glide_time: f32, duty: &Shared) -> Net {
+    fn make_net(&self, freq: &Shared, glide_time: f32, duty: &Shared) -> Net {
         // have to compensate for different volumes. the sine is so loud!
         match self {
             Self::Sawtooth => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> saw())),
@@ -117,6 +117,7 @@ impl Synth {
 
 pub struct Oscillator {
     pub level: Shared,
+    pub duty: Shared,
     pub env: ADSR,
     pub waveform: Waveform,
 }
@@ -125,6 +126,7 @@ impl Oscillator {
     fn new() -> Self {
         Self {
             level: shared(0.5),
+            duty: shared(0.5),
             env: ADSR::new(),
             waveform: Waveform::Sawtooth,
         }
@@ -151,7 +153,6 @@ impl ADSR {
 
 struct Voice {
     freq: Shared,
-    duty: Shared,
     gate: Shared,
     release_time: f32,
     event_id: EventId,
@@ -160,16 +161,14 @@ struct Voice {
 impl Voice {
     fn new(pitch: f32, glide_time: f32, oscs: &[Oscillator], seq: &mut Sequencer) -> Self {
         let freq = shared(midi_hz(pitch));
-        let duty = shared(0.5);
         let gate = shared(1.0);
         let f = |i: usize| {
-            (oscs[i].waveform.make_node(&freq, glide_time, &duty)) * var(&oscs[i].level) *
+            (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * var(&oscs[i].level) *
                 (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release))
         };
         let unit = f(0);
         Self {
             freq,
-            duty,
             gate,
             release_time: oscs[0].env.release,
             event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(unit)),

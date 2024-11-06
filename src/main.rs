@@ -284,6 +284,7 @@ impl eframe::App for App {
         egui::CentralPanel::default().show(ctx, |ui| {
             // oscillator controlls
             shared_slider(ui, &self.synth.oscs[0].level, 0.0..=1.0, "Level");
+            shared_slider(ui, &self.synth.oscs[0].duty, 0.0..=1.0, "Duty");
             egui::ComboBox::from_label("Waveform")
                 .selected_text(self.synth.oscs[0].waveform.name())
                 .show_ui(ui, |ui| {
