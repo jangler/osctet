@@ -37,6 +37,7 @@ impl PlayMode {
 pub struct Synth {
     pub oscs: [Oscillator; 1],
     pub play_mode: PlayMode,
+    pub glide_time: f32,
     voices: HashMap<Key, Voice>,
 }
 
@@ -44,25 +45,26 @@ impl Synth {
     pub fn new() -> Self {
         Self {
             oscs: [Oscillator::new()],
-            voices: HashMap::new(),
             play_mode: PlayMode::Poly,
+            glide_time: 0.05,
+            voices: HashMap::new(),
         }
     }
 
     pub fn note_on(&mut self, key: Key, pitch: f32, seq: &mut Sequencer) {
         match self.play_mode {
             PlayMode::Poly => {
-                self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, seq));
             },
             PlayMode::Mono => {
                 for voice in self.voices.values_mut() {
                     voice.off(seq);
                 }
-                self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, seq));
             },
             PlayMode::SingleTrigger => {
                 if self.voices.is_empty() {
-                    self.voices.insert(key, Voice::new(pitch, &self.oscs, seq));
+                    self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, seq));
                 } else {
                     let voice = self.voices.drain().map(|(_, v)| v).next().unwrap();
                     voice.freq.set(midi_hz(pitch));
@@ -121,11 +123,11 @@ struct Voice {
 }
 
 impl Voice {
-    fn new(pitch: f32, oscs: &[Oscillator], seq: &mut Sequencer) -> Self {
+    fn new(pitch: f32, glide_time: f32, oscs: &[Oscillator], seq: &mut Sequencer) -> Self {
         let freq = shared(midi_hz(pitch));
         let gate = shared(1.0);
         let f = |i: usize| {
-            (var(&freq) >> saw()) * var(&oscs[i].gain) *
+            (var(&freq) >> follow(glide_time) >> saw()) * var(&oscs[i].gain) *
                 (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release))
         };
         let unit = f(0);

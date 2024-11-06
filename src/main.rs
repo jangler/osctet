@@ -282,6 +282,10 @@ impl eframe::App for App {
                 shared_gain.set_value(gain);
             }
 
+            // glide time slider
+            // FIXME: this doesn't update voices that are already playing
+            ui.add(egui::Slider::new(&mut self.synth.glide_time, 0.0..=0.5).text("Glide"));
+
             // play mode control
             egui::ComboBox::from_label("Play mode")
                 .selected_text(self.synth.play_mode.name())
