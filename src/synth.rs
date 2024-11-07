@@ -89,7 +89,7 @@ impl FilterType {
 }
 
 pub struct Synth {
-    pub oscs: [Oscillator; 1],
+    pub oscs: [Oscillator; 4],
     pub filter: Filter,
     pub play_mode: PlayMode,
     pub glide_time: f32,
@@ -99,7 +99,7 @@ pub struct Synth {
 impl Synth {
     pub fn new() -> Self {
         Self {
-            oscs: [Oscillator::new()],
+            oscs: [Oscillator::new(0.5), Oscillator::new(0.0), Oscillator::new(0.0), Oscillator::new(0.0)],
             filter: Filter::new(),
             play_mode: PlayMode::Poly,
             glide_time: 0.05,
@@ -145,9 +145,9 @@ pub struct Oscillator {
 }
 
 impl Oscillator {
-    fn new() -> Self {
+    fn new(level: f32) -> Self {
         Self {
-            level: shared(0.5),
+            level: shared(level),
             duty: shared(0.5),
             env: ADSR::new(),
             waveform: Waveform::Sawtooth,
@@ -186,7 +186,7 @@ pub struct Filter {
 impl Filter {
     fn new() -> Self {
         Self {
-            cutoff: shared(440.0),
+            cutoff: shared(20_000.0),
             resonance: shared(0.1),
             key_tracking: KeyTracking::None,
             filter_type: FilterType::Lowpass,
@@ -249,7 +249,7 @@ impl Voice {
                 (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release)) >>
                 filter.make_net(&freq, &gate)
         };
-        let unit = f(0);
+        let unit = f(0) + f(1) + f(2) + f(3);
         Self {
             freq,
             gate,

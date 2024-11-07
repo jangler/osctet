@@ -101,6 +101,7 @@ struct App {
     octave: i8,
     midi: Midi,
     config: Config,
+    selected_osc: usize,
 }
 
 impl App {
@@ -123,6 +124,7 @@ impl App {
             octave: 4,
             midi,
             config,
+            selected_osc: 0,
         }
     }
 
@@ -295,20 +297,30 @@ impl eframe::App for App {
             // FIXME: this doesn't update voices that are already playing
             ui.add(egui::Slider::new(&mut self.synth.glide_time, 0.0..=0.5).text("Glide"));
 
-            ui.add(egui::Label::new("Osc 1"));
-            shared_slider(ui, &self.synth.oscs[0].level, 0.0..=1.0, "Level", false);
-            shared_slider(ui, &self.synth.oscs[0].duty, 0.0..=1.0, "Duty", false);
+            // oscillator controls
+            ui.separator();
+            ui.horizontal(|ui| {
+                for i in 0..self.synth.oscs.len() {
+                    ui.selectable_value(&mut self.selected_osc, i, format!("Osc {}", i + 1));
+                }
+            });
+            let osc = &mut self.synth.oscs[self.selected_osc];
+            shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
+            ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
+                shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
+            });
             egui::ComboBox::from_label("Waveform")
-                .selected_text(self.synth.oscs[0].waveform.name())
+                .selected_text(osc.waveform.name())
                 .show_ui(ui, |ui| {
                     for variant in Waveform::VARIANTS {
-                        ui.selectable_value(&mut self.synth.oscs[0].waveform, variant, variant.name());
+                        ui.selectable_value(&mut osc.waveform, variant, variant.name());
                     }
                 });
-            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
-            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
-            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.sustain, 0.0..=1.0).text("Sustain"));
-            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.release, 0.01..=10.0).text("Release").logarithmic(true));
+            ui.add(egui::Slider::new(&mut osc.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
+            ui.add(egui::Slider::new(&mut osc.env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
+            ui.add(egui::Slider::new(&mut osc.env.sustain, 0.0..=1.0).text("Sustain"));
+            ui.add(egui::Slider::new(&mut osc.env.release, 0.01..=10.0).text("Release").logarithmic(true));
+            ui.separator();
 
             ui.add(egui::Label::new("Filter"));
             egui::ComboBox::from_label("Type")
@@ -334,6 +346,7 @@ impl eframe::App for App {
             ui.add(egui::Slider::new(&mut self.synth.filter.env.release, 0.01..=10.0).text("Release").logarithmic(true));
 
             // message area
+            ui.separator();
             egui::ScrollArea::vertical().show(ui, |ui| {
                 for line in self.messages.iter() {
                     ui.label(line);
