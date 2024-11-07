@@ -11,7 +11,7 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Ui};
 use anyhow::{bail, Result};
-use synth::{FilterType, Key, KeyOrigin, PlayMode, Synth, Waveform};
+use synth::{FilterType, Key, KeyOrigin, KeyTracking, PlayMode, Synth, Waveform};
 
 mod pitch;
 mod input;
@@ -320,8 +320,14 @@ impl eframe::App for App {
                 });
             shared_slider(ui, &self.synth.filter.cutoff, 0.0..=20_000.0, "Cutoff", false);
             shared_slider(ui, &self.synth.filter.resonance, 0.1..=1.0, "Resonance", false);
-            shared_slider(ui, &self.synth.filter.key_tracking, 0.0..=1.0, "Key tracking", false);
-            shared_slider(ui, &self.synth.filter.env_level, -3.0..=3.0, "Envelope level", false);
+            egui::ComboBox::from_label("Key tracking")
+                .selected_text(self.synth.filter.key_tracking.name())
+                .show_ui(ui, |ui| {
+                    for variant in KeyTracking::VARIANTS {
+                        ui.selectable_value(&mut self.synth.filter.key_tracking, variant, variant.name());
+                    }
+                });
+            shared_slider(ui, &self.synth.filter.env_level, -1.0..=7.0, "Envelope level", false);
             ui.add(egui::Slider::new(&mut self.synth.filter.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
             ui.add(egui::Slider::new(&mut self.synth.filter.env.decay, 0.0..=10.0).text("Decay").logarithmic(true));
             ui.add(egui::Slider::new(&mut self.synth.filter.env.sustain, 0.0..=1.0).text("Sustain"));

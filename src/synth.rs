@@ -3,6 +3,8 @@ use std::collections::HashMap;
 
 use fundsp::hacker::*;
 
+const KEY_TRACKING_REF_FREQ: f32 = 261.6;
+
 #[derive(PartialEq, Eq, Hash)]
 pub enum KeyOrigin {
     Keyboard,
@@ -155,11 +157,30 @@ impl Oscillator {
     }
 }
 
+#[derive(PartialEq, Clone, Copy)]
+pub enum KeyTracking {
+    None,
+    Partial,
+    Full,
+}
+
+impl KeyTracking {
+    pub const VARIANTS: [KeyTracking; 3] = [Self::None, Self::Partial, Self::Full];
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::None => "None",
+            Self::Partial => "Partial",
+            Self::Full => "Full",
+        }
+    }
+}
+
 pub struct Filter {
     pub filter_type: FilterType,
     pub cutoff: Shared,
     pub resonance: Shared,
-    pub key_tracking: Shared,
+    pub key_tracking: KeyTracking,
     pub env: ADSR,
     pub env_level: Shared,
 }
@@ -169,21 +190,31 @@ impl Filter {
         Self {
             cutoff: shared(440.0),
             resonance: shared(0.1),
-            key_tracking: shared(0.0),
+            key_tracking: KeyTracking::None,
             filter_type: FilterType::Lowpass,
             env: ADSR::new(),
             env_level: shared(0.0),
         }
     }
 
-    fn make_net(&self, note_freq: &Shared) -> Net {
-        // TODO: envelope
-        (pass() | var(&self.cutoff) * (var(note_freq) * (1.0/261.6) * var(&self.key_tracking) + 1.0) | var(&self.resonance)) >> match self.filter_type {
+    fn make_net(&self, note_freq: &Shared, gate: &Shared) -> Net {
+        // FIXME: partial key tracking uses linear math, when it should be logarithmic
+        let kt = match self.key_tracking {
+            KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
+            KeyTracking::Partial => Net::wrap(Box::new((var(note_freq) + KEY_TRACKING_REF_FREQ) * 0.5 * (1.0/KEY_TRACKING_REF_FREQ))),
+            KeyTracking::Full => Net::wrap(Box::new(var(note_freq) * (1.0/KEY_TRACKING_REF_FREQ))),
+        };
+        let f = match self.filter_type {
             FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
             FilterType::Highpass => Net::wrap(Box::new(highpass())),
             FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
             FilterType::Notch => Net::wrap(Box::new(notch())),
-        }
+        };
+        (pass() |
+            var(&self.cutoff) * kt *
+            (var(gate) >> adsr_live(self.env.attack, self.env.decay, self.env.sustain, self.env.release) * var(&self.env_level) + 1.0) |
+            var(&self.resonance)
+        ) >> f
     }
 }
 
@@ -219,7 +250,7 @@ impl Voice {
         let f = |i: usize| {
             (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * var(&oscs[i].level) *
                 (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release)) >>
-                filter.make_net(&freq)
+                filter.make_net(&freq, &gate)
         };
         let unit = f(0);
         Self {
