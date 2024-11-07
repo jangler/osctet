@@ -102,10 +102,11 @@ struct App {
     midi: Midi,
     config: Config,
     selected_osc: usize,
+    global_fx: GlobalFX,
 }
 
 impl App {
-    fn new(synth: Synth, seq: Sequencer) -> Self {
+    fn new(synth: Synth, seq: Sequencer, global_fx: GlobalFX) -> Self {
         let mut messages = MessageBuffer::new(100);
         let config = match Config::load() {
             Ok(c) => c,
@@ -125,6 +126,7 @@ impl App {
             midi,
             config,
             selected_osc: 0,
+            global_fx,
         }
     }
 
@@ -284,6 +286,33 @@ impl eframe::App for App {
 
         // message panel
         egui::CentralPanel::default().show(ctx, |ui| {
+            // global controls
+            {
+                let mut commit = false;
+                let fx = &mut self.global_fx;
+                shared_slider(ui, &fx.reverb_amount, 0.0..=1.0, "Reverb level", false);
+                let (predelay_time, room_size, time, damping) =
+                    (fx.predelay_time, fx.reverb_room_size, fx.reverb_time, fx.reverb_damping);
+                ui.add(egui::Slider::new(&mut fx.predelay_time, 0.0..=0.1).text("Predelay"));
+                ui.add(egui::Slider::new(&mut fx.reverb_room_size, 5.0..=20.0).text("Room size"));
+                ui.add(egui::Slider::new(&mut fx.reverb_time, 0.1..=10.0).text("Time").logarithmic(true));
+                ui.add(egui::Slider::new(&mut fx.reverb_damping, 0.0..=1.0).text("Damping"));
+                if predelay_time != fx.predelay_time {
+                    fx.net.crossfade(fx.predelay_id, Fade::Smooth, 0.1,
+                        Box::new(delay(predelay_time) | delay(predelay_time)));
+                    commit = true;
+                }
+                if room_size != fx.reverb_room_size || time != fx.reverb_time || damping != fx.reverb_damping {
+                    fx.net.crossfade(fx.reverb_id, Fade::Smooth, 0.1,
+                        Box::new(reverb_stereo(room_size, time, damping)));
+                    commit = true;
+                }
+                if commit {
+                    fx.net.commit();
+                }
+                ui.separator();
+            }
+
             // play mode control
             egui::ComboBox::from_label("Play mode")
                 .selected_text(self.synth.play_mode.name())
@@ -356,6 +385,17 @@ impl eframe::App for App {
     }
 }
 
+struct GlobalFX {
+    predelay_id: NodeId,
+    predelay_time: f32,
+    reverb_id: NodeId,
+    reverb_room_size: f32,
+    reverb_time: f32,
+    reverb_damping: f32,
+    reverb_amount: Shared,
+    net: Net,
+}
+
 fn main() -> eframe::Result {
     // init audio
     let host = cpal::default_host();
@@ -370,8 +410,26 @@ fn main() -> eframe::Result {
     let synth = Synth::new();
     let mut seq = Sequencer::new(false, 1);
     seq.set_sample_rate(config.sample_rate.0 as f64);
-    let mut net = Net::wrap(Box::new(seq.backend())) >> shape(Tanh(1.0));
+
+    let predelay_time = 0.01;
+    let (reverb, reverb_id) = Net::wrap_id(Box::new(reverb_stereo(10.0, 0.2, 0.5)));
+    let (predelay, predelay_id) = Net::wrap_id(Box::new(delay(predelay_time) | delay(predelay_time)));
+    let reverb_amount = shared(0.5);
+    let mut net = Net::wrap(Box::new(seq.backend())) >>
+        highpass_hz(5.0, 0.1) >> shape(Tanh(1.0)) >> split::<U2>() >>
+        (multipass::<U2>() & (var(&reverb_amount) >> split::<U2>()) * (predelay >> reverb));
     let mut backend = BlockRateAdapter::new(Box::new(net.backend()));
+    let global_fx = GlobalFX {
+        predelay_time,
+        predelay_id,
+        reverb_id,
+        reverb_room_size: 10.0,
+        reverb_time: 0.3,
+        reverb_damping: 0.5,
+        reverb_amount,
+        net,
+    };
+    
     let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
@@ -400,7 +458,7 @@ fn main() -> eframe::Result {
         APP_NAME,
         options,
         Box::new(|_cc| {
-            Ok(Box::new(App::new(synth, seq)))
+            Ok(Box::new(App::new(synth, seq, global_fx)))
         }),
     )
 }
