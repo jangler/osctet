@@ -318,7 +318,7 @@ impl eframe::App for App {
                         ui.selectable_value(&mut self.synth.filter.filter_type, variant, variant.name());
                     }
                 });
-            shared_slider(ui, &self.synth.filter.cutoff, 0.0..=20_000.0, "Cutoff", false);
+            shared_slider(ui, &self.synth.filter.cutoff, 20.0..=20_000.0, "Cutoff", true);
             shared_slider(ui, &self.synth.filter.resonance, 0.1..=1.0, "Resonance", false);
             egui::ComboBox::from_label("Key tracking")
                 .selected_text(self.synth.filter.key_tracking.name())

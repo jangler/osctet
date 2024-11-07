@@ -74,18 +74,16 @@ pub enum FilterType {
     Lowpass,
     Highpass,
     Bandpass,
-    Notch,
 }
 
 impl FilterType {
-    pub const VARIANTS: [FilterType; 4] = [Self::Lowpass, Self::Highpass, Self::Bandpass, Self::Notch];
+    pub const VARIANTS: [FilterType; 3] = [Self::Lowpass, Self::Highpass, Self::Bandpass];
     
     pub fn name(&self) -> &str {
         match self {
             Self::Lowpass => "Lowpass",
             Self::Highpass => "Highpass",
             Self::Bandpass => "Bandpass",
-            Self::Notch => "Notch",
         }
     }
 }
@@ -205,10 +203,9 @@ impl Filter {
             KeyTracking::Full => Net::wrap(Box::new(var(note_freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
         let f = match self.filter_type {
-            FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
-            FilterType::Highpass => Net::wrap(Box::new(highpass())),
-            FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
-            FilterType::Notch => Net::wrap(Box::new(notch())),
+            FilterType::Lowpass => Net::wrap(Box::new(flowpass(Tanh(1.0)))),
+            FilterType::Highpass => Net::wrap(Box::new(fhighpass(Tanh(1.0)))),
+            FilterType::Bandpass => Net::wrap(Box::new(fresonator(Tanh(1.0)))),
         };
         (pass() |
             var(&self.cutoff) * kt *
