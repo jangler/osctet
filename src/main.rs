@@ -306,9 +306,9 @@ impl eframe::App for App {
                     }
                 });
             ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
-            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.decay, 0.0..=10.0).text("Decay").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
             ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.sustain, 0.0..=1.0).text("Sustain"));
-            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.release, 0.0..=10.0).text("Release").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.oscs[0].env.release, 0.01..=10.0).text("Release").logarithmic(true));
 
             ui.add(egui::Label::new("Filter"));
             egui::ComboBox::from_label("Type")
@@ -329,9 +329,9 @@ impl eframe::App for App {
                 });
             shared_slider(ui, &self.synth.filter.env_level, -1.0..=7.0, "Envelope level", false);
             ui.add(egui::Slider::new(&mut self.synth.filter.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
-            ui.add(egui::Slider::new(&mut self.synth.filter.env.decay, 0.0..=10.0).text("Decay").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.filter.env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
             ui.add(egui::Slider::new(&mut self.synth.filter.env.sustain, 0.0..=1.0).text("Sustain"));
-            ui.add(egui::Slider::new(&mut self.synth.filter.env.release, 0.0..=10.0).text("Release").logarithmic(true));
+            ui.add(egui::Slider::new(&mut self.synth.filter.env.release, 0.01..=10.0).text("Release").logarithmic(true));
 
             // message area
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -357,7 +357,8 @@ fn main() -> eframe::Result {
     let synth = Synth::new();
     let mut seq = Sequencer::new(false, 1);
     seq.set_sample_rate(config.sample_rate.0 as f64);
-    let mut backend = BlockRateAdapter::new(Box::new(seq.backend()));
+    let mut net = Net::wrap(Box::new(seq.backend())) >> shape(Tanh(1.0));
+    let mut backend = BlockRateAdapter::new(Box::new(net.backend()));
     let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {

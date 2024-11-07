@@ -248,7 +248,7 @@ impl Voice {
         let freq = shared(midi_hz(pitch));
         let gate = shared(1.0);
         let f = |i: usize| {
-            (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * var(&oscs[i].level) *
+            (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * (var(&oscs[i].level) >> follow(0.01)) *
                 (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release)) >>
                 filter.make_net(&freq, &gate)
         };
@@ -263,6 +263,6 @@ impl Voice {
 
     fn off(&self, seq: &mut Sequencer) {
         self.gate.set(0.0);
-        seq.edit_relative(self.event_id, self.release_time as f64, 0.0);
+        seq.edit_relative(self.event_id, self.release_time as f64, 0.01);
     }
 }
