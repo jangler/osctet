@@ -6,10 +6,11 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
 
 use config::Config;
+use eframe::emath;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
-use eframe::egui::{self, Ui};
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
 use anyhow::{bail, Result};
 use synth::{FilterType, Key, KeyOrigin, KeyTracking, PlayMode, Synth, Waveform};
 
@@ -17,6 +18,7 @@ mod pitch;
 mod input;
 mod config;
 mod synth;
+mod song;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -103,6 +105,7 @@ struct App {
     config: Config,
     selected_osc: usize,
     global_fx: GlobalFX,
+    song_editor: song::Editor,
 }
 
 impl App {
@@ -127,6 +130,7 @@ impl App {
             config,
             selected_osc: 0,
             global_fx,
+            song_editor: song::Editor::new(song::Song::new()),
         }
     }
 
@@ -151,7 +155,6 @@ impl App {
                     }
                 }
             },
-
             _ => (),
         }
     }
@@ -284,8 +287,8 @@ impl eframe::App for App {
             }
         });
 
-        // message panel
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // instrument panel
+        egui::SidePanel::left("left_panel").show(ctx, |ui| {
             // global controls
             {
                 let mut commit = false;
@@ -381,6 +384,44 @@ impl eframe::App for App {
                     ui.label(line);
                 }
             });
+        });
+
+        // song panel
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let line_height = 12.0;
+            let font = FontId::monospace(line_height);
+            let fg_color = Color32::BLACK;
+            let cursor_color = Color32::GRAY;
+            let char_width = 8.0;
+            let channel_width = char_width * 10.0;
+            let column_offsets = [0.0, char_width * 3.0, char_width * 5.0, char_width * 7.0];
+
+            let (response, painter) = ui.allocate_painter(ui.available_size_before_wrap(), Sense::click());
+
+            let cursor = &self.song_editor.cursor;
+            let cursor_x = response.rect.min.x + 
+                channel_width * cursor.channel as f32 +
+                column_offsets[cursor.column as usize] +
+                char_width * cursor.char as f32;
+            let cursor_y = response.rect.min.y + line_height * 2.0 + cursor.tick as f32; // TODO
+            let cursor_rect = Rect {
+                min: Pos2 { x: cursor_x , y: cursor_y },
+                max: Pos2 { x: cursor_x + char_width, y: cursor_y + line_height, },
+            };
+            painter.rect_filled(cursor_rect, 0.0, cursor_color);
+
+            for (i, channel) in self.song_editor.song.channels.iter().enumerate() {
+                let pos = Pos2 {
+                    x: channel_width * i as f32,
+                    y: 0.0
+                };
+                painter.text(response.rect.min + pos.to_vec2(),
+                    Align2::LEFT_TOP, format!("Channel {}", i + 1), font.clone(), fg_color);
+            }
+
+            if let Some(pointer_pos) = response.interact_pointer_pos() {
+                // TODO: update cursor position
+            }
         });
     }
 }
