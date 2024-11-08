@@ -11,7 +11,7 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
 use anyhow::{bail, Result};
-use synth::{FilterType, Key, KeyOrigin, KeyTracking, PlayMode, Synth, Waveform};
+use synth::{FilterType, Key, KeyOrigin, KeyTracking, ModSource, ModTarget, PlayMode, Synth, Waveform};
 
 mod pitch;
 mod input;
@@ -224,6 +224,11 @@ impl App {
                                     key: key,
                                 }, pressure as f32 / 127.0);
                             },
+                            Some(MidiEvent::Controller { channel, controller, value }) => {
+                                if controller == input::CC_MODULATION || controller == input::CC_TIMBRE {
+                                    self.synth.modulate(channel, value as f32 / 127.0);
+                                }
+                            },
                             Some(MidiEvent::ChannelPressure { channel, pressure }) => {
                                 self.synth.channel_pressure(channel, pressure as f32 / 127.0);
                             },
@@ -337,26 +342,27 @@ impl eframe::App for App {
             }
 
             // play mode control
+            let settings = &mut self.synth.settings;
             egui::ComboBox::from_label("Play mode")
-                .selected_text(self.synth.play_mode.name())
+                .selected_text(settings.play_mode.name())
                 .show_ui(ui, |ui| {
                     for variant in PlayMode::VARIANTS {
-                        ui.selectable_value(&mut self.synth.play_mode, variant, variant.name());
+                        ui.selectable_value(&mut settings.play_mode, variant, variant.name());
                     }
                 });
 
             // glide time slider
             // FIXME: this doesn't update voices that are already playing
-            ui.add(egui::Slider::new(&mut self.synth.glide_time, 0.0..=0.5).text("Glide"));
+            ui.add(egui::Slider::new(&mut settings.glide_time, 0.0..=0.5).text("Glide"));
 
             // oscillator controls
             ui.separator();
             ui.horizontal(|ui| {
-                for i in 0..self.synth.oscs.len() {
+                for i in 0..settings.oscs.len() {
                     ui.selectable_value(&mut self.selected_osc, i, format!("Osc {}", i + 1));
                 }
             });
-            let osc = &mut self.synth.oscs[self.selected_osc];
+            let osc = &mut settings.oscs[self.selected_osc];
             shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
             ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
                 shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
@@ -376,26 +382,69 @@ impl eframe::App for App {
 
             ui.add(egui::Label::new("Filter"));
             egui::ComboBox::from_label("Type")
-                .selected_text(self.synth.filter.filter_type.name())
+                .selected_text(settings.filter.filter_type.name())
                 .show_ui(ui, |ui| {
                     for variant in FilterType::VARIANTS {
-                        ui.selectable_value(&mut self.synth.filter.filter_type, variant, variant.name());
+                        ui.selectable_value(&mut settings.filter.filter_type, variant, variant.name());
                     }
                 });
-            shared_slider(ui, &self.synth.filter.cutoff, 20.0..=20_000.0, "Cutoff", true);
-            shared_slider(ui, &self.synth.filter.resonance, 0.1..=1.0, "Resonance", false);
+            shared_slider(ui, &settings.filter.cutoff, 20.0..=20_000.0, "Cutoff", true);
+            shared_slider(ui, &settings.filter.resonance, 0.1..=1.0, "Resonance", false);
             egui::ComboBox::from_label("Key tracking")
-                .selected_text(self.synth.filter.key_tracking.name())
+                .selected_text(settings.filter.key_tracking.name())
                 .show_ui(ui, |ui| {
                     for variant in KeyTracking::VARIANTS {
-                        ui.selectable_value(&mut self.synth.filter.key_tracking, variant, variant.name());
+                        ui.selectable_value(&mut settings.filter.key_tracking, variant, variant.name());
                     }
                 });
-            shared_slider(ui, &self.synth.filter.env_level, -1.0..=7.0, "Envelope level", false);
-            ui.add(egui::Slider::new(&mut self.synth.filter.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
-            ui.add(egui::Slider::new(&mut self.synth.filter.env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
-            ui.add(egui::Slider::new(&mut self.synth.filter.env.sustain, 0.0..=1.0).text("Sustain"));
-            ui.add(egui::Slider::new(&mut self.synth.filter.env.release, 0.01..=10.0).text("Release").logarithmic(true));
+            shared_slider(ui, &settings.filter.env_level, -1.0..=7.0, "Envelope level", false);
+            ui.add(egui::Slider::new(&mut settings.filter.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
+            ui.add(egui::Slider::new(&mut settings.filter.env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
+            ui.add(egui::Slider::new(&mut settings.filter.env.sustain, 0.0..=1.0).text("Sustain"));
+            ui.add(egui::Slider::new(&mut settings.filter.env.release, 0.01..=10.0).text("Release").logarithmic(true));
+
+            // mod matrix
+            ui.separator();
+            ui.add(egui::Label::new("Modulation"));
+            egui::Grid::new("mod_matrix")
+                .num_columns(3)
+                .show(ui, |ui| {
+                    // header
+                    ui.label("Source");
+                    ui.label("Target");
+                    ui.label("Depth");
+                    ui.label("");
+                    ui.end_row();
+
+                    let mut removal_index: Option<usize> = None;
+                    for (i, m) in settings.mod_matrix.iter_mut().enumerate() {
+                        egui::ComboBox::from_label("")
+                            .selected_text(m.source.to_string())
+                            .show_ui(ui, |ui| {
+                                for variant in ModSource::VARIANTS {
+                                    ui.selectable_value(&mut m.source, variant, variant.to_string());
+                                }
+                            });
+                        egui::ComboBox::from_label("")
+                            .selected_text(m.target.to_string())
+                            .show_ui(ui, |ui| {
+                                for variant in ModTarget::VARIANTS {
+                                    ui.selectable_value(&mut m.target, variant, variant.to_string());
+                                }
+                            });
+                        ui.add(egui::Slider::new(&mut m.depth, 0.0..=1.0));
+                        if ui.button("x").clicked() {
+                            removal_index = Some(i);
+                        }
+                        ui.end_row();
+                    }
+                    if let Some(i) = removal_index {
+                        settings.mod_matrix.remove(i);
+                    }
+                });
+            if ui.button("+").clicked() {
+                settings.mod_matrix.push(synth::Modulation::default());
+            }
 
             // message area
             ui.separator();

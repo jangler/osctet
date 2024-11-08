@@ -1,6 +1,9 @@
-use eframe::{egui::Key, glow::PRIMITIVE_RESTART_FOR_PATCHES_SUPPORTED};
+use eframe::egui::Key;
 
 use crate::pitch::{Nominal, Note, Tuning};
+
+pub const CC_MODULATION: u8 = 1;
+pub const CC_TIMBRE: u8 = 74;
 
 // sharps aren't much use for keyboard mapping if they're equal to unison
 // or the whole tone
