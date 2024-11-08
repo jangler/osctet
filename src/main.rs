@@ -6,7 +6,6 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
 
 use config::Config;
-use eframe::emath;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
@@ -19,6 +18,8 @@ mod input;
 mod config;
 mod synth;
 mod song;
+
+use input::MidiEvent;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -192,34 +193,30 @@ impl App {
             loop {
                 match rx.try_recv() {
                     Ok(v) => {
-                        // FIXME: invalid MIDI could crash this
-                        // FIXME: this shouldn't all be inlined here
-                        match v[0] & 0xf0 {
-                            0b10000000 => {
-                                // note off
+                        match MidiEvent::parse(&v) {
+                            Some(MidiEvent::NoteOff { channel, key, .. }) => {
                                 self.synth.note_off(Key{
                                     origin: KeyOrigin::Midi,
-                                    channel: v[0] & 0xf,
-                                    key: v[1],
+                                    channel: channel,
+                                    key: key,
                                 }, &mut self.seq);
                             },
-                            0b10010000 => {
-                                // note on, unless velocity is zero
-                                if v[2] != 0 {
+                            Some(MidiEvent::NoteOn { channel, key, velocity }) => {
+                                if velocity != 0 {
                                     let note = input::note_from_midi(v[1] as i8, &self.tuning);
                                     self.synth.note_on(Key {
                                         origin: KeyOrigin::Midi,
-                                        channel: v[0] & 0xf,
-                                        key: v[1],
+                                        channel: channel,
+                                        key: key,
                                     }, self.tuning.midi_pitch(&note), &mut self.seq);
                                 } else {
-                                    self.synth.note_off(Key {
+                                    self.synth.note_off(Key{
                                         origin: KeyOrigin::Midi,
-                                        channel: v[0] & 0xf,
-                                        key: v[1],
+                                        channel: channel,
+                                        key: key,
                                     }, &mut self.seq);
                                 }
-                            },
+                            }
                             _ => (),
                         }
                     },
@@ -491,6 +488,7 @@ fn main() -> eframe::Result {
         net,
     };
     
+    // TODO: handle these errors
     let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {

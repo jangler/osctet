@@ -1,4 +1,4 @@
-use eframe::egui::Key;
+use eframe::{egui::Key, glow::PRIMITIVE_RESTART_FOR_PATCHES_SUPPORTED};
 
 use crate::pitch::{Nominal, Note, Tuning};
 
@@ -79,6 +79,63 @@ pub fn note_from_midi(n: i8, t: &Tuning) -> Note {
         _ => panic!("unreachable"),
     }
 }
+
+// program change is omitted; we have no use for it
+pub enum MidiEvent {
+    NoteOff {
+        channel: u8,
+        key: u8,
+        velocity: u8,
+    },
+    NoteOn {
+        channel: u8,
+        key: u8,
+        velocity: u8,
+    },
+    PolyPressure {
+        channel: u8,
+        key: u8,
+        pressure: u8,
+    },
+    Controller {
+        channel: u8,
+        controller: u8,
+        value: u8,
+    },
+    ChannelPressure {
+        channel: u8,
+        pressure: u8,
+    },
+    Pitch {
+        channel: u8,
+        pitch: f32,
+    },
+}
+
+impl MidiEvent {
+    const PITCH_CENTER: i16 = 2000; // center value of pitch message
+
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        // all the messages we're interested in are at least 2 bytes
+        if data.len() < 2 { return None }
+
+        let channel = data[0] & 0xf;
+
+        match data[0] & 0xf0 {
+            0x80 => Some(Self::NoteOff { channel, key: data[1], velocity: *data.get(2)? }),
+            0x90 => Some(Self::NoteOn { channel, key: data[1], velocity: *data.get(2)? }),
+            0xa0 => Some(Self::PolyPressure { channel, key: data[1], pressure: *data.get(2)? }),
+            0xb0 => Some(Self::Controller { channel, controller: data[1], value: *data.get(2)? }),
+            0xd0 => Some(Self::ChannelPressure { channel, pressure: data[1] }),
+            0xe0 => Some(Self::Pitch { channel, pitch: {
+                let raw_pitch = ((*data.get(2)? as i16) << 7) + data[1] as i16;
+                (raw_pitch - Self::PITCH_CENTER) as f32 / Self::PITCH_CENTER as f32
+            }}),
+            _ => None,
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
