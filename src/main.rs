@@ -224,9 +224,10 @@ impl App {
                                     key: key,
                                 }, pressure as f32 / 127.0);
                             },
-                            Some(MidiEvent::Controller { channel, controller, value }) => {
-                                if controller == input::CC_MODULATION || controller == input::CC_TIMBRE {
-                                    self.synth.modulate(channel, value as f32 / 127.0);
+                            Some(MidiEvent::Controller { controller, value, .. }) => {
+                                if controller == input::CC_MODULATION ||
+                                    (input::CC_MACRO_MIN..=input::CC_MACRO_MAX).contains(&controller) {
+                                    self.synth.modulate(value as f32 / 127.0);
                                 }
                             },
                             Some(MidiEvent::ChannelPressure { channel, pressure }) => {

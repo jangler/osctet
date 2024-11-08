@@ -96,7 +96,7 @@ pub struct Synth {
     pub settings: Settings,
     voices: HashMap<Key, Voice>,
     bend_memory: [f32; 16],
-    mod_memory: [f32; 16],
+    mod_memory: f32,
 }
 
 impl Synth {
@@ -111,15 +111,15 @@ impl Synth {
             },
             voices: HashMap::new(),
             bend_memory: [0.0; 16],
-            mod_memory: [0.0; 16],
+            mod_memory: 0.0,
         }
     }
 
     pub fn note_on(&mut self, key: Key, pitch: f32, pressure: f32, seq: &mut Sequencer) {
-        let (bend, modulation) = if key.origin == KeyOrigin::Midi {
-            (self.bend_memory[key.channel as usize], self.mod_memory[key.channel as usize])
+        let bend = if key.origin == KeyOrigin::Midi {
+            self.bend_memory[key.channel as usize]
         } else {
-            (0.0, 0.0)
+            0.0
         };
         let insert_voice = match self.settings.play_mode {
             PlayMode::Poly => true,
@@ -141,7 +141,7 @@ impl Synth {
             },
         };
         if insert_voice {
-           self.voices.insert(key, Voice::new(pitch, bend, pressure, modulation, &self.settings, seq));
+           self.voices.insert(key, Voice::new(pitch, bend, pressure, self.mod_memory, &self.settings, seq));
         }
     }
 
@@ -172,10 +172,10 @@ impl Synth {
         }
     }
 
-    pub fn modulate(&mut self, channel: u8, depth: f32) {
-        self.mod_memory[channel as usize] = depth;
+    pub fn modulate(&mut self, depth: f32) {
+        self.mod_memory = depth;
         for (key, voice) in self.voices.iter_mut() {
-            if key.origin == KeyOrigin::Midi && key.channel == channel {
+            if key.origin == KeyOrigin::Midi {
                 voice.vars.modulation.set(depth);
             }
         }

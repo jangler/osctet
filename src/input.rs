@@ -3,7 +3,8 @@ use eframe::egui::Key;
 use crate::pitch::{Nominal, Note, Tuning};
 
 pub const CC_MODULATION: u8 = 1;
-pub const CC_TIMBRE: u8 = 74;
+pub const CC_MACRO_MIN: u8 = 41;
+pub const CC_MACRO_MAX: u8 = 48;
 
 // sharps aren't much use for keyboard mapping if they're equal to unison
 // or the whole tone
