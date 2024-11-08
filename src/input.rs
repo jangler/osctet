@@ -108,12 +108,12 @@ pub enum MidiEvent {
     },
     Pitch {
         channel: u8,
-        pitch: f32,
+        bend: f32,
     },
 }
 
 impl MidiEvent {
-    const PITCH_CENTER: i16 = 2000; // center value of pitch message
+    const PITCH_CENTER: i16 = 0x2000; // center value of pitch message
 
     pub fn parse(data: &[u8]) -> Option<Self> {
         // all the messages we're interested in are at least 2 bytes
@@ -127,7 +127,7 @@ impl MidiEvent {
             0xa0 => Some(Self::PolyPressure { channel, key: data[1], pressure: *data.get(2)? }),
             0xb0 => Some(Self::Controller { channel, controller: data[1], value: *data.get(2)? }),
             0xd0 => Some(Self::ChannelPressure { channel, pressure: data[1] }),
-            0xe0 => Some(Self::Pitch { channel, pitch: {
+            0xe0 => Some(Self::Pitch { channel, bend: {
                 let raw_pitch = ((*data.get(2)? as i16) << 7) + data[1] as i16;
                 (raw_pitch - Self::PITCH_CENTER) as f32 / Self::PITCH_CENTER as f32
             }}),

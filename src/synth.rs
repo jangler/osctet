@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use fundsp::hacker::*;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
+const PITCH_BEND_RANGE: f32 = 2.0;
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum KeyOrigin {
@@ -94,6 +95,7 @@ pub struct Synth {
     pub play_mode: PlayMode,
     pub glide_time: f32,
     voices: HashMap<Key, Voice>,
+    bend_memory: [f32; 16],
 }
 
 impl Synth {
@@ -104,23 +106,29 @@ impl Synth {
             play_mode: PlayMode::Poly,
             glide_time: 0.05,
             voices: HashMap::new(),
+            bend_memory: [0.0; 16],
         }
     }
 
     pub fn note_on(&mut self, key: Key, pitch: f32, seq: &mut Sequencer) {
+        let bend = if key.origin == KeyOrigin::Midi {
+            self.bend_memory[key.channel as usize]
+        } else {
+            0.0
+        };
         match self.play_mode {
             PlayMode::Poly => {
-                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, &self.filter, seq));
+                self.voices.insert(key, Voice::new(pitch, bend, self.glide_time, &self.oscs, &self.filter, seq));
             },
             PlayMode::Mono => {
                 for voice in self.voices.values_mut() {
                     voice.off(seq);
                 }
-                self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, &self.filter, seq));
+                self.voices.insert(key, Voice::new(pitch, bend, self.glide_time, &self.oscs, &self.filter, seq));
             },
             PlayMode::SingleTrigger => {
                 if self.voices.is_empty() {
-                    self.voices.insert(key, Voice::new(pitch, self.glide_time, &self.oscs, &self.filter, seq));
+                    self.voices.insert(key, Voice::new(pitch, bend, self.glide_time, &self.oscs, &self.filter, seq));
                 } else {
                     let voice = self.voices.drain().map(|(_, v)| v).next().unwrap();
                     voice.freq.set(midi_hz(pitch));
@@ -133,6 +141,15 @@ impl Synth {
     pub fn note_off(&mut self, key: Key, seq: &mut Sequencer) {
         if let Some(voice) = self.voices.remove(&key) {
             voice.off(seq);
+        }
+    }
+
+    pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
+        self.bend_memory[channel as usize] = bend;
+        for (key, voice) in self.voices.iter_mut() {
+            if key.origin == KeyOrigin::Midi && key.channel == channel {
+                voice.freq.set(midi_hz(voice.base_pitch + bend * PITCH_BEND_RANGE));
+            }
         }
     }
 }
@@ -234,6 +251,7 @@ impl ADSR {
 }
 
 struct Voice {
+    base_pitch: f32,
     freq: Shared,
     gate: Shared,
     release_time: f32,
@@ -241,8 +259,8 @@ struct Voice {
 }
 
 impl Voice {
-    fn new(pitch: f32, glide_time: f32, oscs: &[Oscillator], filter: &Filter, seq: &mut Sequencer) -> Self {
-        let freq = shared(midi_hz(pitch));
+    fn new(pitch: f32, bend: f32, glide_time: f32, oscs: &[Oscillator], filter: &Filter, seq: &mut Sequencer) -> Self {
+        let freq = shared(midi_hz(pitch + bend * PITCH_BEND_RANGE));
         let gate = shared(1.0);
         let f = |i: usize| {
             (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * (var(&oscs[i].level) >> follow(0.01)) *
@@ -251,6 +269,7 @@ impl Voice {
         };
         let unit = f(0) + f(1) + f(2) + f(3);
         Self {
+            base_pitch: pitch,
             freq,
             gate,
             release_time: oscs[0].env.release,

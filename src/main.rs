@@ -216,7 +216,10 @@ impl App {
                                         key: key,
                                     }, &mut self.seq);
                                 }
-                            }
+                            },
+                            Some(MidiEvent::Pitch { channel, bend }) => {
+                                self.synth.pitch_bend(channel, bend);
+                            },
                             _ => (),
                         }
                     },
