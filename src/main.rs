@@ -238,8 +238,8 @@ fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &s
     }
 }
 
-fn make_reverb(r: f32, t: f32, d: f32, m: f32) -> Box<dyn AudioUnit> {
-    Box::new(reverb2_stereo(r, t, d, m, highshelf_hz(5000.0, 1.0, db_amp(-1.0))))
+fn make_reverb(r: f32, t: f32, d: f32, m: f32, damp: f32) -> Box<dyn AudioUnit> {
+    Box::new(reverb2_stereo(r, t, d, m, highshelf_hz(5000.0, 1.0, db_amp(-damp))))
 }
 
 impl eframe::App for App {
@@ -298,21 +298,26 @@ impl eframe::App for App {
                 let mut commit = false;
                 let fx = &mut self.global_fx;
                 shared_slider(ui, &fx.reverb_amount, 0.0..=1.0, "Reverb level", false);
-                let (predelay_time, room_size, time, diffusion, mod_speed) =
-                    (fx.predelay_time, fx.reverb_room_size, fx.reverb_time, fx.reverb_diffusion, fx.reverb_mod_speed);
+                let (predelay_time, room_size, time, diffusion, mod_speed, damping) =
+                    (fx.predelay_time, fx.reverb_room_size, fx.reverb_time,
+                        fx.reverb_diffusion, fx.reverb_mod_speed, fx.reverb_damping);
                 ui.add(egui::Slider::new(&mut fx.predelay_time, 0.0..=0.1).text("Predelay"));
-                ui.add(egui::Slider::new(&mut fx.reverb_room_size, 10.0..=30.0).text("Room size"));
+                ui.add(egui::Slider::new(&mut fx.reverb_room_size, 5.0..=100.0).text("Room size").logarithmic(true));
                 ui.add(egui::Slider::new(&mut fx.reverb_time, 0.1..=10.0).text("Time").logarithmic(true));
                 ui.add(egui::Slider::new(&mut fx.reverb_diffusion, 0.0..=1.0).text("Diffusion"));
                 ui.add(egui::Slider::new(&mut fx.reverb_mod_speed, 0.0..=1.0).text("Mod speed"));
+                ui.add(egui::Slider::new(&mut fx.reverb_damping, 0.0..=6.0).text("HF damping"));
                 if predelay_time != fx.predelay_time {
                     fx.net.crossfade(fx.predelay_id, Fade::Smooth, 0.1,
                         Box::new(delay(predelay_time) | delay(predelay_time)));
                     commit = true;
                 }
                 if room_size != fx.reverb_room_size || time != fx.reverb_time ||
-                    diffusion != fx.reverb_diffusion || mod_speed != fx.reverb_mod_speed {
-                    fx.net.crossfade(fx.reverb_id, Fade::Smooth, 0.1, make_reverb(room_size, time, diffusion, mod_speed));
+                    diffusion != fx.reverb_diffusion || mod_speed != fx.reverb_mod_speed ||
+                    damping != fx.reverb_damping {
+                    fx.net.crossfade(fx.reverb_id, Fade::Smooth, 0.1,
+                        make_reverb(fx.reverb_room_size, fx.reverb_time, fx.reverb_diffusion,
+                            fx.reverb_mod_speed, fx.reverb_damping));
                     commit = true;
                 }
                 if commit {
@@ -439,6 +444,7 @@ struct GlobalFX {
     reverb_time: f32,
     reverb_diffusion: f32,
     reverb_mod_speed: f32,
+    reverb_damping: f32,
     reverb_amount: Shared,
     net: Net,
 }
@@ -460,13 +466,14 @@ fn main() -> eframe::Result {
 
     let predelay_time = 0.01;
     let reverb_room_size = 20.0;
-    let reverb_time = 1.0;
+    let reverb_time = 0.2;
     let reverb_diffusion = 0.5;
     let reverb_mod_speed = 0.5;
+    let reverb_damping = 3.0;
     let (reverb, reverb_id) = Net::wrap_id(
-        make_reverb(reverb_room_size, reverb_time, reverb_diffusion, reverb_mod_speed));
+        make_reverb(reverb_room_size, reverb_time, reverb_diffusion, reverb_mod_speed, reverb_damping));
     let (predelay, predelay_id) = Net::wrap_id(Box::new(delay(predelay_time) | delay(predelay_time)));
-    let reverb_amount = shared(0.5);
+    let reverb_amount = shared(0.1);
     let mut net = Net::wrap(Box::new(seq.backend())) >>
         highpass_hz(5.0, 0.1) >> shape(Tanh(1.0)) >> split::<U2>() >>
         (multipass::<U2>() & (var(&reverb_amount) >> split::<U2>()) * (predelay >> reverb));
@@ -479,6 +486,7 @@ fn main() -> eframe::Result {
         reverb_time,
         reverb_diffusion,
         reverb_mod_speed,
+        reverb_damping,
         reverb_amount,
         net,
     };
