@@ -145,7 +145,7 @@ impl App {
                                 origin: KeyOrigin::Keyboard,
                                 channel: 0,
                                 key: key.name().bytes().next().unwrap_or(0),
-                            }, self.tuning.midi_pitch(&note), &mut self.seq);
+                            }, self.tuning.midi_pitch(&note), 100.0 / 127.0, &mut self.seq);
                         } else if !*pressed {
                             self.synth.note_off(Key {
                                 origin: KeyOrigin::Keyboard,
@@ -208,14 +208,24 @@ impl App {
                                         origin: KeyOrigin::Midi,
                                         channel: channel,
                                         key: key,
-                                    }, self.tuning.midi_pitch(&note), &mut self.seq);
+                                    }, self.tuning.midi_pitch(&note), velocity as f32 / 127.0, &mut self.seq);
                                 } else {
-                                    self.synth.note_off(Key{
+                                    self.synth.note_off(Key {
                                         origin: KeyOrigin::Midi,
                                         channel: channel,
                                         key: key,
                                     }, &mut self.seq);
                                 }
+                            },
+                            Some(MidiEvent::PolyPressure { channel, key, pressure }) => {
+                                self.synth.poly_pressure(Key {
+                                    origin: KeyOrigin::Midi,
+                                    channel: channel,
+                                    key: key,
+                                }, pressure as f32 / 127.0);
+                            },
+                            Some(MidiEvent::ChannelPressure { channel, pressure }) => {
+                                self.synth.channel_pressure(channel, pressure as f32 / 127.0);
                             },
                             Some(MidiEvent::Pitch { channel, bend }) => {
                                 self.synth.pitch_bend(channel, bend);

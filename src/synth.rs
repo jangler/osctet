@@ -6,14 +6,14 @@ use fundsp::hacker::*;
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const PITCH_BEND_RANGE: f32 = 2.0;
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub enum KeyOrigin {
     Keyboard,
     Midi,
     Pattern,
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Key {
     pub origin: KeyOrigin,
     pub channel: u8,
@@ -110,31 +110,33 @@ impl Synth {
         }
     }
 
-    pub fn note_on(&mut self, key: Key, pitch: f32, seq: &mut Sequencer) {
+    pub fn note_on(&mut self, key: Key, pitch: f32, pressure: f32, seq: &mut Sequencer) {
         let bend = if key.origin == KeyOrigin::Midi {
             self.bend_memory[key.channel as usize]
         } else {
             0.0
         };
-        match self.play_mode {
-            PlayMode::Poly => {
-                self.voices.insert(key, Voice::new(pitch, bend, self.glide_time, &self.oscs, &self.filter, seq));
-            },
+        let insert_voice = match self.play_mode {
+            PlayMode::Poly => true,
             PlayMode::Mono => {
                 for voice in self.voices.values_mut() {
                     voice.off(seq);
                 }
-                self.voices.insert(key, Voice::new(pitch, bend, self.glide_time, &self.oscs, &self.filter, seq));
+                true
             },
             PlayMode::SingleTrigger => {
                 if self.voices.is_empty() {
-                    self.voices.insert(key, Voice::new(pitch, bend, self.glide_time, &self.oscs, &self.filter, seq));
+                    true
                 } else {
                     let voice = self.voices.drain().map(|(_, v)| v).next().unwrap();
                     voice.freq.set(midi_hz(pitch));
-                    self.voices.insert(key, voice);
+                    self.voices.insert(key.clone(), voice);
+                    false
                 }
             },
+        };
+        if insert_voice {
+           self.voices.insert(key, Voice::new(pitch, bend, pressure, self.glide_time, &self.oscs, &self.filter, seq));
         }
     }
 
@@ -149,6 +151,18 @@ impl Synth {
         for (key, voice) in self.voices.iter_mut() {
             if key.origin == KeyOrigin::Midi && key.channel == channel {
                 voice.freq.set(midi_hz(voice.base_pitch + bend * PITCH_BEND_RANGE));
+            }
+        }
+    }
+
+    pub fn poly_pressure(&mut self, key: Key, pressure: f32) {
+        self.voices.get(&key).inspect(|v| v.pressure.set(pressure));
+    }
+
+    pub fn channel_pressure(&mut self, channel: u8, pressure: f32) {
+        for (key, voice) in self.voices.iter_mut() {
+            if key.origin == KeyOrigin::Midi && key.channel == channel {
+                voice.pressure.set(pressure);
             }
         }
     }
@@ -253,24 +267,28 @@ impl ADSR {
 struct Voice {
     base_pitch: f32,
     freq: Shared,
+    pressure: Shared,
     gate: Shared,
     release_time: f32,
     event_id: EventId,
 }
 
 impl Voice {
-    fn new(pitch: f32, bend: f32, glide_time: f32, oscs: &[Oscillator], filter: &Filter, seq: &mut Sequencer) -> Self {
+    fn new(pitch: f32, bend: f32, pressure: f32, glide_time: f32, oscs: &[Oscillator], filter: &Filter, seq: &mut Sequencer) -> Self {
         let freq = shared(midi_hz(pitch + bend * PITCH_BEND_RANGE));
         let gate = shared(1.0);
+        let pressure = shared(pressure);
         let f = |i: usize| {
             (oscs[i].waveform.make_net(&freq, glide_time, &oscs[i].duty)) * (var(&oscs[i].level) >> follow(0.01)) *
-                (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release)) >>
+                (var(&gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release) *
+                var(&pressure)) >>
                 filter.make_net(&freq, &gate)
         };
         let unit = f(0) + f(1) + f(2) + f(3);
         Self {
             base_pitch: pitch,
             freq,
+            pressure,
             gate,
             release_time: oscs[0].env.release,
             event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(unit)),
