@@ -238,6 +238,10 @@ fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &s
     }
 }
 
+fn make_reverb(r: f32, t: f32, d: f32, m: f32) -> Box<dyn AudioUnit> {
+    Box::new(reverb2_stereo(r, t, d, m, highshelf_hz(5000.0, 1.0, db_amp(-1.0))))
+}
+
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // process UI input
@@ -288,26 +292,27 @@ impl eframe::App for App {
         });
 
         // instrument panel
-        egui::SidePanel::left("left_panel").show(ctx, |ui| {
+        egui::SidePanel::left("left_panel").resizable(false).show(ctx, |ui| {
             // global controls
             {
                 let mut commit = false;
                 let fx = &mut self.global_fx;
                 shared_slider(ui, &fx.reverb_amount, 0.0..=1.0, "Reverb level", false);
-                let (predelay_time, room_size, time, damping) =
-                    (fx.predelay_time, fx.reverb_room_size, fx.reverb_time, fx.reverb_damping);
+                let (predelay_time, room_size, time, diffusion, mod_speed) =
+                    (fx.predelay_time, fx.reverb_room_size, fx.reverb_time, fx.reverb_diffusion, fx.reverb_mod_speed);
                 ui.add(egui::Slider::new(&mut fx.predelay_time, 0.0..=0.1).text("Predelay"));
-                ui.add(egui::Slider::new(&mut fx.reverb_room_size, 5.0..=20.0).text("Room size"));
+                ui.add(egui::Slider::new(&mut fx.reverb_room_size, 10.0..=30.0).text("Room size"));
                 ui.add(egui::Slider::new(&mut fx.reverb_time, 0.1..=10.0).text("Time").logarithmic(true));
-                ui.add(egui::Slider::new(&mut fx.reverb_damping, 0.0..=1.0).text("Damping"));
+                ui.add(egui::Slider::new(&mut fx.reverb_diffusion, 0.0..=1.0).text("Diffusion"));
+                ui.add(egui::Slider::new(&mut fx.reverb_mod_speed, 0.0..=1.0).text("Mod speed"));
                 if predelay_time != fx.predelay_time {
                     fx.net.crossfade(fx.predelay_id, Fade::Smooth, 0.1,
                         Box::new(delay(predelay_time) | delay(predelay_time)));
                     commit = true;
                 }
-                if room_size != fx.reverb_room_size || time != fx.reverb_time || damping != fx.reverb_damping {
-                    fx.net.crossfade(fx.reverb_id, Fade::Smooth, 0.1,
-                        Box::new(reverb_stereo(room_size, time, damping)));
+                if room_size != fx.reverb_room_size || time != fx.reverb_time ||
+                    diffusion != fx.reverb_diffusion || mod_speed != fx.reverb_mod_speed {
+                    fx.net.crossfade(fx.reverb_id, Fade::Smooth, 0.1, make_reverb(room_size, time, diffusion, mod_speed));
                     commit = true;
                 }
                 if commit {
@@ -432,7 +437,8 @@ struct GlobalFX {
     reverb_id: NodeId,
     reverb_room_size: f32,
     reverb_time: f32,
-    reverb_damping: f32,
+    reverb_diffusion: f32,
+    reverb_mod_speed: f32,
     reverb_amount: Shared,
     net: Net,
 }
@@ -453,7 +459,12 @@ fn main() -> eframe::Result {
     seq.set_sample_rate(config.sample_rate.0 as f64);
 
     let predelay_time = 0.01;
-    let (reverb, reverb_id) = Net::wrap_id(Box::new(reverb_stereo(10.0, 0.2, 0.5)));
+    let reverb_room_size = 20.0;
+    let reverb_time = 1.0;
+    let reverb_diffusion = 0.5;
+    let reverb_mod_speed = 0.5;
+    let (reverb, reverb_id) = Net::wrap_id(
+        make_reverb(reverb_room_size, reverb_time, reverb_diffusion, reverb_mod_speed));
     let (predelay, predelay_id) = Net::wrap_id(Box::new(delay(predelay_time) | delay(predelay_time)));
     let reverb_amount = shared(0.5);
     let mut net = Net::wrap(Box::new(seq.backend())) >>
@@ -464,9 +475,10 @@ fn main() -> eframe::Result {
         predelay_time,
         predelay_id,
         reverb_id,
-        reverb_room_size: 10.0,
-        reverb_time: 0.3,
-        reverb_damping: 0.5,
+        reverb_room_size,
+        reverb_time,
+        reverb_diffusion,
+        reverb_mod_speed,
         reverb_amount,
         net,
     };
