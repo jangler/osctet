@@ -5,6 +5,7 @@ use fundsp::hacker::*;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const PITCH_BEND_RANGE: f32 = 2.0;
+const SEMITONE_RATIO: f32 = 1.059463;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum KeyOrigin {
@@ -59,13 +60,15 @@ impl Waveform {
         }
     }
 
-    fn make_net(&self, freq: &Shared, glide_time: f32, duty: &Shared) -> Net {
+    fn make_net(&self, freq: &Shared, glide_time: f32, osc: &Oscillator) -> Net {
+        let base = var(freq) * (var(&osc.fine_pitch) >> shape_fn(|x| pow(SEMITONE_RATIO, x))) >> follow(glide_time);
+
         // have to compensate for different volumes. the sine is so loud!
         match self {
-            Self::Sawtooth => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> saw())),
-            Self::Pulse => Net::wrap(Box::new((var(freq) >> follow(glide_time) | var(duty)) >> pulse())),
-            Self::Triangle => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> triangle() * 2.0)),
-            Self::Sine => Net::wrap(Box::new(var(freq) >> follow(glide_time) >> sine() * 0.5)),
+            Self::Sawtooth => Net::wrap(Box::new(base >> saw())),
+            Self::Pulse => Net::wrap(Box::new((base | var(&osc.duty)) >> pulse())),
+            Self::Triangle => Net::wrap(Box::new(base >> triangle() * 2.0)),
+            Self::Sine => Net::wrap(Box::new(base >> sine() * 0.5)),
         }
     }
 }
@@ -190,6 +193,7 @@ pub struct Settings {
 pub struct Oscillator {
     pub level: Shared,
     pub duty: Shared,
+    pub fine_pitch: Shared,
     pub env: ADSR,
     pub waveform: Waveform,
 }
@@ -199,6 +203,7 @@ impl Oscillator {
         Self {
             level: shared(level),
             duty: shared(0.5),
+            fine_pitch: shared(0.0),
             env: ADSR::new(),
             waveform: Waveform::Sawtooth,
         }
@@ -361,7 +366,7 @@ impl Voice {
         };
         let f = |i: usize| {
             let oscs = &settings.oscs;
-            (oscs[i].waveform.make_net(&vars.freq, settings.glide_time, &oscs[i].duty)) * (var(&oscs[i].level) >> follow(0.01)) *
+            (oscs[i].waveform.make_net(&vars.freq, settings.glide_time, &oscs[i])) * (var(&oscs[i].level) >> follow(0.01)) *
                 (var(&vars.gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release) *
                 var(&vars.pressure)) >>
                 settings.filter.make_net(&vars, &settings.mod_matrix)

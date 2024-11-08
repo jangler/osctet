@@ -364,6 +364,7 @@ impl eframe::App for App {
             });
             let osc = &mut settings.oscs[self.selected_osc];
             shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
+            shared_slider(ui, &osc.fine_pitch, -0.5..=0.5, "Fine pitch", false);
             ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
                 shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
             });
