@@ -190,56 +190,51 @@ impl App {
 
     fn handle_midi(&mut self) {
         if let Some(rx) = &self.midi.rx {
-            loop {
-                match rx.try_recv() {
-                    Ok(v) => {
-                        match MidiEvent::parse(&v) {
-                            Some(MidiEvent::NoteOff { channel, key, .. }) => {
-                                self.synth.note_off(Key{
-                                    origin: KeyOrigin::Midi,
-                                    channel: channel,
-                                    key: key,
-                                }, &mut self.seq);
-                            },
-                            Some(MidiEvent::NoteOn { channel, key, velocity }) => {
-                                if velocity != 0 {
-                                    let note = input::note_from_midi(v[1] as i8, &self.tuning);
-                                    self.synth.note_on(Key {
-                                        origin: KeyOrigin::Midi,
-                                        channel: channel,
-                                        key: key,
-                                    }, self.tuning.midi_pitch(&note), velocity as f32 / 127.0, &mut self.seq);
-                                } else {
-                                    self.synth.note_off(Key {
-                                        origin: KeyOrigin::Midi,
-                                        channel: channel,
-                                        key: key,
-                                    }, &mut self.seq);
-                                }
-                            },
-                            Some(MidiEvent::PolyPressure { channel, key, pressure }) => {
-                                self.synth.poly_pressure(Key {
-                                    origin: KeyOrigin::Midi,
-                                    channel: channel,
-                                    key: key,
-                                }, pressure as f32 / 127.0);
-                            },
-                            Some(MidiEvent::Controller { controller, value, .. }) => {
-                                if controller == input::CC_MODULATION ||
-                                    (input::CC_MACRO_MIN..=input::CC_MACRO_MAX).contains(&controller) {
-                                    self.synth.modulate(value as f32 / 127.0);
-                                }
-                            },
-                            Some(MidiEvent::ChannelPressure { channel, pressure }) => {
-                                self.synth.channel_pressure(channel, pressure as f32 / 127.0);
-                            },
-                            Some(MidiEvent::Pitch { channel, bend }) => {
-                                self.synth.pitch_bend(channel, bend);
-                            },
-                            _ => (),
+            while let Ok(v) = rx.try_recv() {
+                match MidiEvent::parse(&v) {
+                    Some(MidiEvent::NoteOff { channel, key, .. }) => {
+                        self.synth.note_off(Key{
+                            origin: KeyOrigin::Midi,
+                            channel: channel,
+                            key: key,
+                        }, &mut self.seq);
+                    },
+                    Some(MidiEvent::NoteOn { channel, key, velocity }) => {
+                        if velocity != 0 {
+                            let note = input::note_from_midi(v[1] as i8, &self.tuning);
+                            self.synth.note_on(Key {
+                                origin: KeyOrigin::Midi,
+                                channel: channel,
+                                key: key,
+                            }, self.tuning.midi_pitch(&note), velocity as f32 / 127.0, &mut self.seq);
+                        } else {
+                            self.synth.note_off(Key {
+                                origin: KeyOrigin::Midi,
+                                channel: channel,
+                                key: key,
+                            }, &mut self.seq);
                         }
                     },
-                    Err(_) => break,
+                    Some(MidiEvent::PolyPressure { channel, key, pressure }) => {
+                        self.synth.poly_pressure(Key {
+                            origin: KeyOrigin::Midi,
+                            channel: channel,
+                            key: key,
+                        }, pressure as f32 / 127.0);
+                    },
+                    Some(MidiEvent::Controller { controller, value, .. }) => {
+                        if controller == input::CC_MODULATION ||
+                            (input::CC_MACRO_MIN..=input::CC_MACRO_MAX).contains(&controller) {
+                            self.synth.modulate(value as f32 / 127.0);
+                        }
+                    },
+                    Some(MidiEvent::ChannelPressure { channel, pressure }) => {
+                        self.synth.channel_pressure(channel, pressure as f32 / 127.0);
+                    },
+                    Some(MidiEvent::Pitch { channel, bend }) => {
+                        self.synth.pitch_bend(channel, bend);
+                    },
+                    None => (),
                 }
             }
         }
