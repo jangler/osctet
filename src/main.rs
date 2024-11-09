@@ -223,8 +223,7 @@ impl App {
                         }, pressure as f32 / 127.0);
                     },
                     Some(MidiEvent::Controller { controller, value, .. }) => {
-                        if controller == input::CC_MODULATION ||
-                            (input::CC_MACRO_MIN..=input::CC_MACRO_MAX).contains(&controller) {
+                        if let input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX = controller {
                             self.synth.modulate(value as f32 / 127.0);
                         }
                     },
