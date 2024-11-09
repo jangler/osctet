@@ -434,7 +434,7 @@ impl eframe::App for App {
                                     ui.selectable_value(&mut m.target, variant, variant.to_string());
                                 }
                             });
-                        ui.add(egui::Slider::new(&mut m.depth, -1.0..=1.0));
+                        shared_slider(ui, &m.depth, -1.0..=1.0, "", false);
                         if ui.button("x").clicked() {
                             removal_index = Some(i);
                         }

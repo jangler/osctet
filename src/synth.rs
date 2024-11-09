@@ -263,7 +263,7 @@ impl Filter {
                 match m.source {
                     ModSource::Modulation => {
                         // range is +/- 2 octaves
-                        cutoff_mod = cutoff_mod * ((var(&vars.modulation) * m.depth) >> shape_fn(|x| pow(4.0, x)));
+                        cutoff_mod = cutoff_mod * ((var(&vars.modulation) * var(&m.depth)) >> shape_fn(|x| pow(4.0, x)));
                     },
                 }
             }
@@ -302,7 +302,7 @@ impl ADSR {
 pub struct Modulation {
     pub source: ModSource,
     pub target: ModTarget,
-    pub depth: f32,
+    pub depth: Shared,
 }
 
 impl Modulation {
@@ -310,7 +310,7 @@ impl Modulation {
         Self {
             source: ModSource::Modulation,
             target: ModTarget::FilterCutoff,
-            depth: 0.0,
+            depth: shared(0.0),
         }
     }
 }
