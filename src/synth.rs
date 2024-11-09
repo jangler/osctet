@@ -60,13 +60,16 @@ impl Waveform {
         }
     }
 
-    fn make_net(&self, freq: &Shared, glide_time: f32, osc: &Oscillator) -> Net {
-        let base = var(freq) * (var(&osc.fine_pitch) >> shape_fn(|x| pow(SEMITONE_RATIO, x))) >> follow(glide_time);
+    fn make_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize) -> Net {
+        let base = var(&vars.freq) * (var(&osc.fine_pitch) >> shape_fn(|x| pow(SEMITONE_RATIO, x))) >> follow(settings.glide_time);
 
         // have to compensate for different volumes. the sine is so loud!
         match self {
             Self::Sawtooth => Net::wrap(Box::new(base >> saw())),
-            Self::Pulse => Net::wrap(Box::new((base | var(&osc.duty)) >> pulse())),
+            Self::Pulse => {
+                let duty_mod = settings.dsp_component(vars, ModTarget::Duty(index));
+                Net::wrap(Box::new((base | var(&osc.duty) + duty_mod >> follow(0.01)) >> pulse()))
+            },
             Self::Triangle => Net::wrap(Box::new(base >> triangle() * 2.0)),
             Self::Sine => Net::wrap(Box::new(base >> sine() * 0.5)),
         }
@@ -190,6 +193,18 @@ pub struct Settings {
     pub mod_matrix: Vec<Modulation>,
 }
 
+impl Settings {
+    fn dsp_component(&self, vars: &VoiceVars, target: ModTarget) -> Net {
+        let mut net = Net::wrap(Box::new(constant(0.0)));
+        for m in &self.mod_matrix {
+            if m.target == target {
+                net = net + m.dsp_component(&vars);
+            }
+        }
+        net
+    }
+}
+
 pub struct Oscillator {
     pub level: Shared,
     pub duty: Shared,
@@ -250,24 +265,14 @@ impl Filter {
         }
     }
 
-    fn make_net(&self, vars: &VoiceVars, mods: &[Modulation]) -> Net {
+    fn make_net(&self, settings: &Settings, vars: &VoiceVars) -> Net {
         // FIXME: partial key tracking uses linear math, when it should be logarithmic
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
             KeyTracking::Partial => Net::wrap(Box::new((var(&vars.freq) + KEY_TRACKING_REF_FREQ) * 0.5 * (1.0/KEY_TRACKING_REF_FREQ))),
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
-        let mut cutoff_mod = Net::wrap(Box::new(constant(1.0)));
-        for m in mods {
-            if m.target == ModTarget::FilterCutoff {
-                match m.source {
-                    ModSource::Modulation => {
-                        // range is +/- 2 octaves
-                        cutoff_mod = cutoff_mod * ((var(&vars.modulation) * var(&m.depth)) >> shape_fn(|x| pow(4.0, x)));
-                    },
-                }
-            }
-        }
+        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff) >> shape_fn(|x| pow(4.0, x));
         let f = match self.filter_type {
             FilterType::Lowpass => Net::wrap(Box::new(flowpass(Tanh(1.0)))),
             FilterType::Highpass => Net::wrap(Box::new(fhighpass(Tanh(1.0)))),
@@ -313,20 +318,30 @@ impl Modulation {
             depth: shared(0.0),
         }
     }
+
+    fn dsp_component(&self, vars: &VoiceVars) -> An<Binop<FrameMul<typenum::UInt<typenum::UTerm, typenum::B1>>, Var, Var>> {
+        let shared_var = match self.source {
+            ModSource::Pressure => &vars.pressure,
+            ModSource::Modulation => &vars.modulation,
+        };
+        var(shared_var) * var(&self.depth)
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ModSource {
+    Pressure,
     Modulation,
 }
 
 impl ModSource {
-    pub const VARIANTS: [ModSource; 1] = [Self::Modulation];
+    pub const VARIANTS: [ModSource; 2] = [Self::Pressure, Self::Modulation];
 }
 
 impl Display for ModSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
+            Self::Pressure => "Pressure",
             Self::Modulation => "Mod wheel",
         })
     }
@@ -334,18 +349,21 @@ impl Display for ModSource {
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ModTarget {
+    Duty(usize),
     FilterCutoff,
 }
 
 impl ModTarget {
-    pub const VARIANTS: [ModTarget; 1] = [Self::FilterCutoff];
+    pub const VARIANTS: [ModTarget; 2] = [Self::Duty(0), Self::FilterCutoff];
 }
 
 impl Display for ModTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
+        let s = match self {
+            Self::Duty(n) => &format!("Osc {} duty", n + 1),
             Self::FilterCutoff => "Filter cutoff",
-        })
+        };
+        f.write_str(s)
     }
 }
 
@@ -366,10 +384,10 @@ impl Voice {
         };
         let f = |i: usize| {
             let oscs = &settings.oscs;
-            (oscs[i].waveform.make_net(&vars.freq, settings.glide_time, &oscs[i])) * (var(&oscs[i].level) >> follow(0.01)) *
+            (oscs[i].waveform.make_net(&settings, &vars, &oscs[i], i)) * (var(&oscs[i].level) >> follow(0.01)) *
                 (var(&vars.gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release) *
                 var(&vars.pressure)) >>
-                settings.filter.make_net(&vars, &settings.mod_matrix)
+                settings.filter.make_net(&settings, &vars)
         };
         let unit = f(0) + f(1) + f(2) + f(3);
         Self {
