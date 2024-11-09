@@ -262,8 +262,8 @@ impl Filter {
             if m.target == ModTarget::FilterCutoff {
                 match m.source {
                     ModSource::Modulation => {
-                        // FIXME: this is also linear when it should be logarithmic.
-                        cutoff_mod = cutoff_mod * (1.0 - m.depth + var(&vars.modulation) * m.depth);
+                        // range is +/- 2 octaves
+                        cutoff_mod = cutoff_mod * ((var(&vars.modulation) * m.depth) >> shape_fn(|x| pow(4.0, x)));
                     },
                 }
             }

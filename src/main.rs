@@ -420,21 +420,21 @@ impl eframe::App for App {
 
                     let mut removal_index: Option<usize> = None;
                     for (i, m) in settings.mod_matrix.iter_mut().enumerate() {
-                        egui::ComboBox::from_label("")
+                        egui::ComboBox::from_id_salt(format!("mod_source_{}", i))
                             .selected_text(m.source.to_string())
                             .show_ui(ui, |ui| {
                                 for variant in ModSource::VARIANTS {
                                     ui.selectable_value(&mut m.source, variant, variant.to_string());
                                 }
                             });
-                        egui::ComboBox::from_label("")
+                        egui::ComboBox::from_id_salt(format!("mod_target_{}", i))
                             .selected_text(m.target.to_string())
                             .show_ui(ui, |ui| {
                                 for variant in ModTarget::VARIANTS {
                                     ui.selectable_value(&mut m.target, variant, variant.to_string());
                                 }
                             });
-                        ui.add(egui::Slider::new(&mut m.depth, 0.0..=1.0));
+                        ui.add(egui::Slider::new(&mut m.depth, -1.0..=1.0));
                         if ui.button("x").clicked() {
                             removal_index = Some(i);
                         }
