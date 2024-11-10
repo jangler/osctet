@@ -109,6 +109,7 @@ struct App {
     midi: Midi,
     config: Config,
     selected_osc: usize,
+    selected_env: usize,
     global_fx: GlobalFX,
     song_editor: song::Editor,
 }
@@ -137,6 +138,7 @@ impl App {
             midi,
             config,
             selected_osc: 0,
+            selected_env: 0,
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
         }
@@ -391,10 +393,6 @@ impl eframe::App for App {
                         ui.selectable_value(&mut osc.waveform, variant, variant.name());
                     }
                 });
-            ui.add(egui::Slider::new(&mut osc.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
-            ui.add(egui::Slider::new(&mut osc.env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
-            ui.add(egui::Slider::new(&mut osc.env.sustain, 0.0..=1.0).text("Sustain"));
-            ui.add(egui::Slider::new(&mut osc.env.release, 0.01..=10.0).text("Release").logarithmic(true));
             ui.separator();
 
             ui.add(egui::Label::new("Filter"));
@@ -415,10 +413,20 @@ impl eframe::App for App {
                     }
                 });
             shared_slider(ui, &settings.filter.env_level, -1.0..=7.0, "Envelope level", false);
-            ui.add(egui::Slider::new(&mut settings.filter.env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
-            ui.add(egui::Slider::new(&mut settings.filter.env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
-            ui.add(egui::Slider::new(&mut settings.filter.env.sustain, 0.0..=1.0).text("Sustain"));
-            ui.add(egui::Slider::new(&mut settings.filter.env.release, 0.01..=10.0).text("Release").logarithmic(true));
+
+            // envelopes
+            ui.separator();
+            ui.horizontal(|ui| {
+                for i in 0..settings.envs.len() {
+                    ui.selectable_value(&mut self.selected_env, i, format!("Env {}", i + 1));
+                }
+            });
+            if let Some(env) = settings.envs.get_mut(self.selected_env) {
+                ui.add(egui::Slider::new(&mut env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
+                ui.add(egui::Slider::new(&mut env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
+                ui.add(egui::Slider::new(&mut env.sustain, 0.0..=1.0).text("Sustain"));
+                ui.add(egui::Slider::new(&mut env.release, 0.01..=10.0).text("Release").logarithmic(true));
+            }
 
             // mod matrix
             ui.separator();
@@ -449,7 +457,9 @@ impl eframe::App for App {
                                     ui.selectable_value(&mut m.target, variant, variant.to_string());
                                 }
                             });
-                        shared_slider(ui, &m.depth, -1.0..=1.0, "", false);
+                        ui.add_enabled_ui(m.target.is_additive(), |ui| {
+                            shared_slider(ui, &m.depth, -1.0..=1.0, "", false);
+                        });
                         if ui.button("x").clicked() {
                             removal_index = Some(i);
                         }
@@ -567,8 +577,9 @@ fn main() -> eframe::Result {
         net,
     };
 
-    let mut errs = vec![];
-    match device.build_output_stream(
+    // TODO: handle these errors correctly (without dropping the stream!)
+    let errs = vec![];
+    let stream = device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
             // there's probably a better way to do this
@@ -585,12 +596,8 @@ fn main() -> eframe::Result {
             eprintln!("stream error: {}", err);
         },
         None
-    ) {
-        Ok(stream) => if let Err(e) = stream.play() {
-            errs.push(e.to_string());
-        },
-        Err(e) => errs.push(e.to_string()),
-    }
+    ).unwrap();
+    stream.play().unwrap();
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),

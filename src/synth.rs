@@ -106,10 +106,15 @@ impl Synth {
         Self {
             settings: Settings {
                 oscs: [Oscillator::new(0.5), Oscillator::new(0.0), Oscillator::new(0.0), Oscillator::new(0.0)],
+                envs: vec![ADSR::new()],
                 filter: Filter::new(),
                 play_mode: PlayMode::Poly,
                 glide_time: 0.05,
-                mod_matrix: vec![],
+                mod_matrix: vec![Modulation {
+                    source: ModSource::Envelope(0),
+                    target: ModTarget::Gain,
+                    depth: shared(1.0),
+                }],
             },
             voices: HashMap::new(),
             bend_memory: [0.0; 16],
@@ -187,6 +192,7 @@ impl Synth {
 
 pub struct Settings {
     pub oscs: [Oscillator; 4],
+    pub envs: Vec<ADSR>,
     pub filter: Filter,
     pub play_mode: PlayMode,
     pub glide_time: f32,
@@ -195,10 +201,14 @@ pub struct Settings {
 
 impl Settings {
     fn dsp_component(&self, vars: &VoiceVars, target: ModTarget) -> Net {
-        let mut net = Net::wrap(Box::new(constant(0.0)));
+        let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
         for m in &self.mod_matrix {
             if m.target == target {
-                net = net + m.dsp_component(&vars);
+                if target.is_additive() {
+                    net = net + m.dsp_component(&self, &vars);
+                } else {
+                    net = net * m.dsp_component(&self, &vars);
+                }
             }
         }
         net
@@ -209,7 +219,6 @@ pub struct Oscillator {
     pub level: Shared,
     pub duty: Shared,
     pub fine_pitch: Shared,
-    pub env: ADSR,
     pub waveform: Waveform,
 }
 
@@ -219,7 +228,6 @@ impl Oscillator {
             level: shared(level),
             duty: shared(0.5),
             fine_pitch: shared(0.0),
-            env: ADSR::new(),
             waveform: Waveform::Sawtooth,
         }
     }
@@ -302,6 +310,10 @@ impl ADSR {
             release: 0.01,
         }
     }
+
+    fn make_node(&self, gate: &Shared) -> An<Pipe<Var, EnvelopeIn<f32, impl FnMut(f32, &numeric_array::NumericArray<f32, typenum::UInt<typenum::UTerm, typenum::B1>>) -> f32 + Clone, typenum::UInt<typenum::UTerm, typenum::B1>, f32>>> {
+        var(gate) >> adsr_live(self.attack, self.decay, self.sustain, self.release)
+    }
 }
 
 pub struct Modulation {
@@ -319,12 +331,20 @@ impl Modulation {
         }
     }
 
-    fn dsp_component(&self, vars: &VoiceVars) -> An<Binop<FrameMul<typenum::UInt<typenum::UTerm, typenum::B1>>, Var, Var>> {
-        let shared_var = match self.source {
-            ModSource::Pressure => &vars.pressure,
-            ModSource::Modulation => &vars.modulation,
+    fn dsp_component(&self, settings: &Settings, vars: &VoiceVars) -> Net {
+        let net = match self.source {
+            ModSource::Envelope(i) => match settings.envs.get(i) {
+                Some(env) => Net::wrap(Box::new(env.make_node(&vars.gate))),
+                None => Net::wrap(Box::new(zero())),
+            },
+            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure))),
+            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation))),
         };
-        var(shared_var) * var(&self.depth)
+        if self.target.is_additive() {
+            net * var(&self.depth)
+        } else {
+            net
+        }
     }
 }
 
@@ -332,34 +352,43 @@ impl Modulation {
 pub enum ModSource {
     Pressure,
     Modulation,
+    Envelope(usize),
 }
 
 impl ModSource {
-    pub const VARIANTS: [ModSource; 2] = [Self::Pressure, Self::Modulation];
+    pub const VARIANTS: [ModSource; 3] = [Self::Pressure, Self::Modulation, Self::Envelope(0)];
 }
 
 impl Display for ModSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
+        let s = match self {
             Self::Pressure => "Pressure",
             Self::Modulation => "Mod wheel",
-        })
+            Self::Envelope(i) => &format!("Envelope {}", i + 1),
+        };
+        f.write_str(s)
     }
 }
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ModTarget {
+    Gain,
     Duty(usize),
     FilterCutoff,
 }
 
 impl ModTarget {
-    pub const VARIANTS: [ModTarget; 2] = [Self::Duty(0), Self::FilterCutoff];
+    pub const VARIANTS: [ModTarget; 3] = [Self::Gain, Self::Duty(0), Self::FilterCutoff];
+
+    pub fn is_additive(&self) -> bool {
+        *self != ModTarget::Gain
+    }
 }
 
 impl Display for ModTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
+            Self::Gain => "Gain",
             Self::Duty(n) => &format!("Osc {} duty", n + 1),
             Self::FilterCutoff => "Filter cutoff",
         };
@@ -376,24 +405,24 @@ struct Voice {
 
 impl Voice {
     fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, settings: &Settings, seq: &mut Sequencer) -> Self {
+        let gate = shared(1.0);
         let vars = VoiceVars {
             freq: shared(midi_hz(pitch + bend)),
-            gate: shared(1.0),
+            gate,
             pressure: shared(pressure),
             modulation: shared(modulation),
         };
         let f = |i: usize| {
             let oscs = &settings.oscs;
             (oscs[i].waveform.make_net(&settings, &vars, &oscs[i], i)) * (var(&oscs[i].level) >> follow(0.01)) *
-                (var(&vars.gate) >> adsr_live(oscs[i].env.attack, oscs[i].env.decay, oscs[i].env.sustain, oscs[i].env.release) *
-                var(&vars.pressure)) >>
+                settings.dsp_component(&vars, ModTarget::Gain) >>
                 settings.filter.make_net(&settings, &vars)
         };
         let unit = f(0) + f(1) + f(2) + f(3);
         Self {
             vars,
             base_pitch: pitch,
-            release_time: settings.oscs.iter().map(|osc| osc.env.release).fold(0.0, f32::max),
+            release_time: settings.envs.iter().map(|env| env.release).fold(0.0, f32::max),
             event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(unit)),
         }
     }
