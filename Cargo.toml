@@ -12,6 +12,7 @@ midir = "0.10.0"
 anyhow = "1.0.92"
 serde = { version = "1.0.214", features = ["derive"] }
 toml = "0.8.19"
+rand = "0.8.5"
 
 [profile.dev]
 opt-level = 1

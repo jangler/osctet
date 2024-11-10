@@ -1,6 +1,7 @@
 use core::f64;
 use std::{collections::HashMap, fmt::Display};
 
+use rand::prelude::*;
 use fundsp::hacker::*;
 
 pub const MAX_ENVS: usize = 8;
@@ -217,7 +218,7 @@ impl Settings {
     }
 
     pub fn mod_sources(&self) -> Vec<ModSource> {
-        let mut v = vec![ModSource::Pressure, ModSource::Modulation];
+        let mut v = vec![ModSource::Pitch, ModSource::Pressure, ModSource::Modulation, ModSource::Random];
         for i in 0..self.envs.len() {
             v.push(ModSource::Envelope(i));
         }
@@ -343,12 +344,14 @@ impl Modulation {
 
     fn dsp_component(&self, settings: &Settings, vars: &VoiceVars) -> Net {
         let net = match self.source {
+            ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
+            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure))),
+            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation))),
+            ModSource::Random => Net::wrap(Box::new(constant(random::<f32>()))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
                 Some(env) => Net::wrap(Box::new(env.make_node(&vars.gate))),
                 None => Net::wrap(Box::new(zero())),
             },
-            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure))),
-            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation))),
         };
         if self.target.is_additive() {
             net * var(&self.depth)
@@ -360,16 +363,20 @@ impl Modulation {
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ModSource {
+    Pitch,
     Pressure,
     Modulation,
+    Random,
     Envelope(usize),
 }
 
 impl Display for ModSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
+            Self::Pitch => "Pitch",
             Self::Pressure => "Pressure",
             Self::Modulation => "Mod wheel",
+            Self::Random => "Random",
             Self::Envelope(i) => &format!("Envelope {}", i + 1),
         };
         f.write_str(s)
