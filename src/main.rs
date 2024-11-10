@@ -73,7 +73,7 @@ impl Midi {
             rx: None,
             input_id: 0,
             rpn: (0, 0),
-            bend_range: 0.0,
+            bend_range: 2.0,
         };
         m.input = m.new_input().ok();
         m
