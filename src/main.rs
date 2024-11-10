@@ -11,7 +11,7 @@ use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
 use anyhow::{bail, Result};
-use synth::{FilterType, Key, KeyOrigin, KeyTracking, ModSource, ModTarget, PlayMode, Synth, Waveform};
+use synth::{FilterType, Key, KeyOrigin, KeyTracking, PlayMode, Synth, Waveform};
 
 mod pitch;
 mod input;
@@ -379,20 +379,30 @@ impl eframe::App for App {
                 for i in 0..settings.oscs.len() {
                     ui.selectable_value(&mut self.selected_osc, i, format!("Osc {}", i + 1));
                 }
-            });
-            let osc = &mut settings.oscs[self.selected_osc];
-            shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
-            shared_slider(ui, &osc.fine_pitch, -0.5..=0.5, "Fine pitch", false);
-            ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
-                shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
-            });
-            egui::ComboBox::from_label("Waveform")
-                .selected_text(osc.waveform.name())
-                .show_ui(ui, |ui| {
-                    for variant in Waveform::VARIANTS {
-                        ui.selectable_value(&mut osc.waveform, variant, variant.name());
+                if settings.oscs.len() < synth::MAX_OSCS && ui.button("+").clicked() {
+                    settings.oscs.push(synth::Oscillator::new());
+                }
+                if settings.oscs.len() > 1 && ui.button("-").clicked() {
+                    settings.remove_osc(self.selected_osc);
+                    if self.selected_osc >= settings.oscs.len() {
+                        self.selected_osc -= 1;
                     }
+                }
+            });
+            if let Some(osc) = settings.oscs.get_mut(self.selected_osc) {
+                shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
+                shared_slider(ui, &osc.fine_pitch, -0.5..=0.5, "Fine pitch", false);
+                ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
+                    shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
                 });
+                egui::ComboBox::from_label("Waveform")
+                    .selected_text(osc.waveform.name())
+                    .show_ui(ui, |ui| {
+                        for variant in Waveform::VARIANTS {
+                            ui.selectable_value(&mut osc.waveform, variant, variant.name());
+                        }
+                    });
+            }
             ui.separator();
 
             ui.add(egui::Label::new("Filter"));
@@ -422,8 +432,11 @@ impl eframe::App for App {
                 if settings.envs.len() < synth::MAX_ENVS && ui.button("+").clicked() {
                     settings.envs.push(synth::ADSR::new());
                 }
-                if self.selected_env < settings.envs.len() && ui.button("-").clicked() {
-                    settings.envs.remove(self.selected_env);
+                if ui.button("-").clicked() {
+                    settings.remove_env(self.selected_env);
+                    if self.selected_osc > 0 && self.selected_env >= settings.envs.len() {
+                        self.selected_env -= 1;
+                    }
                 }
             });
             if let Some(env) = settings.envs.get_mut(self.selected_env) {

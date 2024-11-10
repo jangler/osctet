@@ -4,7 +4,8 @@ use std::{collections::HashMap, fmt::Display};
 use rand::prelude::*;
 use fundsp::hacker::*;
 
-pub const MAX_ENVS: usize = 8;
+pub const MAX_ENVS: usize = 4;
+pub const MAX_OSCS: usize = 4;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
@@ -108,7 +109,7 @@ impl Synth {
     pub fn new() -> Self {
         Self {
             settings: Settings {
-                oscs: [Oscillator::new(0.5), Oscillator::new(0.0), Oscillator::new(0.0), Oscillator::new(0.0)],
+                oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
                 filter: Filter::new(),
                 play_mode: PlayMode::Poly,
@@ -194,7 +195,7 @@ impl Synth {
 }
 
 pub struct Settings {
-    pub oscs: [Oscillator; 4],
+    pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
     pub filter: Filter,
     pub play_mode: PlayMode,
@@ -232,6 +233,36 @@ impl Settings {
         }
         v
     }
+
+    pub fn remove_osc(&mut self, i: usize) {
+        if i < self.oscs.len() {
+            self.oscs.remove(i);
+
+            // update mod matrix for new osc indices
+            for m in self.mod_matrix.iter_mut() {
+                if let ModTarget::Duty(n) = m.target {
+                    if n > i {
+                        m.target = ModTarget::Duty(n - 1);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn remove_env(&mut self, i: usize) {
+        if i < self.envs.len() {
+            self.envs.remove(i);
+
+            // update mod matrix for new env indices
+            for m in self.mod_matrix.iter_mut() {
+                if let ModSource::Envelope(n) = m.source {
+                    if n > i {
+                        m.source = ModSource::Envelope(n - 1);
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub struct Oscillator {
@@ -242,12 +273,12 @@ pub struct Oscillator {
 }
 
 impl Oscillator {
-    fn new(level: f32) -> Self {
+    pub fn new() -> Self {
         Self {
-            level: shared(level),
+            level: shared(0.5),
             duty: shared(0.5),
             fine_pitch: shared(0.0),
-            waveform: Waveform::Sawtooth,
+            waveform: Waveform::Sine,
         }
     }
 }
@@ -429,7 +460,10 @@ impl Voice {
                 settings.dsp_component(&vars, ModTarget::Gain) >>
                 settings.filter.make_net(&settings, &vars)
         };
-        let unit = f(0) + f(1) + f(2) + f(3);
+        let mut unit = Net::new(0, 1);
+        for i in 0..settings.oscs.len() {
+            unit = unit + f(i);
+        }
         Self {
             vars,
             base_pitch: pitch,
