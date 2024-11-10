@@ -257,8 +257,6 @@ pub struct Filter {
     pub cutoff: Shared,
     pub resonance: Shared,
     pub key_tracking: KeyTracking,
-    pub env: ADSR,
-    pub env_level: Shared,
 }
 
 impl Filter {
@@ -268,8 +266,6 @@ impl Filter {
             resonance: shared(0.1),
             key_tracking: KeyTracking::None,
             filter_type: FilterType::Lowpass,
-            env: ADSR::new(),
-            env_level: shared(0.0),
         }
     }
 
@@ -286,11 +282,7 @@ impl Filter {
             FilterType::Highpass => Net::wrap(Box::new(fhighpass(Tanh(1.0)))),
             FilterType::Bandpass => Net::wrap(Box::new(fresonator(Tanh(1.0)))),
         };
-        (pass() |
-            var(&self.cutoff) * kt * cutoff_mod *
-            (var(&vars.gate) >> adsr_live(self.env.attack, self.env.decay, self.env.sustain, self.env.release) * var(&self.env_level) + 1.0) |
-            var(&self.resonance)
-        ) >> f
+        (pass() | var(&self.cutoff) * kt * cutoff_mod | var(&self.resonance)) >> f
     }
 }
 

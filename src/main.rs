@@ -412,7 +412,6 @@ impl eframe::App for App {
                         ui.selectable_value(&mut settings.filter.key_tracking, variant, variant.name());
                     }
                 });
-            shared_slider(ui, &settings.filter.env_level, -1.0..=7.0, "Envelope level", false);
 
             // envelopes
             ui.separator();
