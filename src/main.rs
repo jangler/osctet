@@ -59,6 +59,8 @@ struct Midi {
     conn: Option<MidiInputConnection<Sender<Vec<u8>>>>,
     rx: Option<Receiver<Vec<u8>>>,
     input_id: u16,
+    rpn: (u8, u8),
+    bend_range: f32,
 }
 
 impl Midi {
@@ -70,6 +72,8 @@ impl Midi {
             conn: None,
             rx: None,
             input_id: 0,
+            rpn: (0, 0),
+            bend_range: 0.0,
         };
         m.input = m.new_input().ok();
         m
@@ -223,15 +227,28 @@ impl App {
                         }, pressure as f32 / 127.0);
                     },
                     Some(MidiEvent::Controller { controller, value, .. }) => {
-                        if let input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX = controller {
-                            self.synth.modulate(value as f32 / 127.0);
+                        match controller {
+                            input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
+                                self.synth.modulate(value as f32 / 127.0);
+                            },
+                            input::CC_RPN_MSB => self.midi.rpn.0 = value,
+                            input::CC_RPN_LSB => self.midi.rpn.1 = value,
+                            input::CC_DATA_ENTRY_MSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
+                                // set semitones
+                                self.midi.bend_range = self.midi.bend_range % 1.0 + value as f32;
+                            },
+                            input:: CC_DATA_ENTRY_LSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
+                                // set cents
+                                self.midi.bend_range = self.midi.bend_range.round() + value as f32 / 100.0;
+                            },
+                            _ => (),
                         }
                     },
                     Some(MidiEvent::ChannelPressure { channel, pressure }) => {
                         self.synth.channel_pressure(channel, pressure as f32 / 127.0);
                     },
                     Some(MidiEvent::Pitch { channel, bend }) => {
-                        self.synth.pitch_bend(channel, bend);
+                        self.synth.pitch_bend(channel, bend * self.midi.bend_range);
                     },
                     None => (),
                 }

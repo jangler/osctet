@@ -5,6 +5,11 @@ use crate::pitch::{Nominal, Note, Tuning};
 pub const CC_MODULATION: u8 = 1;
 pub const CC_MACRO_MIN: u8 = 41;
 pub const CC_MACRO_MAX: u8 = 48;
+pub const CC_RPN_MSB: u8 = 101;
+pub const CC_RPN_LSB: u8 = 100;
+pub const CC_DATA_ENTRY_MSB: u8 = 6;
+pub const CC_DATA_ENTRY_LSB: u8 = 38;
+pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
 
 // sharps aren't much use for keyboard mapping if they're equal to unison
 // or the whole tone

@@ -4,7 +4,6 @@ use std::{collections::HashMap, fmt::Display};
 use fundsp::hacker::*;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
-const PITCH_BEND_RANGE: f32 = 2.0;
 const SEMITONE_RATIO: f32 = 1.059463;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -158,7 +157,7 @@ impl Synth {
         self.bend_memory[channel as usize] = bend;
         for (key, voice) in self.voices.iter_mut() {
             if key.origin == KeyOrigin::Midi && key.channel == channel {
-                voice.vars.freq.set(midi_hz(voice.base_pitch + bend * PITCH_BEND_RANGE));
+                voice.vars.freq.set(midi_hz(voice.base_pitch + bend));
             }
         }
     }
@@ -377,7 +376,7 @@ struct Voice {
 impl Voice {
     fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, settings: &Settings, seq: &mut Sequencer) -> Self {
         let vars = VoiceVars {
-            freq: shared(midi_hz(pitch + bend * PITCH_BEND_RANGE)),
+            freq: shared(midi_hz(pitch + bend)),
             gate: shared(1.0),
             pressure: shared(pressure),
             modulation: shared(modulation),
