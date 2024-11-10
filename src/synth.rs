@@ -64,7 +64,10 @@ impl Waveform {
     }
 
     fn make_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize) -> Net {
-        let base = var(&vars.freq) * (var(&osc.fine_pitch) >> shape_fn(|x| pow(SEMITONE_RATIO, x))) >> follow(settings.glide_time);
+        let base = var(&vars.freq)
+            * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
+            * (settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x)))
+            >> follow(settings.glide_time);
 
         // have to compensate for different volumes. the sine is so loud!
         match self {
@@ -229,6 +232,8 @@ impl Settings {
     pub fn mod_targets(&self) -> Vec<ModTarget> {
         let mut v = vec![ModTarget::Gain, ModTarget::FilterCutoff];
         for i in 0..self.oscs.len() {
+            v.push(ModTarget::Level(i));
+            v.push(ModTarget::Pitch(i));
             v.push(ModTarget::Duty(i));
         }
         v
@@ -417,13 +422,18 @@ impl Display for ModSource {
 #[derive(PartialEq, Clone, Copy)]
 pub enum ModTarget {
     Gain,
+    Level(usize),
+    Pitch(usize),
     Duty(usize),
     FilterCutoff,
 }
 
 impl ModTarget {
     pub fn is_additive(&self) -> bool {
-        *self != ModTarget::Gain
+        match *self  {
+            ModTarget::Gain | ModTarget::Level(_) => false,
+            _ => true,
+        }
     }
 }
 
@@ -431,6 +441,8 @@ impl Display for ModTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Gain => "Gain",
+            Self::Level(n) => &format!("Osc {} level", n + 1),
+            Self::Pitch(n) => &format!("Osc {} pitch", n + 1),
             Self::Duty(n) => &format!("Osc {} duty", n + 1),
             Self::FilterCutoff => "Filter cutoff",
         };
@@ -457,13 +469,14 @@ impl Voice {
         let f = |i: usize| {
             let oscs = &settings.oscs;
             (oscs[i].waveform.make_net(&settings, &vars, &oscs[i], i)) * (var(&oscs[i].level) >> follow(0.01)) *
-                settings.dsp_component(&vars, ModTarget::Gain) >>
+                settings.dsp_component(&vars, ModTarget::Level(i)) >>
                 settings.filter.make_net(&settings, &vars)
         };
         let mut unit = Net::new(0, 1);
         for i in 0..settings.oscs.len() {
             unit = unit + f(i);
         }
+        unit = unit * settings.dsp_component(&vars, ModTarget::Gain);
         Self {
             vars,
             base_pitch: pitch,
