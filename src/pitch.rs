@@ -76,7 +76,7 @@ impl Tuning {
     }
 
     pub fn midi_pitch(&self, note: &Note) -> f32 {
-        let equave = self.scale.last().unwrap() / 100.0;
+        let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let steps = self.nominal_steps(note.nominal) +
             self.sharp_steps() * note.demisharps as i32 / 2 +
             self.arrow_steps as i32 * note.arrows as i32;

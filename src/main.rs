@@ -114,8 +114,11 @@ struct App {
 }
 
 impl App {
-    fn new(synth: Synth, seq: Sequencer, global_fx: GlobalFX) -> Self {
+    fn new(synth: Synth, seq: Sequencer, global_fx: GlobalFX, init_messages: Vec<String>) -> Self {
         let mut messages = MessageBuffer::new(100);
+        for msg in init_messages {
+            messages.push(msg);
+        }
         let config = match Config::load() {
             Ok(c) => c,
             Err(e) => {
@@ -287,7 +290,8 @@ impl eframe::App for App {
                 egui::ComboBox::from_label("MIDI input port")
                     .selected_text(self.midi.port_name.clone().unwrap_or("(none)".to_string()))
                     .show_ui(ui, |ui| {
-                        let input = self.midi.input.as_ref().unwrap();
+                        let input = self.midi.input.as_ref()
+                            .expect("MIDI input was just checked");
                         for p in input.ports() {
                             let name = input.port_name(&p).unwrap_or(String::from("(unknown)"));
                             ui.selectable_value(&mut self.midi.port_selection, Some(name.clone()), name);
@@ -562,9 +566,9 @@ fn main() -> eframe::Result {
         reverb_amount,
         net,
     };
-    
-    // TODO: handle these errors
-    let stream = device.build_output_stream(
+
+    let mut errs = vec![];
+    match device.build_output_stream(
         &config,
         move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
             // there's probably a better way to do this
@@ -581,8 +585,12 @@ fn main() -> eframe::Result {
             eprintln!("stream error: {}", err);
         },
         None
-    ).unwrap();
-    stream.play().unwrap();
+    ) {
+        Ok(stream) => if let Err(e) = stream.play() {
+            errs.push(e.to_string());
+        },
+        Err(e) => errs.push(e.to_string()),
+    }
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
@@ -592,7 +600,7 @@ fn main() -> eframe::Result {
         APP_NAME,
         options,
         Box::new(|_cc| {
-            Ok(Box::new(App::new(synth, seq, global_fx)))
+            Ok(Box::new(App::new(synth, seq, global_fx, errs)))
         }),
     )
 }

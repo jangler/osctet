@@ -135,7 +135,8 @@ impl Synth {
                 if self.voices.is_empty() {
                     true
                 } else {
-                    let voice = self.voices.drain().map(|(_, v)| v).next().unwrap();
+                    let voice = self.voices.drain().map(|(_, v)| v).next()
+                        .expect("voices confirmed non-empty");
                     voice.vars.freq.set(midi_hz(pitch));
                     self.voices.insert(key.clone(), voice);
                     false
