@@ -3,6 +3,8 @@ use std::{collections::HashMap, fmt::Display};
 
 use fundsp::hacker::*;
 
+pub const MAX_ENVS: usize = 8;
+
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
 
@@ -213,6 +215,22 @@ impl Settings {
         }
         net
     }
+
+    pub fn mod_sources(&self) -> Vec<ModSource> {
+        let mut v = vec![ModSource::Pressure, ModSource::Modulation];
+        for i in 0..self.envs.len() {
+            v.push(ModSource::Envelope(i));
+        }
+        v
+    }
+
+    pub fn mod_targets(&self) -> Vec<ModTarget> {
+        let mut v = vec![ModTarget::Gain, ModTarget::FilterCutoff];
+        for i in 0..self.oscs.len() {
+            v.push(ModTarget::Duty(i));
+        }
+        v
+    }
 }
 
 pub struct Oscillator {
@@ -294,7 +312,7 @@ pub struct ADSR {
 }
 
 impl ADSR {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             attack: 0.01,
             decay: 1.0,
@@ -347,10 +365,6 @@ pub enum ModSource {
     Envelope(usize),
 }
 
-impl ModSource {
-    pub const VARIANTS: [ModSource; 3] = [Self::Pressure, Self::Modulation, Self::Envelope(0)];
-}
-
 impl Display for ModSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -370,8 +384,6 @@ pub enum ModTarget {
 }
 
 impl ModTarget {
-    pub const VARIANTS: [ModTarget; 3] = [Self::Gain, Self::Duty(0), Self::FilterCutoff];
-
     pub fn is_additive(&self) -> bool {
         *self != ModTarget::Gain
     }

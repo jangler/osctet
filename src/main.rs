@@ -419,6 +419,12 @@ impl eframe::App for App {
                 for i in 0..settings.envs.len() {
                     ui.selectable_value(&mut self.selected_env, i, format!("Env {}", i + 1));
                 }
+                if settings.envs.len() < synth::MAX_ENVS && ui.button("+").clicked() {
+                    settings.envs.push(synth::ADSR::new());
+                }
+                if self.selected_env < settings.envs.len() && ui.button("-").clicked() {
+                    settings.envs.remove(self.selected_env);
+                }
             });
             if let Some(env) = settings.envs.get_mut(self.selected_env) {
                 ui.add(egui::Slider::new(&mut env.attack, 0.0..=10.0).text("Attack").logarithmic(true));
@@ -441,19 +447,21 @@ impl eframe::App for App {
                     ui.end_row();
 
                     let mut removal_index: Option<usize> = None;
+                    let sources = settings.mod_sources();
+                    let targets = settings.mod_targets();
                     for (i, m) in settings.mod_matrix.iter_mut().enumerate() {
                         egui::ComboBox::from_id_salt(format!("mod_source_{}", i))
                             .selected_text(m.source.to_string())
                             .show_ui(ui, |ui| {
-                                for variant in ModSource::VARIANTS {
-                                    ui.selectable_value(&mut m.source, variant, variant.to_string());
+                                for variant in &sources {
+                                    ui.selectable_value(&mut m.source, *variant, variant.to_string());
                                 }
                             });
                         egui::ComboBox::from_id_salt(format!("mod_target_{}", i))
                             .selected_text(m.target.to_string())
                             .show_ui(ui, |ui| {
-                                for variant in ModTarget::VARIANTS {
-                                    ui.selectable_value(&mut m.target, variant, variant.to_string());
+                                for variant in &targets {
+                                    ui.selectable_value(&mut m.target, *variant, variant.to_string());
                                 }
                             });
                         ui.add_enabled_ui(m.target.is_additive(), |ui| {
