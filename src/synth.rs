@@ -257,8 +257,6 @@ impl Settings {
         if i < self.oscs.len() {
             self.oscs.remove(i);
 
-            // TODO: I think the following math is wrong.
-
             // update outputs for new osc indices
             for (j, osc) in self.oscs.iter_mut().enumerate() {
                 if j == 0 {
@@ -274,8 +272,9 @@ impl Settings {
             }
 
             // update mod matrix for new osc indices
+            self.mod_matrix.retain(|m| m.target.osc() != Some(i));
             for m in self.mod_matrix.iter_mut() {
-                if let ModTarget::Duty(n) = m.target {
+                if let Some(n) = m.target.osc() {
                     if n > i {
                         m.target = ModTarget::Duty(n - 1);
                     }
@@ -288,9 +287,8 @@ impl Settings {
         if i < self.envs.len() {
             self.envs.remove(i);
 
-            // TODO: this math is probably wrong too
-
             // update mod matrix for new env indices
+            self.mod_matrix.retain(|m| m.source != ModSource::Envelope(i));
             for m in self.mod_matrix.iter_mut() {
                 if let ModSource::Envelope(n) = m.source {
                     if n > i {
@@ -514,6 +512,13 @@ impl ModTarget {
         match *self  {
             ModTarget::Gain | ModTarget::Level(_) => false,
             _ => true,
+        }
+    }
+
+    fn osc(&self) -> Option<usize> {
+        match *self {
+            ModTarget::Level(n) | ModTarget::Pitch(n) | ModTarget::Duty(n) => Some(n),
+            _ => None,
         }
     }
 }

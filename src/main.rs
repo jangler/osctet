@@ -381,6 +381,7 @@ impl eframe::App for App {
                 }
                 if settings.oscs.len() < synth::MAX_OSCS && ui.button("+").clicked() {
                     settings.oscs.push(synth::Oscillator::new());
+                    self.selected_osc = settings.oscs.len() - 1;
                 }
                 if settings.oscs.len() > 1 && ui.button("-").clicked() {
                     settings.remove_osc(self.selected_osc);
@@ -404,13 +405,15 @@ impl eframe::App for App {
                             ui.selectable_value(&mut osc.waveform, variant, variant.name());
                         }
                     });
-                egui::ComboBox::from_label("Output")
-                    .selected_text(osc.output.to_string())
-                    .show_ui(ui, |ui| {
-                        for variant in &outputs {
-                            ui.selectable_value(&mut osc.output, *variant, variant.to_string());
-                        }
-                    });
+                ui.add_enabled_ui(self.selected_osc != 0, |ui| {
+                    egui::ComboBox::from_label("Output")
+                        .selected_text(osc.output.to_string())
+                        .show_ui(ui, |ui| {
+                            for variant in &outputs {
+                                ui.selectable_value(&mut osc.output, *variant, variant.to_string());
+                            }
+                        });
+                });
             }
             ui.separator();
 
@@ -440,10 +443,13 @@ impl eframe::App for App {
                 }
                 if settings.envs.len() < synth::MAX_ENVS && ui.button("+").clicked() {
                     settings.envs.push(synth::ADSR::new());
+                    if !settings.envs.is_empty() {
+                        self.selected_env = settings.envs.len() - 1;
+                    }
                 }
                 if ui.button("-").clicked() {
                     settings.remove_env(self.selected_env);
-                    if self.selected_osc > 0 && self.selected_env >= settings.envs.len() {
+                    if self.selected_env > 0 && self.selected_env >= settings.envs.len() {
                         self.selected_env -= 1;
                     }
                 }
