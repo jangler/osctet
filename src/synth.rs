@@ -51,10 +51,12 @@ pub enum Waveform {
     Pulse,
     Triangle,
     Sine,
+    Hold,
+    Noise,
 }
 
 impl Waveform {
-    pub const VARIANTS: [Waveform; 4] = [Self::Sawtooth, Self::Pulse, Self::Triangle, Self::Sine];
+    pub const VARIANTS: [Waveform; 6] = [Self::Sawtooth, Self::Pulse, Self::Triangle, Self::Sine, Self::Hold, Self::Noise];
 
     pub fn name(&self) -> &str {
         match self {
@@ -62,6 +64,8 @@ impl Waveform {
             Self::Pulse => "Pulse",
             Self::Triangle => "Triangle",
             Self::Sine => "Sine",
+            Self::Hold => "S&H",
+            Self::Noise => "Noise",
         }
     }
 
@@ -75,15 +79,18 @@ impl Waveform {
             * (1.0 + fm_oscs * 100.0);
 
         // have to compensate for different volumes. the sine is so loud!
-        match self {
-            Self::Sawtooth => Net::wrap(Box::new(base >> saw())),
+        let au: Box<dyn AudioUnit> = match self {
+            Self::Sawtooth => Box::new(base >> saw()),
             Self::Pulse => {
                 let duty_mod = settings.dsp_component(vars, ModTarget::Duty(index));
-                Net::wrap(Box::new((base | (var(&osc.duty) >> follow(0.01)) + duty_mod) >> pulse()))
+                Box::new((base | (var(&osc.duty) >> follow(0.01)) + duty_mod) >> pulse())
             },
-            Self::Triangle => Net::wrap(Box::new(base >> triangle())),
-            Self::Sine => Net::wrap(Box::new(base >> sine() * 0.5)),
-        }
+            Self::Triangle => Box::new(base >> triangle()),
+            Self::Sine => Box::new(base >> sine() * 0.5),
+            Self::Hold => Box::new((noise() | base) >> hold(0.0)),
+            Self::Noise => Box::new(pink()),
+        };
+        Net::wrap(au)
     }
 
     fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
@@ -97,6 +104,8 @@ impl Waveform {
             Self::Pulse => Box::new(f >> square() * d),
             Self::Triangle => Box::new(f >> triangle() * d),
             Self::Sine => Box::new(f >> sine() * 0.5 * d),
+            Self::Hold => Box::new((noise() | f) >> hold(0.0) * d >> follow(0.01)),
+            Self::Noise => Box::new(pink() * d),
         };
         Net::wrap(au)
     }
