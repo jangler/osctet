@@ -86,16 +86,18 @@ impl Waveform {
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum FilterType {
+    Ladder,
     Lowpass,
     Highpass,
     Bandpass,
 }
 
 impl FilterType {
-    pub const VARIANTS: [FilterType; 3] = [Self::Lowpass, Self::Highpass, Self::Bandpass];
+    pub const VARIANTS: [FilterType; 4] = [Self::Ladder, Self::Lowpass, Self::Highpass, Self::Bandpass];
     
     pub fn name(&self) -> &str {
         match self {
+            Self::Ladder => "Ladder",
             Self::Lowpass => "Lowpass",
             Self::Highpass => "Highpass",
             Self::Bandpass => "Bandpass",
@@ -403,7 +405,7 @@ impl Filter {
             cutoff: shared(20_000.0),
             resonance: shared(0.1),
             key_tracking: KeyTracking::None,
-            filter_type: FilterType::Lowpass,
+            filter_type: FilterType::Ladder,
         }
     }
 
@@ -416,9 +418,10 @@ impl Filter {
         };
         let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff) >> shape_fn(|x| pow(4.0, x));
         let f = match self.filter_type {
-            FilterType::Lowpass => Net::wrap(Box::new(flowpass(Tanh(1.0)))),
-            FilterType::Highpass => Net::wrap(Box::new(fhighpass(Tanh(1.0)))),
-            FilterType::Bandpass => Net::wrap(Box::new(fresonator(Tanh(1.0)))),
+            FilterType::Ladder => Net::wrap(Box::new(moog())),
+            FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
+            FilterType::Highpass => Net::wrap(Box::new(highpass())),
+            FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
         };
         (pass() | var(&self.cutoff) * kt * cutoff_mod | var(&self.resonance)) >> f
     }
