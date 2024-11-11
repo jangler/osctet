@@ -74,7 +74,7 @@ impl Waveform {
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
             >> follow(settings.glide_time)
-            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(8.0, x))))
+            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(4.0, x))))
             * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 100.0);
 
