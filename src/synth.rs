@@ -7,6 +7,7 @@ use fundsp::hacker::*;
 pub const MAX_ENVS: usize = 4;
 pub const MAX_OSCS: usize = 4;
 pub const MAX_FILTERS: usize = 2;
+pub const MAX_LFOS: usize = 2;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
@@ -64,7 +65,7 @@ impl Waveform {
         }
     }
 
-    fn make_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
+    fn make_osc_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
         let base = var(&vars.freq)
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
@@ -83,6 +84,19 @@ impl Waveform {
             Self::Triangle => Net::wrap(Box::new(base >> triangle())),
             Self::Sine => Net::wrap(Box::new(base >> sine() * 0.5)),
         }
+    }
+
+    fn make_lfo_net(&self, lfo: &LFO) -> Net {
+        let f = var(&lfo.freq);
+        let dt = lfo.delay as f64;
+        let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
+        let au: Box<dyn AudioUnit> = match self {
+            Self::Sawtooth => Box::new(f >> saw() * d),
+            Self::Pulse => Box::new(f >> square() * d),
+            Self::Triangle => Box::new(f >> triangle() * d),
+            Self::Sine => Box::new(f >> sine() * 0.5 * d),
+        };
+        Net::wrap(au)
     }
 }
 
@@ -121,6 +135,7 @@ impl Synth {
                 oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
                 filters: vec![],
+                lfos: vec![],
                 play_mode: PlayMode::Poly,
                 glide_time: 0.05,
                 mod_matrix: vec![Modulation {
@@ -211,6 +226,7 @@ pub struct Settings {
     pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
     pub filters: Vec<Filter>,
+    pub lfos: Vec<LFO>,
     pub play_mode: PlayMode,
     pub glide_time: f32,
     pub mod_matrix: Vec<Modulation>,
@@ -235,6 +251,9 @@ impl Settings {
         let mut v = vec![ModSource::Pitch, ModSource::Pressure, ModSource::Modulation, ModSource::Random];
         for i in 0..self.envs.len() {
             v.push(ModSource::Envelope(i));
+        }
+        for i in 0..self.lfos.len() {
+            v.push(ModSource::LFO(i));
         }
         v
     }
@@ -328,6 +347,22 @@ impl Settings {
         }
     }
 
+    pub fn remove_lfo(&mut self, i: usize) {
+        if i < self.lfos.len() {
+            self.lfos.remove(i);
+
+            // update mod matrix for new indices
+            self.mod_matrix.retain(|m| m.source != ModSource::LFO(i));
+            for m in self.mod_matrix.iter_mut() {
+                if let ModSource::LFO(n) = m.source {
+                    if n > i {
+                        m.source = ModSource::LFO(n - 1);
+                    }
+                }
+            }
+        }
+    }
+
     fn make_osc(&self, i: usize, vars: &VoiceVars) -> Net {
         // FIXME: right now, output can sound different depending on the order oscs are mixed in.
         //        this is because of pseudorandom phase based on node location in its network.
@@ -347,7 +382,7 @@ impl Settings {
             }
         }
 
-        (self.oscs[i].waveform.make_net(self, &vars, &self.oscs[i], i, fm_oscs))
+        (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
             * (var(&self.oscs[i].level) >> follow(0.01))
             * self.dsp_component(&vars, ModTarget::Level(i))
             * am_oscs
@@ -473,6 +508,22 @@ impl ADSR {
     }
 }
 
+pub struct LFO {
+    pub waveform: Waveform,
+    pub freq: Shared,
+    pub delay: f32,
+}
+
+impl LFO {
+    pub fn new() -> Self {
+        Self {
+            waveform: Waveform::Triangle,
+            freq: shared(1.0),
+            delay: 0.0,
+        }
+    }
+}
+
 pub struct Modulation {
     pub source: ModSource,
     pub target: ModTarget,
@@ -498,6 +549,10 @@ impl Modulation {
                 Some(env) => Net::wrap(Box::new(env.make_node(&vars.gate))),
                 None => Net::wrap(Box::new(zero())),
             },
+            ModSource::LFO(i) => match settings.lfos.get(i) {
+                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(&osc))),
+                None => Net::wrap(Box::new(zero())),
+            }
         };
         if self.target.is_additive() {
             net * var(&self.depth)
@@ -514,6 +569,7 @@ pub enum ModSource {
     Modulation,
     Random,
     Envelope(usize),
+    LFO(usize),
 }
 
 impl Display for ModSource {
@@ -524,6 +580,7 @@ impl Display for ModSource {
             Self::Modulation => "Mod wheel",
             Self::Random => "Random",
             Self::Envelope(i) => &format!("Envelope {}", i + 1),
+            Self::LFO(i) => &format!("LFO {}", i + 1),
         };
         f.write_str(s)
     }

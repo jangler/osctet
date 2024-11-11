@@ -111,6 +111,7 @@ struct App {
     selected_osc: usize,
     selected_filter: usize,
     selected_env: usize,
+    selected_lfo: usize,
     global_fx: GlobalFX,
     song_editor: song::Editor,
 }
@@ -141,6 +142,7 @@ impl App {
             selected_osc: 0,
             selected_filter: 0,
             selected_env: 0,
+            selected_lfo: 0,
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
         }
@@ -400,7 +402,7 @@ impl eframe::App for App {
                 ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
                     shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
                 });
-                egui::ComboBox::from_label("Waveform")
+                egui::ComboBox::new("osc_waveform", "Waveform")
                     .selected_text(osc.waveform.name())
                     .show_ui(ui, |ui| {
                         for variant in Waveform::VARIANTS {
@@ -480,6 +482,37 @@ impl eframe::App for App {
                 ui.add(egui::Slider::new(&mut env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
                 ui.add(egui::Slider::new(&mut env.sustain, 0.0..=1.0).text("Sustain"));
                 ui.add(egui::Slider::new(&mut env.release, 0.01..=10.0).text("Release").logarithmic(true));
+            }
+
+            // LFOs
+            ui.separator();
+            ui.horizontal(|ui| {
+                for i in 0..settings.lfos.len() {
+                    ui.selectable_value(&mut self.selected_lfo, i, format!("LFO {}", i + 1));
+                }
+                if settings.lfos.len() < synth::MAX_LFOS && ui.button("+").clicked() {
+                    settings.lfos.push(synth::LFO::new());
+                    if !settings.lfos.is_empty() {
+                        self.selected_lfo = settings.lfos.len() - 1;
+                    }
+                }
+                if ui.button("-").clicked() {
+                    settings.remove_lfo(self.selected_lfo);
+                    if self.selected_lfo > 0 && self.selected_lfo >= settings.lfos.len() {
+                        self.selected_lfo -= 1;
+                    }
+                }
+            });
+            if let Some(lfo) = settings.lfos.get_mut(self.selected_lfo) {
+                egui::ComboBox::new("lfo_waveform", "Waveform")
+                    .selected_text(lfo.waveform.name())
+                    .show_ui(ui, |ui| {
+                        for variant in Waveform::VARIANTS {
+                            ui.selectable_value(&mut lfo.waveform, variant, variant.name());
+                        }
+                    });
+                shared_slider(ui, &lfo.freq, 0.1..=20.0, "Frequency", true);
+                ui.add(egui::Slider::new(&mut lfo.delay, 0.0..=10.0).text("Delay"));
             }
 
             // mod matrix
@@ -562,7 +595,7 @@ impl eframe::App for App {
             };
             painter.rect_filled(cursor_rect, 0.0, cursor_color);
 
-            for (i, channel) in self.song_editor.song.channels.iter().enumerate() {
+            for (i, _channel) in self.song_editor.song.channels.iter().enumerate() {
                 let pos = Pos2 {
                     x: channel_width * i as f32,
                     y: 0.0
@@ -571,7 +604,7 @@ impl eframe::App for App {
                     Align2::LEFT_TOP, format!("Channel {}", i + 1), font.clone(), fg_color);
             }
 
-            if let Some(pointer_pos) = response.interact_pointer_pos() {
+            if let Some(_pointer_pos) = response.interact_pointer_pos() {
                 // TODO: update cursor position
             }
         });
