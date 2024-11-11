@@ -68,7 +68,8 @@ impl Waveform {
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
             >> follow(settings.glide_time)
-            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x))))
+            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(4.0, x))))
+            * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x))))
             * (1.0 + fm_oscs * 100.0);
 
         // have to compensate for different volumes. the sine is so loud!
@@ -242,6 +243,7 @@ impl Settings {
         for i in 0..self.oscs.len() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::Pitch(i));
+            v.push(ModTarget::FinePitch(i));
             v.push(ModTarget::Duty(i));
         }
         v
@@ -510,6 +512,7 @@ pub enum ModTarget {
     Gain,
     Level(usize),
     Pitch(usize),
+    FinePitch(usize),
     Duty(usize),
     FilterCutoff,
 }
@@ -524,7 +527,8 @@ impl ModTarget {
 
     fn osc(&self) -> Option<usize> {
         match *self {
-            ModTarget::Level(n) | ModTarget::Pitch(n) | ModTarget::Duty(n) => Some(n),
+            ModTarget::Level(n) | ModTarget::Pitch(n) |
+                ModTarget::FinePitch(n) | ModTarget::Duty(n) => Some(n),
             _ => None,
         }
     }
@@ -536,6 +540,7 @@ impl Display for ModTarget {
             Self::Gain => "Gain",
             Self::Level(n) => &format!("Osc {} level", n + 1),
             Self::Pitch(n) => &format!("Osc {} pitch", n + 1),
+            Self::FinePitch(n) => &format!("Osc {} fine pitch", n + 1),
             Self::Duty(n) => &format!("Osc {} duty", n + 1),
             Self::FilterCutoff => "Filter cutoff",
         };
