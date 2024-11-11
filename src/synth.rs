@@ -489,10 +489,9 @@ impl Filter {
     }
 
     fn make_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
-        // FIXME: partial key tracking uses linear math, when it should be logarithmic
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
-            KeyTracking::Partial => Net::wrap(Box::new((var(&vars.freq) + KEY_TRACKING_REF_FREQ) * 0.5 * (1.0/KEY_TRACKING_REF_FREQ))),
+            KeyTracking::Partial => Net::wrap(Box::new(var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
         let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index)) >> shape_fn(|x| pow(1000.0, x));
