@@ -239,7 +239,7 @@ impl Settings {
     }
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
-        let mut v = vec![ModTarget::Gain, ModTarget::FilterCutoff];
+        let mut v = vec![ModTarget::Gain, ModTarget::FilterCutoff, ModTarget::FilterQ];
         for i in 0..self.oscs.len() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::Pitch(i));
@@ -419,13 +419,14 @@ impl Filter {
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
         let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff) >> shape_fn(|x| pow(4.0, x));
+        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ) >> follow(0.01);
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),
             FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
             FilterType::Highpass => Net::wrap(Box::new(highpass())),
             FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
         };
-        (pass() | var(&self.cutoff) * kt * cutoff_mod | var(&self.resonance)) >> f
+        (pass() | var(&self.cutoff) * kt * cutoff_mod | var(&self.resonance) + reso_mod) >> f
     }
 }
 
@@ -515,6 +516,7 @@ pub enum ModTarget {
     FinePitch(usize),
     Duty(usize),
     FilterCutoff,
+    FilterQ,
 }
 
 impl ModTarget {
@@ -543,6 +545,7 @@ impl Display for ModTarget {
             Self::FinePitch(n) => &format!("Osc {} fine pitch", n + 1),
             Self::Duty(n) => &format!("Osc {} duty", n + 1),
             Self::FilterCutoff => "Filter cutoff",
+            Self::FilterQ => "Filter resonance",
         };
         f.write_str(s)
     }
