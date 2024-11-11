@@ -229,11 +229,13 @@ impl App {
                         }
                     },
                     Some(MidiEvent::PolyPressure { channel, key, pressure }) => {
-                        self.synth.poly_pressure(Key {
-                            origin: KeyOrigin::Midi,
-                            channel: channel,
-                            key: key,
-                        }, pressure as f32 / 127.0);
+                        if self.config.midi_send_pressure == Some(true) {
+                            self.synth.poly_pressure(Key {
+                                origin: KeyOrigin::Midi,
+                                channel: channel,
+                                key: key,
+                            }, pressure as f32 / 127.0);
+                        }
                     },
                     Some(MidiEvent::Controller { controller, value, .. }) => {
                         match controller {
@@ -254,7 +256,9 @@ impl App {
                         }
                     },
                     Some(MidiEvent::ChannelPressure { channel, pressure }) => {
-                        self.synth.channel_pressure(channel, pressure as f32 / 127.0);
+                        if self.config.midi_send_pressure == Some(true) {
+                            self.synth.channel_pressure(channel, pressure as f32 / 127.0);
+                        }
                     },
                     Some(MidiEvent::Pitch { channel, bend }) => {
                         self.synth.pitch_bend(channel, bend * self.midi.bend_range);
@@ -293,38 +297,48 @@ impl eframe::App for App {
         // bottom panel
         egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
             if self.midi.input.is_some() {
-                egui::ComboBox::from_label("MIDI input port")
-                    .selected_text(self.midi.port_name.clone().unwrap_or("(none)".to_string()))
-                    .show_ui(ui, |ui| {
-                        let input = self.midi.input.as_ref()
-                            .expect("MIDI input was just checked");
-                        for p in input.ports() {
-                            let name = input.port_name(&p).unwrap_or(String::from("(unknown)"));
-                            ui.selectable_value(&mut self.midi.port_selection, Some(name.clone()), name);
-                        }
-                    });
-                if self.midi.port_selection.is_some() && self.midi.port_selection != self.midi.port_name {
-                    match self.midi_connect(ctx.clone()) {
-                        Ok(conn) => {
-                            let old_conn = std::mem::replace(&mut self.midi.conn, Some(conn));
-                            if let Some(c) = old_conn {
-                                c.close();
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_label("MIDI input port")
+                        .selected_text(self.midi.port_name.clone().unwrap_or("(none)".to_string()))
+                        .show_ui(ui, |ui| {
+                            let input = self.midi.input.as_ref()
+                                .expect("MIDI input was just checked");
+                            for p in input.ports() {
+                                let name = input.port_name(&p).unwrap_or(String::from("(unknown)"));
+                                ui.selectable_value(&mut self.midi.port_selection, Some(name.clone()), name);
                             }
-                            self.midi.port_name = self.midi.port_selection.clone();
-                            self.midi.port_name.as_ref().inspect(|name| {
-                                self.messages.push(format!("Connected to {} for MIDI input", name));
-                            });
-                            self.config.default_midi_input = self.midi.port_name.clone();
-                            if let Err(e) = self.config.save() {
-                                self.messages.push(format!("Error saving config: {}", e));
-                            };
-                        },
-                        Err(e) => {
-                            self.midi.port_selection = None;
-                            self.messages.report(&e);
-                        },
+                        });
+                    if self.midi.port_selection.is_some() && self.midi.port_selection != self.midi.port_name {
+                        match self.midi_connect(ctx.clone()) {
+                            Ok(conn) => {
+                                let old_conn = std::mem::replace(&mut self.midi.conn, Some(conn));
+                                if let Some(c) = old_conn {
+                                    c.close();
+                                }
+                                self.midi.port_name = self.midi.port_selection.clone();
+                                self.midi.port_name.as_ref().inspect(|name| {
+                                    self.messages.push(format!("Connected to {} for MIDI input", name));
+                                });
+                                self.config.default_midi_input = self.midi.port_name.clone();
+                                if let Err(e) = self.config.save() {
+                                    self.messages.push(format!("Error saving config: {}", e));
+                                };
+                            },
+                            Err(e) => {
+                                self.midi.port_selection = None;
+                                self.messages.report(&e);
+                            },
+                        }
                     }
-                }
+                    let mut v = self.config.midi_send_pressure.unwrap_or(true);
+                    ui.checkbox(&mut v, "Send pressure");
+                    if Some(v) != self.config.midi_send_pressure {
+                        self.config.midi_send_pressure = Some(v);
+                        if let Err(e) = self.config.save() {
+                            self.messages.report(&e);
+                        }
+                    }
+                });
             }
         });
 
