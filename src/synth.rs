@@ -86,8 +86,10 @@ impl Waveform {
         }
     }
 
-    fn make_lfo_net(&self, lfo: &LFO) -> Net {
-        let f = var(&lfo.freq);
+    fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
+        let lfo = &settings.lfos[index];
+        let f = var(&lfo.freq)
+            * (settings.dsp_component(vars, ModTarget::LFORate(index)) >> shape_fn(|x| pow(16.0, x)));
         let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
         let au: Box<dyn AudioUnit> = match self {
@@ -270,6 +272,9 @@ impl Settings {
             v.push(ModTarget::FilterCutoff(i));
             v.push(ModTarget::FilterQ(i));
         }
+        for i in 0..self.lfos.len() {
+            v.push(ModTarget::LFORate(i));
+        }
         v
     }
 
@@ -352,11 +357,17 @@ impl Settings {
             self.lfos.remove(i);
 
             // update mod matrix for new indices
-            self.mod_matrix.retain(|m| m.source != ModSource::LFO(i));
+            self.mod_matrix.retain(|m|
+                m.source != ModSource::LFO(i) && m.target != ModTarget::LFORate(i));
             for m in self.mod_matrix.iter_mut() {
                 if let ModSource::LFO(n) = m.source {
                     if n > i {
                         m.source = ModSource::LFO(n - 1);
+                    }
+                }
+                if let ModTarget::LFORate(n) = m.target {
+                    if n > i {
+                        m.target = ModTarget::LFORate(n - 1)
                     }
                 }
             }
@@ -550,7 +561,7 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             },
             ModSource::LFO(i) => match settings.lfos.get(i) {
-                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(&osc))),
+                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(settings, vars, i))),
                 None => Net::wrap(Box::new(zero())),
             }
         };
@@ -595,6 +606,7 @@ pub enum ModTarget {
     Duty(usize),
     FilterCutoff(usize),
     FilterQ(usize),
+    LFORate(usize),
 }
 
 impl ModTarget {
@@ -631,6 +643,7 @@ impl Display for ModTarget {
             Self::Duty(n) => &format!("Osc {} duty", n + 1),
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
+            Self::LFORate(n) => &format!("LFO {} freq", n + 1),
         };
         f.write_str(s)
     }
