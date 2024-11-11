@@ -649,8 +649,10 @@ fn main() -> eframe::Result {
         make_reverb(reverb_room_size, reverb_time, reverb_diffusion, reverb_mod_speed, reverb_damping));
     let (predelay, predelay_id) = Net::wrap_id(Box::new(delay(predelay_time) | delay(predelay_time)));
     let reverb_amount = shared(0.1);
-    let mut net = Net::wrap(Box::new(seq.backend())) >>
-        highpass_hz(5.0, 0.1) >> shape(Tanh(1.0)) >> split::<U2>() >>
+    let mut net = Net::wrap(Box::new(seq.backend()))
+        >> highpass_hz(1.0, 0.1)
+        >> shape(Tanh(1.0))
+        >> split::<U2>() >>
         (multipass::<U2>() & (var(&reverb_amount) >> split::<U2>()) * (predelay >> reverb));
     let mut backend = BlockRateAdapter::new(Box::new(net.backend()));
     let global_fx = GlobalFX {

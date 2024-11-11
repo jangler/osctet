@@ -86,7 +86,7 @@ impl Waveform {
                 Box::new((base | (var(&osc.duty) >> follow(0.01)) + duty_mod) >> pulse())
             },
             Self::Triangle => Box::new(base >> triangle()),
-            Self::Sine => Box::new(base >> sine() * 0.5),
+            Self::Sine => Box::new(base >> sine()),
             Self::Hold => Box::new((noise() | base) >> hold(0.0)),
             Self::Noise => Box::new(pink()),
         };
@@ -103,7 +103,7 @@ impl Waveform {
             Self::Sawtooth => Box::new(f >> saw() * d),
             Self::Pulse => Box::new(f >> square() * d),
             Self::Triangle => Box::new(f >> triangle() * d),
-            Self::Sine => Box::new(f >> sine() * 0.5 * d),
+            Self::Sine => Box::new(f >> sine() * d),
             Self::Hold => Box::new((noise() | f) >> hold(0.0) * d >> follow(0.01)),
             Self::Noise => Box::new(pink() * d),
         };
