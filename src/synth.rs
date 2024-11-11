@@ -122,7 +122,11 @@ impl Synth {
                 mod_matrix: vec![Modulation {
                     source: ModSource::Envelope(0),
                     target: ModTarget::Gain,
-                    depth: shared(1.0),
+                    depth: shared(0.0),
+                }, Modulation {
+                    source: ModSource::Pressure,
+                    target: ModTarget::Gain,
+                    depth: shared(0.0),
                 }],
             },
             voices: HashMap::new(),
