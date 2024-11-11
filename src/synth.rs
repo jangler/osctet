@@ -69,7 +69,7 @@ impl Waveform {
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
             >> follow(settings.glide_time)
             * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x))))
-            * (1.0 + fm_oscs * 10.0);
+            * (1.0 + fm_oscs * 100.0);
 
         // have to compensate for different volumes. the sine is so loud!
         match self {
