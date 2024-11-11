@@ -6,6 +6,7 @@ use fundsp::hacker::*;
 
 pub const MAX_ENVS: usize = 4;
 pub const MAX_OSCS: usize = 4;
+pub const MAX_FILTERS: usize = 2;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
@@ -77,7 +78,7 @@ impl Waveform {
             Self::Sawtooth => Net::wrap(Box::new(base >> saw())),
             Self::Pulse => {
                 let duty_mod = settings.dsp_component(vars, ModTarget::Duty(index));
-                Net::wrap(Box::new((base | var(&osc.duty) + duty_mod >> follow(0.01)) >> pulse()))
+                Net::wrap(Box::new((base | (var(&osc.duty) >> follow(0.01)) + duty_mod) >> pulse()))
             },
             Self::Triangle => Net::wrap(Box::new(base >> triangle())),
             Self::Sine => Net::wrap(Box::new(base >> sine() * 0.5)),
@@ -119,7 +120,7 @@ impl Synth {
             settings: Settings {
                 oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
-                filter: Filter::new(),
+                filters: vec![],
                 play_mode: PlayMode::Poly,
                 glide_time: 0.05,
                 mod_matrix: vec![Modulation {
@@ -209,7 +210,7 @@ impl Synth {
 pub struct Settings {
     pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
-    pub filter: Filter,
+    pub filters: Vec<Filter>,
     pub play_mode: PlayMode,
     pub glide_time: f32,
     pub mod_matrix: Vec<Modulation>,
@@ -239,12 +240,16 @@ impl Settings {
     }
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
-        let mut v = vec![ModTarget::Gain, ModTarget::FilterCutoff, ModTarget::FilterQ];
+        let mut v = vec![ModTarget::Gain];
         for i in 0..self.oscs.len() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::Pitch(i));
             v.push(ModTarget::FinePitch(i));
             v.push(ModTarget::Duty(i));
+        }
+        for i in 0..self.filters.len() {
+            v.push(ModTarget::FilterCutoff(i));
+            v.push(ModTarget::FilterQ(i));
         }
         v
     }
@@ -295,13 +300,29 @@ impl Settings {
         if i < self.envs.len() {
             self.envs.remove(i);
 
-            // update mod matrix for new env indices
+            // update mod matrix for new indices
             self.mod_matrix.retain(|m| m.source != ModSource::Envelope(i));
             for m in self.mod_matrix.iter_mut() {
                 if let ModSource::Envelope(n) = m.source {
                     if n > i {
                         m.source = ModSource::Envelope(n - 1);
                     }
+                }
+            }
+        }
+    }
+
+    pub fn remove_filter(&mut self, i: usize) {
+        if i < self.filters.len() {
+            self.filters.remove(i);
+
+            // update mod matrix for new indices
+            self.mod_matrix.retain(|m| m.target.filter() != Some(i));
+            for m in self.mod_matrix.iter_mut() {
+                match m.target {
+                    ModTarget::FilterCutoff(n) if n > i => m.target = ModTarget::FilterCutoff(n - 1),
+                    ModTarget::FilterQ(n) if n > i => m.target = ModTarget::FilterQ(n - 1),
+                    _ => (),
                 }
             }
         }
@@ -402,7 +423,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             cutoff: shared(20_000.0),
             resonance: shared(0.1),
@@ -411,15 +432,15 @@ impl Filter {
         }
     }
 
-    fn make_net(&self, settings: &Settings, vars: &VoiceVars) -> Net {
+    fn make_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
         // FIXME: partial key tracking uses linear math, when it should be logarithmic
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
             KeyTracking::Partial => Net::wrap(Box::new((var(&vars.freq) + KEY_TRACKING_REF_FREQ) * 0.5 * (1.0/KEY_TRACKING_REF_FREQ))),
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
-        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff) >> shape_fn(|x| pow(4.0, x));
-        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ) >> follow(0.01);
+        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index)) >> shape_fn(|x| pow(4.0, x));
+        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index));
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),
             FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
@@ -462,7 +483,7 @@ impl Modulation {
     pub fn default() -> Self {
         Self {
             source: ModSource::Modulation,
-            target: ModTarget::FilterCutoff,
+            target: ModTarget::Gain,
             depth: shared(0.0),
         }
     }
@@ -470,8 +491,8 @@ impl Modulation {
     fn dsp_component(&self, settings: &Settings, vars: &VoiceVars) -> Net {
         let net = match self.source {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
-            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure))),
-            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation))),
+            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(0.01))),
+            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(0.01))),
             ModSource::Random => Net::wrap(Box::new(constant(random::<f32>()))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
                 Some(env) => Net::wrap(Box::new(env.make_node(&vars.gate))),
@@ -515,8 +536,8 @@ pub enum ModTarget {
     Pitch(usize),
     FinePitch(usize),
     Duty(usize),
-    FilterCutoff,
-    FilterQ,
+    FilterCutoff(usize),
+    FilterQ(usize),
 }
 
 impl ModTarget {
@@ -534,6 +555,13 @@ impl ModTarget {
             _ => None,
         }
     }
+    
+    fn filter(&self) -> Option<usize> {
+        match *self {
+            ModTarget::FilterCutoff(n) | ModTarget::FilterQ(n) => Some(n),
+            _ => None,
+        }
+    }
 }
 
 impl Display for ModTarget {
@@ -544,8 +572,8 @@ impl Display for ModTarget {
             Self::Pitch(n) => &format!("Osc {} pitch", n + 1),
             Self::FinePitch(n) => &format!("Osc {} fine pitch", n + 1),
             Self::Duty(n) => &format!("Osc {} duty", n + 1),
-            Self::FilterCutoff => "Filter cutoff",
-            Self::FilterQ => "Filter resonance",
+            Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
+            Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
         };
         f.write_str(s)
     }
@@ -567,7 +595,11 @@ impl Voice {
             pressure: shared(pressure),
             modulation: shared(modulation),
         };
-        let net = (settings.make_osc(0, &vars) >> settings.filter.make_net(&settings, &vars))
+        let mut filter_net = Net::wrap(Box::new(pass()));
+        for (i, filter) in settings.filters.iter().enumerate() {
+            filter_net = filter_net >> filter.make_net(&settings, &vars, i);
+        }
+        let net = (settings.make_osc(0, &vars) >> filter_net)
             * settings.dsp_component(&vars, ModTarget::Gain);
         Self {
             vars,

@@ -109,6 +109,7 @@ struct App {
     midi: Midi,
     config: Config,
     selected_osc: usize,
+    selected_filter: usize,
     selected_env: usize,
     global_fx: GlobalFX,
     song_editor: song::Editor,
@@ -138,6 +139,7 @@ impl App {
             midi,
             config,
             selected_osc: 0,
+            selected_filter: 0,
             selected_env: 0,
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
@@ -417,23 +419,42 @@ impl eframe::App for App {
             }
             ui.separator();
 
-            ui.add(egui::Label::new("Filter"));
-            egui::ComboBox::from_label("Type")
-                .selected_text(settings.filter.filter_type.name())
-                .show_ui(ui, |ui| {
-                    for variant in FilterType::VARIANTS {
-                        ui.selectable_value(&mut settings.filter.filter_type, variant, variant.name());
+            // filter controls
+            ui.horizontal(|ui| {
+                for i in 0..settings.filters.len() {
+                    ui.selectable_value(&mut self.selected_filter, i, format!("Filter {}", i + 1));
+                }
+                if settings.filters.len() < synth::MAX_FILTERS && ui.button("+").clicked() {
+                    settings.filters.push(synth::Filter::new());
+                    if !settings.filters.is_empty() {
+                        self.selected_filter = settings.filters.len() - 1;
                     }
-                });
-            shared_slider(ui, &settings.filter.cutoff, 20.0..=20_000.0, "Cutoff", true);
-            shared_slider(ui, &settings.filter.resonance, 0.1..=1.0, "Resonance", false);
-            egui::ComboBox::from_label("Key tracking")
-                .selected_text(settings.filter.key_tracking.name())
-                .show_ui(ui, |ui| {
-                    for variant in KeyTracking::VARIANTS {
-                        ui.selectable_value(&mut settings.filter.key_tracking, variant, variant.name());
+                }
+                if ui.button("-").clicked() {
+                    settings.remove_filter(self.selected_filter);
+                    if self.selected_filter > 0 && self.selected_filter >= settings.filters.len() {
+                        self.selected_filter -= 1;
                     }
-                });
+                }
+            });
+            if let Some(filter) = settings.filters.get_mut(self.selected_filter) {
+                egui::ComboBox::from_label("Type")
+                    .selected_text(filter.filter_type.name())
+                    .show_ui(ui, |ui| {
+                        for variant in FilterType::VARIANTS {
+                            ui.selectable_value(&mut filter.filter_type, variant, variant.name());
+                        }
+                    });
+                shared_slider(ui, &filter.cutoff, 20.0..=20_000.0, "Cutoff", true);
+                shared_slider(ui, &filter.resonance, 0.1..=1.0, "Resonance", false);
+                egui::ComboBox::from_label("Key tracking")
+                    .selected_text(filter.key_tracking.name())
+                    .show_ui(ui, |ui| {
+                        for variant in KeyTracking::VARIANTS {
+                            ui.selectable_value(&mut filter.key_tracking, variant, variant.name());
+                        }
+                    });
+            }
 
             // envelopes
             ui.separator();
