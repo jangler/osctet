@@ -63,11 +63,13 @@ impl Waveform {
         }
     }
 
-    fn make_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize) -> Net {
+    fn make_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
         let base = var(&vars.freq)
+            * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
-            * (settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x)))
-            >> follow(settings.glide_time);
+            >> follow(settings.glide_time)
+            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x))))
+            * (1.0 + fm_oscs * 10.0);
 
         // have to compensate for different volumes. the sine is so loud!
         match self {
@@ -76,7 +78,7 @@ impl Waveform {
                 let duty_mod = settings.dsp_component(vars, ModTarget::Duty(index));
                 Net::wrap(Box::new((base | var(&osc.duty) + duty_mod >> follow(0.01)) >> pulse()))
             },
-            Self::Triangle => Net::wrap(Box::new(base >> triangle() * 2.0)),
+            Self::Triangle => Net::wrap(Box::new(base >> triangle())),
             Self::Sine => Net::wrap(Box::new(base >> sine() * 0.5)),
         }
     }
@@ -239,9 +241,37 @@ impl Settings {
         v
     }
 
+    pub fn outputs(&self, osc_index: usize) -> Vec<OscOutput> {
+        if osc_index == 0 {
+            vec![OscOutput::Mix(0)]
+        } else {
+            (0..osc_index).flat_map(|i| vec![
+                OscOutput::Mix(i),
+                OscOutput::AM(i),
+                OscOutput::FM(i),
+            ]).collect()
+        }
+    }
+
     pub fn remove_osc(&mut self, i: usize) {
         if i < self.oscs.len() {
             self.oscs.remove(i);
+
+            // TODO: I think the following math is wrong.
+
+            // update outputs for new osc indices
+            for (j, osc) in self.oscs.iter_mut().enumerate() {
+                if j == 0 {
+                    osc.output = OscOutput::Mix(0);
+                } else {
+                    match osc.output {
+                        OscOutput::Mix(n) if n > i => osc.output = OscOutput::Mix(n - 1),
+                        OscOutput::AM(n) if n > i => osc.output = OscOutput::AM(n - 1),
+                        OscOutput::FM(n) if n > i => osc.output = OscOutput::FM(n - 1),
+                        _ => (),
+                    }
+                }
+            }
 
             // update mod matrix for new osc indices
             for m in self.mod_matrix.iter_mut() {
@@ -258,6 +288,8 @@ impl Settings {
         if i < self.envs.len() {
             self.envs.remove(i);
 
+            // TODO: this math is probably wrong too
+
             // update mod matrix for new env indices
             for m in self.mod_matrix.iter_mut() {
                 if let ModSource::Envelope(n) = m.source {
@@ -268,13 +300,41 @@ impl Settings {
             }
         }
     }
+
+    fn make_osc(&self, i: usize, vars: &VoiceVars) -> Net {
+        // FIXME: right now, output can sound different depending on the order oscs are mixed in.
+        //        this is because of pseudorandom phase based on node location in its network.
+        //        this should be fixable in the next published version of the crate.
+        let mut mixed_oscs = Net::new(0, 1);
+        let mut am_oscs = Net::wrap(Box::new(constant(1.0)));
+        let mut fm_oscs = Net::new(0, 1);
+        for (j, osc) in self.oscs.iter().enumerate() {
+            if j > i {
+                if osc.output == OscOutput::Mix(i) {
+                    mixed_oscs = mixed_oscs + self.make_osc(j, vars);
+                } else if osc.output == OscOutput::AM(i) {
+                    am_oscs = am_oscs * self.make_osc(j, vars);
+                } else if osc.output == OscOutput::FM(i) {
+                    fm_oscs = fm_oscs + self.make_osc(j, vars);
+                }
+            }
+        }
+
+        (self.oscs[i].waveform.make_net(self, &vars, &self.oscs[i], i, fm_oscs))
+            * (var(&self.oscs[i].level) >> follow(0.01))
+            * self.dsp_component(&vars, ModTarget::Level(i))
+            * am_oscs
+            + mixed_oscs
+    }
 }
 
 pub struct Oscillator {
     pub level: Shared,
     pub duty: Shared,
+    pub freq_ratio: Shared,
     pub fine_pitch: Shared,
     pub waveform: Waveform,
+    pub output: OscOutput,
 }
 
 impl Oscillator {
@@ -282,9 +342,30 @@ impl Oscillator {
         Self {
             level: shared(0.5),
             duty: shared(0.5),
+            freq_ratio: shared(1.0),
             fine_pitch: shared(0.0),
             waveform: Waveform::Sine,
+            output: OscOutput::Mix(0),
         }
+    }
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum OscOutput {
+    Mix(usize),
+    AM(usize),
+    FM(usize),
+}
+
+impl Display for OscOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Mix(i) if *i == 0 => "Mix",
+            Self::Mix(i) => &format!("Mix to osc {}", i + 1),
+            Self::AM(i) => &format!("RM osc {}", i + 1),
+            Self::FM(i) => &format!("FM osc {}", i + 1),
+        };
+        f.write_str(s)
     }
 }
 
@@ -466,22 +547,13 @@ impl Voice {
             pressure: shared(pressure),
             modulation: shared(modulation),
         };
-        let f = |i: usize| {
-            let oscs = &settings.oscs;
-            (oscs[i].waveform.make_net(&settings, &vars, &oscs[i], i)) * (var(&oscs[i].level) >> follow(0.01)) *
-                settings.dsp_component(&vars, ModTarget::Level(i)) >>
-                settings.filter.make_net(&settings, &vars)
-        };
-        let mut unit = Net::new(0, 1);
-        for i in 0..settings.oscs.len() {
-            unit = unit + f(i);
-        }
-        unit = unit * settings.dsp_component(&vars, ModTarget::Gain);
+        let net = (settings.make_osc(0, &vars) >> settings.filter.make_net(&settings, &vars))
+            * settings.dsp_component(&vars, ModTarget::Gain);
         Self {
             vars,
             base_pitch: pitch,
             release_time: settings.envs.iter().map(|env| env.release).fold(0.0, f32::max),
-            event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(unit)),
+            event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(net)),
         }
     }
 

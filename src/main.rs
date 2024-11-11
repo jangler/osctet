@@ -389,8 +389,10 @@ impl eframe::App for App {
                     }
                 }
             });
+            let outputs = settings.outputs(self.selected_osc);
             if let Some(osc) = settings.oscs.get_mut(self.selected_osc) {
                 shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
+                shared_slider(ui, &osc.freq_ratio, 0.25..=16.0, "Freq. ratio", true);
                 shared_slider(ui, &osc.fine_pitch, -0.5..=0.5, "Fine pitch", false);
                 ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
                     shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
@@ -400,6 +402,13 @@ impl eframe::App for App {
                     .show_ui(ui, |ui| {
                         for variant in Waveform::VARIANTS {
                             ui.selectable_value(&mut osc.waveform, variant, variant.name());
+                        }
+                    });
+                egui::ComboBox::from_label("Output")
+                    .selected_text(osc.output.to_string())
+                    .show_ui(ui, |ui| {
+                        for variant in &outputs {
+                            ui.selectable_value(&mut osc.output, *variant, variant.to_string());
                         }
                     });
             }
