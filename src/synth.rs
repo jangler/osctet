@@ -74,8 +74,8 @@ impl Waveform {
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
             >> follow(settings.glide_time)
-            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(4.0, x))))
-            * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x))))
+            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(8.0, x))))
+            * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 100.0);
 
         // have to compensate for different volumes. the sine is so loud!
@@ -96,7 +96,8 @@ impl Waveform {
     fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq)
-            * (settings.dsp_component(vars, ModTarget::LFORate(index)) >> shape_fn(|x| pow(16.0, x)));
+            * (settings.dsp_component(vars, ModTarget::LFORate(index)) >> shape_fn(|x| pow(200.0, x)))
+            >> shape_fn(|x| clamp(0.1, 20.0, x));
         let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
         let au: Box<dyn AudioUnit> = match self {
@@ -494,7 +495,7 @@ impl Filter {
             KeyTracking::Partial => Net::wrap(Box::new((var(&vars.freq) + KEY_TRACKING_REF_FREQ) * 0.5 * (1.0/KEY_TRACKING_REF_FREQ))),
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
-        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index)) >> shape_fn(|x| pow(4.0, x));
+        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index)) >> shape_fn(|x| pow(1000.0, x));
         let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index));
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),
@@ -502,7 +503,9 @@ impl Filter {
             FilterType::Highpass => Net::wrap(Box::new(highpass())),
             FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
         };
-        (pass() | var(&self.cutoff) * kt * cutoff_mod | var(&self.resonance) + reso_mod) >> f
+        (pass()
+            | var(&self.cutoff) * kt * cutoff_mod >> shape_fn(|x| clamp(0.0, 22_000.0, x))
+            | var(&self.resonance) + reso_mod) >> f
     }
 }
 
