@@ -158,11 +158,11 @@ impl Synth {
                 mod_matrix: vec![Modulation {
                     source: ModSource::Envelope(0),
                     target: ModTarget::Gain,
-                    depth: shared(0.0),
+                    depth: shared(1.0),
                 }, Modulation {
                     source: ModSource::Pressure,
                     target: ModTarget::Gain,
-                    depth: shared(0.0),
+                    depth: shared(1.0),
                 }],
                 prev_freq: None,
             },
@@ -623,10 +623,11 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             }
         };
+        let d = var(&self.depth) + settings.dsp_component(vars, ModTarget::ModDepth(index));
         if self.target.is_additive() {
-            net * (var(&self.depth) + settings.dsp_component(vars, ModTarget::ModDepth(index)))
+            net * d
         } else {
-            net
+            1.0 - d * (1.0 - net)
         }
     }
 }
