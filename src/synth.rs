@@ -313,11 +313,12 @@ impl Settings {
         if osc_index == 0 {
             vec![OscOutput::Mix(0)]
         } else {
-            (0..osc_index).flat_map(|i| vec![
-                OscOutput::Mix(i),
-                OscOutput::AM(i),
-                OscOutput::FM(i),
-            ]).collect()
+            (0..osc_index).flat_map(|i| if i + 1 == osc_index {
+                // only allow modulating the oscillator directly to the left
+                vec![OscOutput::Mix(i), OscOutput::AM(i), OscOutput::FM(i)]
+            } else {
+                vec![OscOutput::Mix(i)]
+            }).collect()
         }
     }
 
@@ -328,9 +329,12 @@ impl Settings {
             // update outputs for new osc indices
             for (j, osc) in self.oscs.iter_mut().enumerate() {
                 if j == 0 {
+                    // first osc always has normal output
                     osc.output = OscOutput::Mix(0);
                 } else {
                     match osc.output {
+                        OscOutput::Mix(n) | OscOutput::AM(n) | OscOutput::FM(n) if n == i =>
+                            osc.output = OscOutput::Mix(0),
                         OscOutput::Mix(n) if n > i => osc.output = OscOutput::Mix(n - 1),
                         OscOutput::AM(n) if n > i => osc.output = OscOutput::AM(n - 1),
                         OscOutput::FM(n) if n > i => osc.output = OscOutput::FM(n - 1),
