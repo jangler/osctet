@@ -495,27 +495,9 @@ impl eframe::App for App {
 
             // LFOs
             ui.separator();
-            ui.horizontal(|ui| {
-                if settings.lfos.is_empty() {
-                    ui.label("LFOs");
-                }
-                for i in 0..settings.lfos.len() {
-                    ui.selectable_value(&mut self.selected_lfo, i, format!("LFO {}", i + 1));
-                }
-                if settings.lfos.len() < synth::MAX_LFOS && ui.button("+").clicked() {
-                    settings.lfos.push(synth::LFO::new());
-                    if !settings.lfos.is_empty() {
-                        self.selected_lfo = settings.lfos.len() - 1;
-                    }
-                }
-                if ui.button("-").clicked() {
-                    settings.remove_lfo(self.selected_lfo);
-                    if self.selected_lfo > 0 && self.selected_lfo >= settings.lfos.len() {
-                        self.selected_lfo -= 1;
-                    }
-                }
-            });
-            if let Some(lfo) = settings.lfos.get_mut(self.selected_lfo) {
+            ui.label("LFO");
+            {
+                let lfo = &mut settings.lfo;
                 egui::ComboBox::new("lfo_waveform", "Waveform")
                     .selected_text(lfo.waveform.name())
                     .show_ui(ui, |ui| {
