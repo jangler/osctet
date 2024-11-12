@@ -77,18 +77,20 @@ impl Waveform {
             * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(4.0, x))))
             * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 100.0);
+        let tone = var(&osc.tone) >> follow(0.01)
+            + settings.dsp_component(vars, ModTarget::Tone(index))
+            >> shape_fn(|x| clamp01(x));
 
         // have to compensate for different volumes. the sine is so loud!
         let au: Box<dyn AudioUnit> = match self {
             Self::Sawtooth => Box::new(base >> saw()),
-            Self::Pulse => {
-                let duty_mod = settings.dsp_component(vars, ModTarget::Duty(index));
-                Box::new((base | (var(&osc.duty) >> follow(0.01)) + duty_mod) >> pulse())
-            },
+            Self::Pulse => Box::new((base | tone * 0.5 + 0.5) >> pulse()),
             Self::Triangle => Box::new(base >> triangle()),
             Self::Sine => Box::new(base >> sine()),
             Self::Hold => Box::new((noise() | base) >> hold(0.0)),
-            Self::Noise => Box::new(pink()),
+            Self::Noise => Box::new(noise()
+                >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
+                >> join::<U2>()),
         };
         Net::wrap(au)
     }
@@ -276,7 +278,7 @@ impl Settings {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::Pitch(i));
             v.push(ModTarget::FinePitch(i));
-            v.push(ModTarget::Duty(i));
+            v.push(ModTarget::Tone(i));
         }
         for i in 0..self.filters.len() {
             v.push(ModTarget::FilterCutoff(i));
@@ -323,7 +325,7 @@ impl Settings {
             for m in self.mod_matrix.iter_mut() {
                 if let Some(n) = m.target.osc() {
                     if n > i {
-                        m.target = ModTarget::Duty(n - 1);
+                        m.target = ModTarget::Tone(n - 1);
                     }
                 }
             }
@@ -413,7 +415,7 @@ impl Settings {
 
 pub struct Oscillator {
     pub level: Shared,
-    pub duty: Shared,
+    pub tone: Shared,
     pub freq_ratio: Shared,
     pub fine_pitch: Shared,
     pub waveform: Waveform,
@@ -423,8 +425,8 @@ pub struct Oscillator {
 impl Oscillator {
     pub fn new() -> Self {
         Self {
-            level: shared(0.5),
-            duty: shared(0.5),
+            level: shared(1.0),
+            tone: shared(0.0),
             freq_ratio: shared(1.0),
             fine_pitch: shared(0.0),
             waveform: Waveform::Sine,
@@ -614,7 +616,7 @@ pub enum ModTarget {
     Level(usize),
     Pitch(usize),
     FinePitch(usize),
-    Duty(usize),
+    Tone(usize),
     FilterCutoff(usize),
     FilterQ(usize),
     LFORate(usize),
@@ -631,7 +633,7 @@ impl ModTarget {
     fn osc(&self) -> Option<usize> {
         match *self {
             ModTarget::Level(n) | ModTarget::Pitch(n) |
-                ModTarget::FinePitch(n) | ModTarget::Duty(n) => Some(n),
+                ModTarget::FinePitch(n) | ModTarget::Tone(n) => Some(n),
             _ => None,
         }
     }
@@ -651,7 +653,7 @@ impl Display for ModTarget {
             Self::Level(n) => &format!("Osc {} level", n + 1),
             Self::Pitch(n) => &format!("Osc {} pitch", n + 1),
             Self::FinePitch(n) => &format!("Osc {} fine pitch", n + 1),
-            Self::Duty(n) => &format!("Osc {} duty", n + 1),
+            Self::Tone(n) => &format!("Osc {} tone", n + 1),
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
             Self::LFORate(n) => &format!("LFO {} freq", n + 1),

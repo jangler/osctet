@@ -413,8 +413,8 @@ impl eframe::App for App {
                 shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
                 shared_slider(ui, &osc.freq_ratio, 0.25..=16.0, "Freq. ratio", true);
                 shared_slider(ui, &osc.fine_pitch, -0.5..=0.5, "Fine pitch", false);
-                ui.add_enabled_ui(osc.waveform == Waveform::Pulse, |ui| {
-                    shared_slider(ui, &osc.duty, 0.0..=1.0, "Duty", false);
+                ui.add_enabled_ui(osc.waveform == Waveform::Pulse || osc.waveform == Waveform::Noise, |ui| {
+                    shared_slider(ui, &osc.tone, 0.0..=1.0, "Tone", false);
                 });
                 egui::ComboBox::new("osc_waveform", "Waveform")
                     .selected_text(osc.waveform.name())
