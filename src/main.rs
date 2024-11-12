@@ -1,6 +1,7 @@
 // disable console in windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::error::Error;
 use std::ops::RangeInclusive;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
@@ -10,7 +11,6 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
-use anyhow::{bail, Result};
 use synth::{FilterType, Key, KeyOrigin, KeyTracking, PlayMode, Synth, Waveform};
 
 mod pitch;
@@ -173,7 +173,7 @@ impl App {
         }
     }
 
-    fn midi_connect(&mut self, ctx: egui::Context) -> Result<MidiInputConnection<Sender<Vec<u8>>>> {
+    fn midi_connect(&mut self, ctx: egui::Context) -> Result<MidiInputConnection<Sender<Vec<u8>>>, Box<dyn Error>> {
         match self.midi.selected_port() {
             Some(port) => {
                 match self.midi.new_input() {
@@ -194,10 +194,10 @@ impl App {
                             tx,
                         )?)
                     },
-                    Err(e) => bail!(e),
+                    Err(e) => Err(Box::new(e)),
                 }
             },
-            None => bail!("no MIDI port selected")
+            None => Err("no MIDI port selected".into()),
         }
     }
 

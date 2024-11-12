@@ -1,8 +1,6 @@
 use std::fmt;
 use std::cmp::max;
 
-use anyhow::{bail, Result};
-
 const REFERENCE_MIDI_PITCH: f32 = 69.0; // A4
 
 fn cents(ratio: f32) -> f32 {
@@ -48,12 +46,12 @@ pub struct Tuning {
 }
 
 impl Tuning {
-    pub fn divide(ratio: f32, steps: u16, arrow_steps: u8) -> Result<Tuning> {
+    pub fn divide(ratio: f32, steps: u16, arrow_steps: u8) -> Result<Tuning, &'static str> {
         if ratio <= 1.0 {
-            bail!("ratio must be greater than 1");
+            return Err("ratio must be greater than 1");
         }
         if steps < 1 {
-            bail!("step count cannot be zero");
+            return Err("step count cannot be zero");
         }
         let step = cents(ratio) / steps as f32;
         Ok(Tuning {
