@@ -626,6 +626,8 @@ impl Modulation {
         let d = var(&self.depth) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index));
         if self.target.is_additive() {
             net * d
+        } else if self.source.is_bipolar() {
+            1.0 - d * (1.0 - 0.5 * (net + 1.0))
         } else {
             1.0 - d * (1.0 - net)
         }
@@ -653,6 +655,15 @@ impl Display for ModSource {
             Self::LFO(i) => &format!("LFO {}", i + 1),
         };
         f.write_str(s)
+    }
+}
+
+impl ModSource {
+    fn is_bipolar(&self) -> bool {
+        match *self {
+            ModSource::LFO(_) => true,
+            _ => false,
+        }
     }
 }
 
