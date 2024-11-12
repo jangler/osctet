@@ -8,6 +8,7 @@ use crate::adsr::adsr_scalable;
 
 pub const MAX_ENVS: usize = 4;
 pub const MAX_OSCS: usize = 4;
+pub const MAX_LFOS: usize = 2;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
@@ -100,11 +101,12 @@ impl Waveform {
         Net::wrap(au)
     }
 
-    fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, path: &[ModSource]) -> Net {
-        let f = var(&settings.lfo.freq)
-            * (settings.dsp_component(vars, ModTarget::LFORate, path) >> shape_fn(|x| pow(200.0, x)))
+    fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+        let lfo = &settings.lfos[index];
+        let f = var(&lfo.freq)
+            * (settings.dsp_component(vars, ModTarget::LFORate(index), path) >> shape_fn(|x| pow(200.0, x)))
             >> shape_fn(|x| clamp(0.1, 20.0, x));
-        let dt = settings.lfo.delay as f64;
+        let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
         let au: Box<dyn AudioUnit> = match self {
             Self::Sawtooth => Box::new(f >> saw() * d >> follow(0.01)),
@@ -162,7 +164,7 @@ impl Synth {
                 oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
                 filter: Filter::new(),
-                lfo: LFO::new(),
+                lfos: vec![],
                 play_mode: PlayMode::Poly,
                 glide_time: 0.0,
                 pan: shared(0.0),
@@ -256,7 +258,7 @@ pub struct Settings {
     pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
     pub filter: Filter,
-    pub lfo: LFO,
+    pub lfos: Vec<LFO>,
     pub play_mode: PlayMode,
     pub glide_time: f32,
     pub pan: Shared, // range -1..1
@@ -280,15 +282,18 @@ impl Settings {
     }
 
     pub fn mod_sources(&self) -> Vec<ModSource> {
-        let mut v = vec![ModSource::Pitch, ModSource::Pressure, ModSource::Modulation, ModSource::Random, ModSource::LFO];
+        let mut v = vec![ModSource::Pitch, ModSource::Pressure, ModSource::Modulation, ModSource::Random];
         for i in 0..self.envs.len() {
             v.push(ModSource::Envelope(i));
+        }
+        for i in 0..self.lfos.len() {
+            v.push(ModSource::LFO(i));
         }
         v
     }
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
-        let mut v = vec![ModTarget::Gain, ModTarget::Pan, ModTarget::Pitch, ModTarget::FinePitch, ModTarget::LFORate];
+        let mut v = vec![ModTarget::Gain, ModTarget::Pan, ModTarget::Pitch, ModTarget::FinePitch];
         for (i, osc) in self.oscs.iter().enumerate() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::OscPitch(i));
@@ -303,6 +308,9 @@ impl Settings {
         }
         for i in 0..self.envs.len() {
             v.push(ModTarget::EnvSpeed(i));
+        }
+        for i in 0..self.lfos.len() {
+            v.push(ModTarget::LFORate(i));
         }
         for i in 0..self.mod_matrix.len() {
             v.push(ModTarget::ModDepth(i));
@@ -366,6 +374,28 @@ impl Settings {
                 if let ModSource::Envelope(n) = m.source {
                     if n > i {
                         m.source = ModSource::Envelope(n - 1);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn remove_lfo(&mut self, i: usize) {
+        if i < self.lfos.len() {
+            self.lfos.remove(i);
+
+            // update mod matrix for new indices
+            self.mod_matrix.retain(|m|
+                m.source != ModSource::LFO(i) && m.target != ModTarget::LFORate(i));
+            for m in self.mod_matrix.iter_mut() {
+                if let ModSource::LFO(n) = m.source {
+                    if n > i {
+                        m.source = ModSource::LFO(n - 1);
+                    }
+                }
+                if let ModTarget::LFORate(n) = m.target {
+                    if n > i {
+                        m.target = ModTarget::LFORate(n - 1)
                     }
                 }
             }
@@ -602,7 +632,10 @@ impl Modulation {
                 Some(env) => Net::wrap(Box::new(env.make_node(settings, vars, i, &path))),
                 None => Net::wrap(Box::new(zero())),
             },
-            ModSource::LFO => Net::wrap(Box::new(settings.lfo.waveform.make_lfo_net(settings, vars, &path))),
+            ModSource::LFO(i) => match settings.lfos.get(i) {
+                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(settings, vars, i, &path))),
+                None => Net::wrap(Box::new(zero())),
+            }
         };
         let d = var(&self.depth) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
         if self.target.is_additive() {
@@ -622,7 +655,7 @@ pub enum ModSource {
     Modulation,
     Random,
     Envelope(usize),
-    LFO,
+    LFO(usize),
 }
 
 impl Display for ModSource {
@@ -633,7 +666,7 @@ impl Display for ModSource {
             Self::Modulation => "Mod wheel",
             Self::Random => "Random",
             Self::Envelope(i) => &format!("Envelope {}", i + 1),
-            Self::LFO => "LFO",
+            Self::LFO(i) => &format!("LFO {}", i + 1),
         };
         f.write_str(s)
     }
@@ -642,7 +675,7 @@ impl Display for ModSource {
 impl ModSource {
     fn is_bipolar(&self) -> bool {
         match *self {
-            ModSource::LFO => true,
+            ModSource::LFO(_) => true,
             _ => false,
         }
     }
@@ -661,7 +694,7 @@ pub enum ModTarget {
     FilterCutoff,
     FilterQ,
     EnvSpeed(usize),
-    LFORate,
+    LFORate(usize),
     ModDepth(usize),
 }
 
@@ -696,7 +729,7 @@ impl Display for ModTarget {
             Self::FilterCutoff => "Filter freq",
             Self::FilterQ => "Filter reso",
             Self::EnvSpeed(n) => &format!("Env {} speed", n + 1),
-            Self::LFORate => "LFO rate",
+            Self::LFORate(n) => &format!("LFO {} freq", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
         };
         f.write_str(s)
