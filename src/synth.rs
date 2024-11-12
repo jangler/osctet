@@ -76,8 +76,10 @@ impl Waveform {
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
-            * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(4.0, x))))
-            * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
+            * ((settings.dsp_component(vars, ModTarget::OscPitch(index))
+                + settings.dsp_component(vars, ModTarget::Pitch) >> shape_fn(|x| pow(4.0, x))))
+            * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index))
+                + settings.dsp_component(vars, ModTarget::FinePitch) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 50.0);
         let tone = var(&osc.tone) >> follow(0.01)
             + settings.dsp_component(vars, ModTarget::Tone(index))
@@ -287,11 +289,11 @@ impl Settings {
     }
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
-        let mut v = vec![ModTarget::Gain, ModTarget::Pan];
+        let mut v = vec![ModTarget::Gain, ModTarget::Pan, ModTarget::Pitch, ModTarget::FinePitch];
         for (i, osc) in self.oscs.iter().enumerate() {
             v.push(ModTarget::Level(i));
-            v.push(ModTarget::Pitch(i));
-            v.push(ModTarget::FinePitch(i));
+            v.push(ModTarget::OscPitch(i));
+            v.push(ModTarget::OscFinePitch(i));
             if osc.waveform.has_tone_control() {
                 v.push(ModTarget::Tone(i));
             }
@@ -486,8 +488,8 @@ impl Display for OscOutput {
         let s = match self {
             Self::Mix(i) if *i == 0 => "Mix",
             Self::Mix(i) => &format!("Mix to osc {}", i + 1),
-            Self::AM(i) => &format!("RM osc {}", i + 1),
-            Self::FM(i) => &format!("FM osc {}", i + 1),
+            Self::AM(i) => &format!("Ring mod osc {}", i + 1),
+            Self::FM(i) => &format!("Freq mod osc {}", i + 1),
         };
         f.write_str(s)
     }
@@ -684,9 +686,11 @@ impl ModSource {
 pub enum ModTarget {
     Gain,
     Pan,
+    Pitch,
+    FinePitch,
     Level(usize),
-    Pitch(usize),
-    FinePitch(usize),
+    OscPitch(usize),
+    OscFinePitch(usize),
     Tone(usize),
     FilterCutoff(usize),
     FilterQ(usize),
@@ -704,8 +708,8 @@ impl ModTarget {
 
     fn osc(&self) -> Option<usize> {
         match *self {
-            ModTarget::Level(n) | ModTarget::Pitch(n) |
-                ModTarget::FinePitch(n) | ModTarget::Tone(n) => Some(n),
+            ModTarget::Level(n) | ModTarget::OscPitch(n) |
+                ModTarget::OscFinePitch(n) | ModTarget::Tone(n) => Some(n),
             _ => None,
         }
     }
@@ -723,9 +727,11 @@ impl Display for ModTarget {
         let s = match self {
             Self::Gain => "Gain",
             Self::Pan => "Pan",
+            Self::Pitch => "Pitch",
+            Self::FinePitch => "Fine pitch",
             Self::Level(n) => &format!("Osc {} level", n + 1),
-            Self::Pitch(n) => &format!("Osc {} pitch", n + 1),
-            Self::FinePitch(n) => &format!("Osc {} fine pitch", n + 1),
+            Self::OscPitch(n) => &format!("Osc {} pitch", n + 1),
+            Self::OscFinePitch(n) => &format!("Osc {} fine pitch", n + 1),
             Self::Tone(n) => &format!("Osc {} tone", n + 1),
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
