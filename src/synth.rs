@@ -152,6 +152,7 @@ impl Synth {
                 lfos: vec![],
                 play_mode: PlayMode::Poly,
                 glide_time: 0.05,
+                pan: shared(0.0),
                 mod_matrix: vec![Modulation {
                     source: ModSource::Envelope(0),
                     target: ModTarget::Gain,
@@ -243,6 +244,7 @@ pub struct Settings {
     pub lfos: Vec<LFO>,
     pub play_mode: PlayMode,
     pub glide_time: f32,
+    pub pan: Shared, // range -1..1
     pub mod_matrix: Vec<Modulation>,
 }
 
@@ -273,7 +275,7 @@ impl Settings {
     }
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
-        let mut v = vec![ModTarget::Gain];
+        let mut v = vec![ModTarget::Gain, ModTarget::Pan];
         for i in 0..self.oscs.len() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::Pitch(i));
@@ -632,6 +634,7 @@ impl Display for ModSource {
 #[derive(PartialEq, Clone, Copy)]
 pub enum ModTarget {
     Gain,
+    Pan,
     Level(usize),
     Pitch(usize),
     FinePitch(usize),
@@ -669,6 +672,7 @@ impl Display for ModTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Gain => "Gain",
+            Self::Pan => "Pan",
             Self::Level(n) => &format!("Osc {} level", n + 1),
             Self::Pitch(n) => &format!("Osc {} pitch", n + 1),
             Self::FinePitch(n) => &format!("Osc {} fine pitch", n + 1),
@@ -701,8 +705,9 @@ impl Voice {
         for (i, filter) in settings.filters.iter().enumerate() {
             filter_net = filter_net >> filter.make_net(&settings, &vars, i);
         }
-        let net = (settings.make_osc(0, &vars) >> filter_net)
-            * settings.dsp_component(&vars, ModTarget::Gain);
+        let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain)
+            | var(&settings.pan) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan) >> shape_fn(|x| clamp11(x)))
+            >> panner();
         Self {
             vars,
             base_pitch: pitch,

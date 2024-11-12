@@ -390,6 +390,7 @@ impl eframe::App for App {
             // glide time slider
             // FIXME: this doesn't update voices that are already playing
             ui.add(egui::Slider::new(&mut settings.glide_time, 0.0..=0.5).text("Glide"));
+            shared_slider(ui, &settings.pan, -1.0..=1.0, "Pan", false);
 
             // oscillator controls
             ui.separator();
@@ -657,7 +658,7 @@ fn main() -> eframe::Result {
         .with_max_sample_rate()
         .into();
     let synth = Synth::new();
-    let mut seq = Sequencer::new(false, 1);
+    let mut seq = Sequencer::new(false, 2);
     seq.set_sample_rate(config.sample_rate.0 as f64);
 
     let predelay_time = 0.01;
@@ -671,10 +672,9 @@ fn main() -> eframe::Result {
     let (predelay, predelay_id) = Net::wrap_id(Box::new(delay(predelay_time) | delay(predelay_time)));
     let reverb_amount = shared(0.1);
     let mut net = Net::wrap(Box::new(seq.backend()))
-        >> highpass_hz(1.0, 0.1)
-        >> shape(Tanh(1.0))
-        >> split::<U2>() >>
-        (multipass::<U2>() & (var(&reverb_amount) >> split::<U2>()) * (predelay >> reverb));
+        >> (highpass_hz(1.0, 0.1) | highpass_hz(1.0, 0.1))
+        >> (shape(Tanh(1.0)) | shape(Tanh(1.0)))
+        >> (multipass::<U2>() & (var(&reverb_amount) >> split::<U2>()) * (predelay >> reverb));
     let mut backend = BlockRateAdapter::new(Box::new(net.backend()));
     let global_fx = GlobalFX {
         predelay_time,
