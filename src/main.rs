@@ -496,6 +496,13 @@ impl eframe::App for App {
                 ui.add(egui::Slider::new(&mut env.decay, 0.01..=10.0).text("Decay").logarithmic(true));
                 ui.add(egui::Slider::new(&mut env.sustain, 0.0..=1.0).text("Sustain"));
                 ui.add(egui::Slider::new(&mut env.release, 0.01..=10.0).text("Release").logarithmic(true));
+                egui::ComboBox::from_label("Curve")
+                    .selected_text(env.curve_name())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut env.power, 1.0, "Linear");
+                        ui.selectable_value(&mut env.power, 2.0, "Quadratic");
+                        ui.selectable_value(&mut env.power, 3.0, "Cubic");
+                    });
             }
 
             // LFOs

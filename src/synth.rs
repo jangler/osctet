@@ -515,6 +515,7 @@ pub struct ADSR {
     pub decay: f32,
     pub sustain: f32,
     pub release: f32,
+    pub power: f32,
 }
 
 impl ADSR {
@@ -524,11 +525,29 @@ impl ADSR {
             decay: 1.0,
             sustain: 1.0,
             release: 0.01,
+            power: 1.0
         }
     }
 
-    fn make_node(&self, gate: &Shared) -> An<Pipe<Var, EnvelopeIn<f32, impl FnMut(f32, &numeric_array::NumericArray<f32, typenum::UInt<typenum::UTerm, typenum::B1>>) -> f32 + Clone, typenum::UInt<typenum::UTerm, typenum::B1>, f32>>> {
-        var(gate) >> adsr_live(self.attack, self.decay, self.sustain, self.release)
+    fn make_node(&self, gate: &Shared) -> Net {
+        let attack = self.attack as f64;
+        let power = self.power as f64;
+        Net::wrap(Box::new(
+            var(gate) >> adsr_live(self.attack, self.decay, self.sustain, self.release)
+                >> envelope2(move |t, x| if t < attack {
+                    pow(x, 1.0/power)
+                } else {
+                    pow(x, power)
+                })))
+    }
+
+    pub fn curve_name(&self) -> &'static str {
+        match self.power {
+            1.0 => "Linear",
+            2.0 => "Quadratic",
+            3.0 => "Cubic",
+            _ => "Unknown",
+        }
     }
 }
 
