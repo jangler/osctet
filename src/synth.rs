@@ -4,6 +4,8 @@ use std::{collections::HashMap, fmt::Display};
 use rand::prelude::*;
 use fundsp::hacker::*;
 
+use crate::adsr::adsr_scalable;
+
 pub const MAX_ENVS: usize = 4;
 pub const MAX_OSCS: usize = 4;
 pub const MAX_FILTERS: usize = 2;
@@ -12,6 +14,7 @@ pub const MAX_LFOS: usize = 2;
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
 const VOICE_GAIN: f32 = 0.5; // -6 dB
+const MAX_ENV_SPEED: f32 = 4.0;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum KeyOrigin {
@@ -76,13 +79,13 @@ impl Waveform {
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
-            * ((settings.dsp_component(vars, ModTarget::OscPitch(index))
-                + settings.dsp_component(vars, ModTarget::Pitch) >> shape_fn(|x| pow(4.0, x))))
-            * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index))
-                + settings.dsp_component(vars, ModTarget::FinePitch) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
+            * ((settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
+                + settings.dsp_component(vars, ModTarget::Pitch, &[]) >> shape_fn(|x| pow(4.0, x))))
+            * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
+                + settings.dsp_component(vars, ModTarget::FinePitch, &[]) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 50.0);
         let tone = var(&osc.tone) >> follow(0.01)
-            + settings.dsp_component(vars, ModTarget::Tone(index))
+            + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(|x| clamp01(x));
 
         // have to compensate for different volumes. the sine is so loud!
@@ -99,10 +102,10 @@ impl Waveform {
         Net::wrap(au)
     }
 
-    fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
+    fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq)
-            * (settings.dsp_component(vars, ModTarget::LFORate(index)) >> shape_fn(|x| pow(200.0, x)))
+            * (settings.dsp_component(vars, ModTarget::LFORate(index), path) >> shape_fn(|x| pow(200.0, x)))
             >> shape_fn(|x| clamp(0.1, 20.0, x));
         let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
@@ -263,14 +266,14 @@ pub struct Settings {
 }
 
 impl Settings {
-    fn dsp_component(&self, vars: &VoiceVars, target: ModTarget) -> Net {
+    fn dsp_component(&self, vars: &VoiceVars, target: ModTarget, path: &[ModSource]) -> Net {
         let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
         for (i, m) in self.mod_matrix.iter().enumerate() {
-            if m.target == target {
+            if m.target == target && !path.contains(&m.source) {
                 if target.is_additive() {
-                    net = net + m.dsp_component(&self, &vars, i);
+                    net = net + m.dsp_component(&self, &vars, i, path);
                 } else {
-                    net = net * m.dsp_component(&self, &vars, i);
+                    net = net * m.dsp_component(&self, &vars, i, path);
                 }
             }
         }
@@ -301,6 +304,9 @@ impl Settings {
         for i in 0..self.filters.len() {
             v.push(ModTarget::FilterCutoff(i));
             v.push(ModTarget::FilterQ(i));
+        }
+        for i in 0..self.envs.len() {
+            v.push(ModTarget::EnvSpeed(i));
         }
         for i in 0..self.lfos.len() {
             v.push(ModTarget::LFORate(i));
@@ -448,7 +454,7 @@ impl Settings {
 
         (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
             * (var(&self.oscs[i].level) >> follow(0.01))
-            * self.dsp_component(&vars, ModTarget::Level(i))
+            * self.dsp_component(&vars, ModTarget::Level(i), &[])
             * am_oscs
             + mixed_oscs
     }
@@ -537,8 +543,8 @@ impl Filter {
             KeyTracking::Partial => Net::wrap(Box::new(var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
-        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index)) >> shape_fn(|x| pow(1000.0, x));
-        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index));
+        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index), &[]) >> shape_fn(|x| pow(1000.0, x));
+        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index), &[]);
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),
             FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
@@ -570,11 +576,13 @@ impl ADSR {
         }
     }
 
-    fn make_node(&self, gate: &Shared) -> Net {
+    fn make_node(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let attack = self.attack as f64;
         let power = self.power as f64;
+        let scale = settings.dsp_component(vars, ModTarget::EnvSpeed(index), path)
+            >> shape_fn(|x| pow(MAX_ENV_SPEED, -x));
         Net::wrap(Box::new(
-            var(gate) >> adsr_live(self.attack, self.decay, self.sustain, self.release)
+            (var(&vars.gate) | scale) >> adsr_scalable(self.attack, self.decay, self.sustain, self.release)
                 >> envelope2(move |t, x| if t < attack {
                     pow(x, 1.0/power)
                 } else {
@@ -623,22 +631,24 @@ impl Modulation {
         }
     }
 
-    fn dsp_component(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
+    fn dsp_component(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+        let mut path = path.to_vec();
+        path.push(self.source);
         let net = match self.source {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
             ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(0.01))),
             ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(0.01))),
             ModSource::Random => Net::wrap(Box::new(constant(random::<f32>()))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
-                Some(env) => Net::wrap(Box::new(env.make_node(&vars.gate))),
+                Some(env) => Net::wrap(Box::new(env.make_node(settings, vars, i, &path))),
                 None => Net::wrap(Box::new(zero())),
             },
             ModSource::LFO(i) => match settings.lfos.get(i) {
-                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(settings, vars, i))),
+                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(settings, vars, i, &path))),
                 None => Net::wrap(Box::new(zero())),
             }
         };
-        let d = var(&self.depth) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index));
+        let d = var(&self.depth) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
         if self.target.is_additive() {
             net * d
         } else if self.source.is_bipolar() {
@@ -694,6 +704,7 @@ pub enum ModTarget {
     Tone(usize),
     FilterCutoff(usize),
     FilterQ(usize),
+    EnvSpeed(usize),
     LFORate(usize),
     ModDepth(usize),
 }
@@ -735,6 +746,7 @@ impl Display for ModTarget {
             Self::Tone(n) => &format!("Osc {} tone", n + 1),
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
+            Self::EnvSpeed(n) => &format!("Env {} speed", n + 1),
             Self::LFORate(n) => &format!("LFO {} freq", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
         };
@@ -762,13 +774,15 @@ impl Voice {
         for (i, filter) in settings.filters.iter().enumerate() {
             filter_net = filter_net >> filter.make_net(&settings, &vars, i);
         }
-        let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain)
-            | var(&settings.pan) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan) >> shape_fn(|x| clamp11(x)))
+        let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain, &[])
+            | var(&settings.pan) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             * VOICE_GAIN >> panner();
         Self {
             vars,
             base_pitch: pitch,
-            release_time: settings.envs.iter().map(|env| env.release).fold(0.0, f32::max),
+            release_time: settings.envs.iter()
+                .map(|env| (env.attack + env.release) * MAX_ENV_SPEED)
+                .fold(0.0, f32::max),
             event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(net)),
         }
     }

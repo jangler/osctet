@@ -18,6 +18,7 @@ mod input;
 mod config;
 mod synth;
 mod song;
+mod adsr;
 
 use input::MidiEvent;
 
