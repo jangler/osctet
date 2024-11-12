@@ -11,6 +11,7 @@ pub const MAX_LFOS: usize = 2;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
+const VOICE_GAIN: f32 = 0.5; // -6 dB
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum KeyOrigin {
@@ -70,10 +71,11 @@ impl Waveform {
     }
 
     fn make_osc_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
-        let base = var(&vars.freq)
+        let prev_freq = settings.prev_freq.unwrap_or(vars.freq.value());
+        let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq as f64 } else { x });
+        let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio)
             * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
-            >> follow(settings.glide_time)
             * ((settings.dsp_component(vars, ModTarget::Pitch(index)) >> shape_fn(|x| pow(4.0, x))))
             * ((settings.dsp_component(vars, ModTarget::FinePitch(index)) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 100.0);
@@ -151,7 +153,7 @@ impl Synth {
                 filters: vec![],
                 lfos: vec![],
                 play_mode: PlayMode::Poly,
-                glide_time: 0.05,
+                glide_time: 0.0,
                 pan: shared(0.0),
                 mod_matrix: vec![Modulation {
                     source: ModSource::Envelope(0),
@@ -162,6 +164,7 @@ impl Synth {
                     target: ModTarget::Gain,
                     depth: shared(0.0),
                 }],
+                prev_freq: None,
             },
             voices: HashMap::new(),
             bend_memory: [0.0; 16],
@@ -197,6 +200,7 @@ impl Synth {
         };
         if insert_voice {
            self.voices.insert(key, Voice::new(pitch, bend, pressure, self.mod_memory, &self.settings, seq));
+           self.settings.prev_freq = Some(midi_hz(pitch));
         }
     }
 
@@ -246,6 +250,7 @@ pub struct Settings {
     pub glide_time: f32,
     pub pan: Shared, // range -1..1
     pub mod_matrix: Vec<Modulation>,
+    prev_freq: Option<f32>,
 }
 
 impl Settings {
@@ -527,7 +532,7 @@ impl ADSR {
             decay: 1.0,
             sustain: 1.0,
             release: 0.01,
-            power: 1.0
+            power: 2.0,
         }
     }
 
@@ -707,7 +712,7 @@ impl Voice {
         }
         let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain)
             | var(&settings.pan) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan) >> shape_fn(|x| clamp11(x)))
-            >> panner();
+            * VOICE_GAIN >> panner();
         Self {
             vars,
             base_pitch: pitch,
