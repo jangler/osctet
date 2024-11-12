@@ -114,6 +114,13 @@ impl Waveform {
         };
         Net::wrap(au)
     }
+
+    fn has_tone_control(&self) -> bool {
+        match *self {
+            Waveform::Pulse | Waveform::Noise => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -281,11 +288,13 @@ impl Settings {
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
         let mut v = vec![ModTarget::Gain, ModTarget::Pan];
-        for i in 0..self.oscs.len() {
+        for (i, osc) in self.oscs.iter().enumerate() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::Pitch(i));
             v.push(ModTarget::FinePitch(i));
-            v.push(ModTarget::Tone(i));
+            if osc.waveform.has_tone_control() {
+                v.push(ModTarget::Tone(i));
+            }
         }
         for i in 0..self.filters.len() {
             v.push(ModTarget::FilterCutoff(i));
