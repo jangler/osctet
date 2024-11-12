@@ -105,8 +105,8 @@ impl Waveform {
         let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
         let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(f >> saw() * d),
-            Self::Pulse => Box::new(f >> square() * d),
+            Self::Sawtooth => Box::new(f >> saw() * d >> follow(0.01)),
+            Self::Pulse => Box::new(f >> square() * d >> follow(0.01)),
             Self::Triangle => Box::new(f >> triangle() * d),
             Self::Sine => Box::new(f >> sine() * d),
             Self::Hold => Box::new((noise() | f) >> hold(0.0) * d >> follow(0.01)),
