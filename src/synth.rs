@@ -597,7 +597,7 @@ impl Modulation {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
             ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(0.01))),
             ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(0.01))),
-            ModSource::Random => Net::wrap(Box::new(constant(random::<f32>()))),
+            ModSource::Random => Net::wrap(Box::new(constant(vars.random))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
                 Some(env) => Net::wrap(Box::new(env.make_node(settings, vars, i, &path))),
                 None => Net::wrap(Box::new(zero())),
@@ -718,6 +718,7 @@ impl Voice {
             gate,
             pressure: shared(pressure),
             modulation: shared(modulation),
+            random: random(),
         };
         let filter_net = settings.filter.make_net(&settings, &vars);
         let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain, &[])
@@ -744,4 +745,5 @@ struct VoiceVars {
     pressure: Shared,
     modulation: Shared,
     gate: Shared,
+    random: f32,
 }
