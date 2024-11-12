@@ -11,7 +11,7 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
-use synth::{FilterType, Key, KeyOrigin, KeyTracking, PlayMode, Synth, Waveform};
+use synth::{FilterType, Key, KeyOrigin, KeyTracking, ModTarget, PlayMode, Synth, Waveform};
 
 mod pitch;
 mod input;
@@ -565,19 +565,23 @@ impl eframe::App for App {
                             .selected_text(m.target.to_string())
                             .show_ui(ui, |ui| {
                                 for variant in &targets {
+                                    if let ModTarget::ModDepth(n) = *variant {
+                                        if n >= i {
+                                            // prevent infinite loops
+                                            continue
+                                        }
+                                    }
                                     ui.selectable_value(&mut m.target, *variant, variant.to_string());
                                 }
                             });
-                        ui.add_enabled_ui(m.target.is_additive(), |ui| {
-                            shared_slider(ui, &m.depth, -1.0..=1.0, "", false);
-                        });
+                        shared_slider(ui, &m.depth, -1.0..=1.0, "", false);
                         if ui.button("x").clicked() {
                             removal_index = Some(i);
                         }
                         ui.end_row();
                     }
                     if let Some(i) = removal_index {
-                        settings.mod_matrix.remove(i);
+                        settings.remove_mod(i);
                     }
                 });
             if ui.button("+").clicked() {

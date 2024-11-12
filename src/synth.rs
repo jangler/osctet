@@ -256,12 +256,12 @@ pub struct Settings {
 impl Settings {
     fn dsp_component(&self, vars: &VoiceVars, target: ModTarget) -> Net {
         let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
-        for m in &self.mod_matrix {
+        for (i, m) in self.mod_matrix.iter().enumerate() {
             if m.target == target {
                 if target.is_additive() {
-                    net = net + m.dsp_component(&self, &vars);
+                    net = net + m.dsp_component(&self, &vars, i);
                 } else {
-                    net = net * m.dsp_component(&self, &vars);
+                    net = net * m.dsp_component(&self, &vars, i);
                 }
             }
         }
@@ -293,6 +293,9 @@ impl Settings {
         }
         for i in 0..self.lfos.len() {
             v.push(ModTarget::LFORate(i));
+        }
+        for i in 0..self.mod_matrix.len() {
+            v.push(ModTarget::ModDepth(i));
         }
         v
     }
@@ -387,6 +390,22 @@ impl Settings {
                 if let ModTarget::LFORate(n) = m.target {
                     if n > i {
                         m.target = ModTarget::LFORate(n - 1)
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn remove_mod(&mut self, i: usize) {
+        if i < self.mod_matrix.len() {
+            self.mod_matrix.remove(i);
+
+            // update mod matrix for new indices
+            self.mod_matrix.retain(|m| m.target != ModTarget::ModDepth(i));
+            for m in self.mod_matrix.iter_mut() {
+                if let ModTarget::ModDepth(n) = m.target {
+                    if n > i {
+                        m.target = ModTarget::ModDepth(n - 1);
                     }
                 }
             }
@@ -589,7 +608,7 @@ impl Modulation {
         }
     }
 
-    fn dsp_component(&self, settings: &Settings, vars: &VoiceVars) -> Net {
+    fn dsp_component(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
         let net = match self.source {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
             ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(0.01))),
@@ -605,7 +624,7 @@ impl Modulation {
             }
         };
         if self.target.is_additive() {
-            net * var(&self.depth)
+            net * (var(&self.depth) + settings.dsp_component(vars, ModTarget::ModDepth(index)))
         } else {
             net
         }
@@ -647,6 +666,7 @@ pub enum ModTarget {
     FilterCutoff(usize),
     FilterQ(usize),
     LFORate(usize),
+    ModDepth(usize),
 }
 
 impl ModTarget {
@@ -685,6 +705,7 @@ impl Display for ModTarget {
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
             Self::LFORate(n) => &format!("LFO {} freq", n + 1),
+            Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
         };
         f.write_str(s)
     }
