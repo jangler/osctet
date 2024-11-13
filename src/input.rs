@@ -1,4 +1,4 @@
-use eframe::egui::Key;
+use macroquad::input::KeyCode;
 
 use crate::pitch::{Nominal, Note, Tuning};
 
@@ -11,6 +11,10 @@ pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
 
+pub fn u8_from_key(k: KeyCode) -> u8 {
+    format!("{:?}", k).bytes().last().unwrap_or_default()
+}
+
 // sharps aren't much use for keyboard mapping if they're equal to unison
 // or the whole tone
 fn use_sharps(t: &Tuning) -> bool {
@@ -20,7 +24,7 @@ fn use_sharps(t: &Tuning) -> bool {
         t.midi_pitch(&ds4) != t.midi_pitch(&Note { nominal: Nominal::E, ..d4 })
 }
 
-pub fn note_from_key(k: &Key, t: &Tuning, equave: i8) -> Option<Note> {
+pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8) -> Option<Note> {
     let f = |nominal, accidentals, offset| {
         Some(Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
@@ -30,35 +34,35 @@ pub fn note_from_key(k: &Key, t: &Tuning, equave: i8) -> Option<Note> {
         })
     };
     match k {
-        Key::Z => f(Nominal::C, 0, -1),
-        Key::S => f(Nominal::C, 1, -1),
-        Key::X => f(Nominal::D, 0, -1),
-        Key::D => f(Nominal::D, 1, -1),
-        Key::C => f(Nominal::E, 0, -1),
-        Key::V => f(Nominal::F, 0, -1),
-        Key::G => f(Nominal::F, 1, -1),
-        Key::B => f(Nominal::G, 0, -1),
-        Key::H => f(Nominal::G, 1, -1),
-        Key::N => f(Nominal::A, 0, -1),
-        Key::J => f(Nominal::A, 1, -1),
-        Key::M => f(Nominal::B, 0, -1),
-        Key::Q => f(Nominal::C, 0, 0),
-        Key::Num2 => f(Nominal::C, 1, 0),
-        Key::W => f(Nominal::D, 0, 0),
-        Key::Num3 => f(Nominal::D, 1, 0),
-        Key::E => f(Nominal::E, 0, 0),
-        Key::R => f(Nominal::F, 0, 0),
-        Key::Num5 => f(Nominal::F, 1, 0),
-        Key::T => f(Nominal::G, 0, 0),
-        Key::Num6 => f(Nominal::G, 1, 0),
-        Key::Y => f(Nominal::A, 0, 0),
-        Key::Num7 => f(Nominal::A, 1, 0),
-        Key::U => f(Nominal::B, 0, 0),
-        Key::I => f(Nominal::C, 0, 1),
-        Key::Num9 => f(Nominal::C, 1, 1),
-        Key::O => f(Nominal::D, 0, 1),
-        Key::Num0 => f(Nominal::D, 1, 1),
-        Key::P => f(Nominal::E, 0, 1),
+        KeyCode::Z => f(Nominal::C, 0, -1),
+        KeyCode::S => f(Nominal::C, 1, -1),
+        KeyCode::X => f(Nominal::D, 0, -1),
+        KeyCode::D => f(Nominal::D, 1, -1),
+        KeyCode::C => f(Nominal::E, 0, -1),
+        KeyCode::V => f(Nominal::F, 0, -1),
+        KeyCode::G => f(Nominal::F, 1, -1),
+        KeyCode::B => f(Nominal::G, 0, -1),
+        KeyCode::H => f(Nominal::G, 1, -1),
+        KeyCode::N => f(Nominal::A, 0, -1),
+        KeyCode::J => f(Nominal::A, 1, -1),
+        KeyCode::M => f(Nominal::B, 0, -1),
+        KeyCode::Q => f(Nominal::C, 0, 0),
+        KeyCode::Key2 => f(Nominal::C, 1, 0),
+        KeyCode::W => f(Nominal::D, 0, 0),
+        KeyCode::Key3 => f(Nominal::D, 1, 0),
+        KeyCode::E => f(Nominal::E, 0, 0),
+        KeyCode::R => f(Nominal::F, 0, 0),
+        KeyCode::Key5 => f(Nominal::F, 1, 0),
+        KeyCode::T => f(Nominal::G, 0, 0),
+        KeyCode::Key6 => f(Nominal::G, 1, 0),
+        KeyCode::Y => f(Nominal::A, 0, 0),
+        KeyCode::Key7 => f(Nominal::A, 1, 0),
+        KeyCode::U => f(Nominal::B, 0, 0),
+        KeyCode::I => f(Nominal::C, 0, 1),
+        KeyCode::Key9 => f(Nominal::C, 1, 1),
+        KeyCode::O => f(Nominal::D, 0, 1),
+        KeyCode::Key0 => f(Nominal::D, 1, 1),
+        KeyCode::P => f(Nominal::E, 0, 1),
         _ => None
     }
 }
