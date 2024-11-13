@@ -100,7 +100,7 @@ impl Waveform {
                 + settings.dsp_component(vars, ModTarget::Pitch, &[]) >> shape_fn(|x| pow(4.0, x))))
             * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::FinePitch, &[]) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
-            * (1.0 + fm_oscs * 50.0);
+            * (1.0 + fm_oscs * 20.0);
         let tone = var(&osc.tone.0) >> follow(0.01)
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(|x| clamp01(x));
