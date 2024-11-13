@@ -11,6 +11,7 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
+use rfd::FileDialog;
 use synth::{FilterType, Key, KeyOrigin, KeyTracking, ModTarget, PlayMode, Synth, Waveform};
 
 mod pitch;
@@ -23,7 +24,10 @@ mod adsr;
 use input::MidiEvent;
 
 const APP_NAME: &str = "Synth Tracker";
-const PATCH_SAVE_PATH: &str = "patch.inst";
+
+// for file dialogs
+const PATCH_FILTER_NAME: &str = "Instrument";
+const PATCH_FILTER_EXT: &str = "inst";
 
 struct MessageBuffer {
     capacity: usize,
@@ -579,21 +583,30 @@ impl eframe::App for App {
                 settings.mod_matrix.push(synth::Modulation::default());
             }
 
+            // file ops
             ui.separator();
             ui.horizontal(|ui| {
                 if ui.button("Save patch").clicked() {
-                    match self.synth.settings.save(PATCH_SAVE_PATH) {
-                        Ok(_) => self.messages.push("Patch saved".to_owned()),
-                        Err(e) => self.messages.report(&e),
+                    if let Some(path) = FileDialog::new()
+                        .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                        .save_file() {
+                        match self.synth.settings.save(&path) {
+                            Ok(_) => self.messages.push(format!("Patch saved to {}", path.display())),
+                            Err(e) => self.messages.report(&e),
+                        }
                     }
                 }
                 if ui.button("Load patch").clicked() {
-                    match synth::Settings::load(PATCH_SAVE_PATH) {
-                        Ok(patch) => {
-                            self.synth.settings = patch;
-                            self.messages.push("Patch loaded".to_owned());
-                        },
-                        Err(e) => self.messages.report(&e),
+                    if let Some(path) = FileDialog::new()
+                        .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                        .pick_file() {
+                        match synth::Settings::load(&path) {
+                            Ok(patch) => {
+                                self.synth.settings = patch;
+                                self.messages.push(format!("Patch loaded from {}", path.display()));
+                            },
+                            Err(e) => self.messages.report(&e),
+                        }
                     }
                 }
             });

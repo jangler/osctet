@@ -1,5 +1,5 @@
 use core::f64;
-use std::{collections::HashMap, error::Error, fmt::Display, fs};
+use std::{collections::HashMap, error::Error, fmt::Display, fs, path::Path};
 
 use rand::prelude::*;
 use fundsp::hacker::*;
@@ -286,12 +286,12 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn load(path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         Ok(rmp_serde::from_slice::<Self>(&input)?)
     }
 
-    pub fn save(&self, path: &str) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
         Ok(fs::write(path, contents)?)
     }
