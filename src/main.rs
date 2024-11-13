@@ -7,8 +7,8 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
 
 use config::Config;
+use fx::GlobalFX;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
-use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use fundsp::hacker::*;
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Ui};
 use rfd::FileDialog;
@@ -20,8 +20,10 @@ mod config;
 mod synth;
 mod song;
 mod adsr;
+mod fx;
 
 use input::MidiEvent;
+use synth_tracker::init_audio;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -122,11 +124,8 @@ struct App {
 }
 
 impl App {
-    fn new(synth: Synth, seq: Sequencer, global_fx: GlobalFX, init_messages: Vec<String>) -> Self {
+    fn new(seq: Sequencer, global_fx: GlobalFX) -> Self {
         let mut messages = MessageBuffer::new(100);
-        for msg in init_messages {
-            messages.push(msg);
-        }
         let config = match Config::load() {
             Ok(c) => c,
             Err(e) => {
@@ -139,7 +138,7 @@ impl App {
         App {
             tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
             messages,
-            synth,
+            synth: Synth::new(),
             seq,
             octave: 4,
             midi,
@@ -282,10 +281,6 @@ fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &s
     }
 }
 
-fn make_reverb(r: f32, t: f32, d: f32, m: f32, damp: f32) -> Box<dyn AudioUnit> {
-    Box::new(reverb2_stereo(r, t, d, m, highshelf_hz(5000.0, 1.0, db_amp(-damp))))
-}
-
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // process UI input
@@ -350,33 +345,24 @@ impl eframe::App for App {
         egui::SidePanel::left("left_panel").resizable(false).show(ctx, |ui| {
             // global controls
             {
-                let mut commit = false;
                 let fx = &mut self.global_fx;
-                shared_slider(ui, &fx.reverb_amount, 0.0..=1.0, "Reverb level", false);
-                let (predelay_time, room_size, time, diffusion, mod_speed, damping) =
-                    (fx.predelay_time, fx.reverb_room_size, fx.reverb_time,
-                        fx.reverb_diffusion, fx.reverb_mod_speed, fx.reverb_damping);
-                ui.add(egui::Slider::new(&mut fx.predelay_time, 0.0..=0.1).text("Predelay"));
-                ui.add(egui::Slider::new(&mut fx.reverb_room_size, 5.0..=100.0).text("Room size").logarithmic(true));
-                ui.add(egui::Slider::new(&mut fx.reverb_time, 0.1..=10.0).text("Time").logarithmic(true));
-                ui.add(egui::Slider::new(&mut fx.reverb_diffusion, 0.0..=1.0).text("Diffusion"));
-                ui.add(egui::Slider::new(&mut fx.reverb_mod_speed, 0.0..=1.0).text("Mod speed"));
-                ui.add(egui::Slider::new(&mut fx.reverb_damping, 0.0..=6.0).text("HF damping"));
-                if predelay_time != fx.predelay_time {
-                    fx.net.crossfade(fx.predelay_id, Fade::Smooth, 0.1,
-                        Box::new(delay(predelay_time) | delay(predelay_time)));
-                    commit = true;
+                shared_slider(ui, &fx.settings.reverb_amount.0, 0.0..=1.0, "Reverb level", false);
+                let old_settings = fx.settings.clone();
+                ui.add(egui::Slider::new(&mut fx.settings.predelay_time, 0.0..=0.1).text("Predelay"));
+                ui.add(egui::Slider::new(&mut fx.settings.reverb_room_size, 5.0..=100.0).text("Room size").logarithmic(true));
+                ui.add(egui::Slider::new(&mut fx.settings.reverb_time, 0.1..=5.0).text("Time").logarithmic(true));
+                ui.add(egui::Slider::new(&mut fx.settings.reverb_diffusion, 0.0..=1.0).text("Diffusion"));
+                ui.add(egui::Slider::new(&mut fx.settings.reverb_mod_speed, 0.0..=1.0).text("Mod speed"));
+                ui.add(egui::Slider::new(&mut fx.settings.reverb_damping, 0.0..=6.0).text("HF damping"));
+                if old_settings.predelay_time != fx.settings.predelay_time {
+                    fx.commit_predelay();
                 }
-                if room_size != fx.reverb_room_size || time != fx.reverb_time ||
-                    diffusion != fx.reverb_diffusion || mod_speed != fx.reverb_mod_speed ||
-                    damping != fx.reverb_damping {
-                    fx.net.crossfade(fx.reverb_id, Fade::Smooth, 0.1,
-                        make_reverb(fx.reverb_room_size, fx.reverb_time, fx.reverb_diffusion,
-                            fx.reverb_mod_speed, fx.reverb_damping));
-                    commit = true;
-                }
-                if commit {
-                    fx.net.commit();
+                if old_settings.reverb_room_size != fx.settings.reverb_room_size
+                    || old_settings.reverb_time != fx.settings.reverb_time
+                    || old_settings.reverb_diffusion != fx.settings.reverb_diffusion
+                    || old_settings.reverb_mod_speed != fx.settings.reverb_mod_speed
+                    || old_settings.reverb_damping != fx.settings.reverb_damping {
+                    fx.commit_reverb();
                 }
                 ui.separator();
             }
@@ -660,93 +646,25 @@ impl eframe::App for App {
     }
 }
 
-struct GlobalFX {
-    predelay_id: NodeId,
-    predelay_time: f32,
-    reverb_id: NodeId,
-    reverb_room_size: f32,
-    reverb_time: f32,
-    reverb_diffusion: f32,
-    reverb_mod_speed: f32,
-    reverb_damping: f32,
-    reverb_amount: Shared,
-    net: Net,
-}
-
-fn main() -> eframe::Result {
-    // init audio
-    let host = cpal::default_host();
-    let device = host.default_output_device()
-        .expect("no output device available");
-    let mut configs = device.supported_output_configs()
-        .expect("error querying output configs");
-    let config: StreamConfig = configs.next()
-        .expect("no supported output config")
-        .with_max_sample_rate()
-        .into();
-    let synth = Synth::new();
+fn main() -> Result<(), Box<dyn Error>> {
     let mut seq = Sequencer::new(false, 2);
-    seq.set_sample_rate(config.sample_rate.0 as f64);
 
-    let predelay_time = 0.01;
-    let reverb_room_size = 20.0;
-    let reverb_time = 0.2;
-    let reverb_diffusion = 0.5;
-    let reverb_mod_speed = 0.5;
-    let reverb_damping = 3.0;
-    let (reverb, reverb_id) = Net::wrap_id(
-        make_reverb(reverb_room_size, reverb_time, reverb_diffusion, reverb_mod_speed, reverb_damping));
-    let (predelay, predelay_id) = Net::wrap_id(Box::new(delay(predelay_time) | delay(predelay_time)));
-    let reverb_amount = shared(0.1);
-    let mut net = Net::wrap(Box::new(seq.backend()))
-        >> (highpass_hz(1.0, 0.1) | highpass_hz(1.0, 0.1))
-        >> (shape(Tanh(1.0)) | shape(Tanh(1.0)))
-        >> (multipass::<U2>() & (var(&reverb_amount) >> split::<U2>()) * (predelay >> reverb));
-    let mut backend = BlockRateAdapter::new(Box::new(net.backend()));
-    let global_fx = GlobalFX {
-        predelay_time,
-        predelay_id,
-        reverb_id,
-        reverb_room_size,
-        reverb_time,
-        reverb_diffusion,
-        reverb_mod_speed,
-        reverb_damping,
-        reverb_amount,
-        net,
-    };
+    let mut global_fx = GlobalFX::new(seq.backend());
+    let backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
 
-    // TODO: handle these errors correctly (without dropping the stream!)
-    let errs = vec![];
-    let stream = device.build_output_stream(
-        &config,
-        move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
-            // there's probably a better way to do this
-            let mut i = 0;
-            let len = data.len();
-            while i < len {
-                let (l, r) = backend.get_stereo();
-                data[i] = l;
-                data[i+1] = r;
-                i += 2;
-            }
-        },
-        move |err| {
-            eprintln!("stream error: {}", err);
-        },
-        None
-    ).unwrap();
-    stream.play().unwrap();
+    // grab the stream to keep it alive
+    let _stream = init_audio(backend)?;
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1280.0, 720.0]),
         ..Default::default()
     };
-    eframe::run_native(
+
+    Ok(eframe::run_native(
         APP_NAME,
         options,
         Box::new(|_cc| {
-            Ok(Box::new(App::new(synth, seq, global_fx, errs)))
+            Ok(Box::new(App::new(seq, global_fx)))
         }),
-    )
+    )?)
 }
