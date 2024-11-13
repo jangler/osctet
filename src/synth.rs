@@ -1,5 +1,5 @@
 use core::f64;
-use std::{collections::HashMap, error::Error, fmt::Display, fs, path::Path};
+use std::{collections::HashMap, error::Error, fmt::Display, fs, path::Path, u64};
 
 use rand::prelude::*;
 use fundsp::hacker::*;
@@ -107,12 +107,12 @@ impl Waveform {
 
         // have to compensate for different volumes. the sine is so loud!
         let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(base >> saw()),
-            Self::Pulse => Box::new((base | tone * 0.5 + 0.5) >> pulse()),
-            Self::Triangle => Box::new(base >> triangle()),
-            Self::Sine => Box::new(base >> sine()),
-            Self::Hold => Box::new((noise() | base) >> hold(0.0)),
-            Self::Noise => Box::new(noise()
+            Self::Sawtooth => Box::new(base >> saw().phase(random())),
+            Self::Pulse => Box::new((base | tone * 0.5 + 0.5) >> pulse().phase(random())),
+            Self::Triangle => Box::new(base >> triangle().phase(random())),
+            Self::Sine => Box::new(base >> sine().phase(random())),
+            Self::Hold => Box::new((noise().seed(random()) | base) >> hold(0.0)),
+            Self::Noise => Box::new(noise().seed(random())
                 >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
                 >> join::<U2>()),
         };
@@ -127,12 +127,12 @@ impl Waveform {
         let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
         let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(f >> saw() * d >> follow(0.01)),
-            Self::Pulse => Box::new(f >> square() * d >> follow(0.01)),
-            Self::Triangle => Box::new(f >> triangle() * d),
-            Self::Sine => Box::new(f >> sine() * d),
-            Self::Hold => Box::new((noise() | f) >> hold(0.0) * d >> follow(0.01)),
-            Self::Noise => Box::new(pink() * d),
+            Self::Sawtooth => Box::new(f >> saw().phase(random()) * d >> follow(0.01)),
+            Self::Pulse => Box::new(f >> square().phase(random()) * d >> follow(0.01)),
+            Self::Triangle => Box::new(f >> triangle().phase(random()) * d),
+            Self::Sine => Box::new(f >> sine().phase(random()) * d),
+            Self::Hold => Box::new((noise().seed(random()) | f) >> hold(0.0) * d >> follow(0.01)),
+            Self::Noise => Box::new(pink().seed(random()) * d),
         };
         Net::wrap(au)
     }
