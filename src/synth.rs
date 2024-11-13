@@ -126,13 +126,14 @@ impl Waveform {
             >> shape_fn(|x| clamp(0.1, 20.0, x));
         let dt = lfo.delay as f64;
         let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
+        let p = vars.lfo_phases[index];
         let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(f >> saw().phase(random()) * d >> follow(0.01)),
-            Self::Pulse => Box::new(f >> square().phase(random()) * d >> follow(0.01)),
-            Self::Triangle => Box::new(f >> triangle().phase(random()) * d),
-            Self::Sine => Box::new(f >> sine().phase(random()) * d),
-            Self::Hold => Box::new((noise().seed(random()) | f) >> hold(0.0) * d >> follow(0.01)),
-            Self::Noise => Box::new(pink().seed(random()) * d),
+            Self::Sawtooth => Box::new(f >> saw().phase(p) * d >> follow(0.01)),
+            Self::Pulse => Box::new(f >> square().phase(p) * d >> follow(0.01)),
+            Self::Triangle => Box::new(f >> triangle().phase(p) * d),
+            Self::Sine => Box::new(f >> sine().phase(p) * d),
+            Self::Hold => Box::new((noise().seed((p * u64::MAX as f32) as u64) | f) >> hold(0.0) * d >> follow(0.01)),
+            Self::Noise => Box::new(pink().seed((p * u64::MAX as f32) as u64) * d),
         };
         Net::wrap(au)
     }
@@ -661,7 +662,7 @@ impl Modulation {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
             ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(0.01))),
             ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(0.01))),
-            ModSource::Random => Net::wrap(Box::new(constant(vars.random))),
+            ModSource::Random => Net::wrap(Box::new(constant(vars.random_values[index]))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
                 Some(env) => Net::wrap(Box::new(env.make_node(settings, vars, i, &path))),
                 None => Net::wrap(Box::new(zero())),
@@ -785,7 +786,8 @@ impl Voice {
             gate,
             pressure: shared(pressure),
             modulation: shared(modulation),
-            random: random(),
+            random_values: settings.mod_matrix.iter().map(|_| random()).collect(),
+            lfo_phases: settings.lfos.iter().map(|_| random()).collect(),
         };
         let filter_net = settings.filter.make_net(&settings, &vars);
         let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain, &[])
@@ -812,5 +814,6 @@ struct VoiceVars {
     pressure: Shared,
     modulation: Shared,
     gate: Shared,
-    random: f32,
+    random_values: Vec<f32>,
+    lfo_phases: Vec<f32>,
 }
