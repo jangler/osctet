@@ -180,6 +180,7 @@ impl Synth {
     pub fn new() -> Self {
         Self {
             settings: Settings {
+                gain: Parameter(shared(1.0)),
                 oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
                 filter: Filter::new(),
@@ -275,15 +276,19 @@ impl Synth {
 
 #[derive(Serialize, Deserialize)]
 pub struct Settings {
+    pub gain: Parameter,
+    pub pan: Parameter, // range -1..1
+    pub glide_time: f32,
+    pub play_mode: PlayMode,
+    pub filter: Filter,
     pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
-    pub filter: Filter,
     pub lfos: Vec<LFO>,
-    pub play_mode: PlayMode,
-    pub glide_time: f32,
-    pub pan: Parameter, // range -1..1
     pub mod_matrix: Vec<Modulation>,
-    prev_freq: Option<f32>,
+
+    #[serde(skip)]
+    // this doesn't really belong here -- it should go in Synth
+    prev_freq: Option<f32>, // for glide
 }
 
 impl Settings {
@@ -467,9 +472,11 @@ impl Settings {
             }
         }
 
+        let level = (var(&self.oscs[i].level.0) >> follow(0.01))
+            * self.dsp_component(&vars, ModTarget::Level(i), &[]);
+
         (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
-            * (var(&self.oscs[i].level.0) >> follow(0.01))
-            * self.dsp_component(&vars, ModTarget::Level(i), &[])
+            * level
             * am_oscs
             + mixed_oscs
     }
@@ -789,10 +796,11 @@ impl Voice {
             random_values: settings.mod_matrix.iter().map(|_| random()).collect(),
             lfo_phases: settings.lfos.iter().map(|_| random()).collect(),
         };
+        let gain = var(&settings.gain.0) * settings.dsp_component(&vars, ModTarget::Gain, &[]) * VOICE_GAIN;
         let filter_net = settings.filter.make_net(&settings, &vars);
-        let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain, &[])
+        let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
             | var(&settings.pan.0) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
-            * VOICE_GAIN >> panner();
+            >> panner();
         Self {
             vars,
             base_pitch: pitch,
