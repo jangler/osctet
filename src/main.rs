@@ -23,6 +23,7 @@ mod adsr;
 use input::MidiEvent;
 
 const APP_NAME: &str = "Synth Tracker";
+const PATCH_SAVE_PATH: &str = "patch.inst";
 
 struct MessageBuffer {
     capacity: usize,
@@ -389,7 +390,7 @@ impl eframe::App for App {
             // glide time slider
             // FIXME: this doesn't update voices that are already playing
             ui.add(egui::Slider::new(&mut settings.glide_time, 0.0..=0.5).text("Glide"));
-            shared_slider(ui, &settings.pan, -1.0..=1.0, "Pan", false);
+            shared_slider(ui, &settings.pan.0, -1.0..=1.0, "Pan", false);
 
             // oscillator controls
             ui.separator();
@@ -410,11 +411,11 @@ impl eframe::App for App {
             });
             let outputs = settings.outputs(self.selected_osc);
             if let Some(osc) = settings.oscs.get_mut(self.selected_osc) {
-                shared_slider(ui, &osc.level, 0.0..=1.0, "Level", false);
-                shared_slider(ui, &osc.freq_ratio, 0.25..=16.0, "Freq. ratio", true);
-                shared_slider(ui, &osc.fine_pitch, -0.5..=0.5, "Fine pitch", false);
+                shared_slider(ui, &osc.level.0, 0.0..=1.0, "Level", false);
+                shared_slider(ui, &osc.freq_ratio.0, 0.25..=16.0, "Freq. ratio", true);
+                shared_slider(ui, &osc.fine_pitch.0, -0.5..=0.5, "Fine pitch", false);
                 ui.add_enabled_ui(osc.waveform == Waveform::Pulse || osc.waveform == Waveform::Noise, |ui| {
-                    shared_slider(ui, &osc.tone, 0.0..=1.0, "Tone", false);
+                    shared_slider(ui, &osc.tone.0, 0.0..=1.0, "Tone", false);
                 });
                 egui::ComboBox::new("osc_waveform", "Waveform")
                     .selected_text(osc.waveform.name())
@@ -446,8 +447,8 @@ impl eframe::App for App {
                     }
                 });
             ui.add_enabled_ui(filter.filter_type != FilterType::Off, |ui| {
-                shared_slider(ui, &filter.cutoff, 20.0..=20_000.0, "Cutoff", true);
-                shared_slider(ui, &filter.resonance, 0.1..=1.0, "Resonance", false);
+                shared_slider(ui, &filter.cutoff.0, 20.0..=20_000.0, "Cutoff", true);
+                shared_slider(ui, &filter.resonance.0, 0.1..=1.0, "Resonance", false);
                 egui::ComboBox::from_label("Key tracking")
                     .selected_text(filter.key_tracking.name())
                     .show_ui(ui, |ui| {
@@ -523,7 +524,7 @@ impl eframe::App for App {
                             ui.selectable_value(&mut lfo.waveform, variant, variant.name());
                         }
                     });
-                shared_slider(ui, &lfo.freq, 0.1..=20.0, "Frequency", true);
+                shared_slider(ui, &lfo.freq.0, 0.1..=20.0, "Frequency", true);
                 ui.add(egui::Slider::new(&mut lfo.delay, 0.0..=10.0).text("Delay"));
             }
 
@@ -564,7 +565,7 @@ impl eframe::App for App {
                                     ui.selectable_value(&mut m.target, *variant, variant.to_string());
                                 }
                             });
-                        shared_slider(ui, &m.depth, -1.0..=1.0, "", false);
+                        shared_slider(ui, &m.depth.0, -1.0..=1.0, "", false);
                         if ui.button("x").clicked() {
                             removal_index = Some(i);
                         }
@@ -577,6 +578,25 @@ impl eframe::App for App {
             if ui.button("+").clicked() {
                 settings.mod_matrix.push(synth::Modulation::default());
             }
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Save patch").clicked() {
+                    match self.synth.settings.save(PATCH_SAVE_PATH) {
+                        Ok(_) => self.messages.push("Patch saved".to_owned()),
+                        Err(e) => self.messages.report(&e),
+                    }
+                }
+                if ui.button("Load patch").clicked() {
+                    match synth::Settings::load(PATCH_SAVE_PATH) {
+                        Ok(patch) => {
+                            self.synth.settings = patch;
+                            self.messages.push("Patch loaded".to_owned());
+                        },
+                        Err(e) => self.messages.report(&e),
+                    }
+                }
+            });
 
             // message area
             ui.separator();

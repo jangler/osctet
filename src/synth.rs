@@ -1,8 +1,9 @@
 use core::f64;
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, error::Error, fmt::Display, fs};
 
 use rand::prelude::*;
 use fundsp::hacker::*;
+use serde::{Deserialize, Serialize};
 
 use crate::adsr::adsr_scalable;
 
@@ -14,6 +15,23 @@ const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
 const VOICE_GAIN: f32 = 0.5; // -6 dB
 const MAX_ENV_SPEED: f32 = 4.0;
+
+// wrap this type so we can serialize it
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(from = "f32", into = "f32")]
+pub struct Parameter(pub Shared);
+
+impl From<f32> for Parameter {
+    fn from(value: f32) -> Self {
+        Parameter(shared(value))
+    }
+}
+
+impl Into<f32> for Parameter {
+    fn into(self) -> f32 {
+        self.0.value()
+    }
+}
 
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum KeyOrigin {
@@ -29,7 +47,7 @@ pub struct Key {
     pub key: u8,
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum PlayMode {
     Poly,
     Mono,
@@ -48,7 +66,7 @@ impl PlayMode {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum Waveform {
     Sawtooth,
     Pulse,
@@ -76,14 +94,14 @@ impl Waveform {
         let prev_freq = settings.prev_freq.unwrap_or(vars.freq.value());
         let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq as f64 } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
-            * var(&osc.freq_ratio)
-            * var_fn(&osc.fine_pitch, |x| pow(SEMITONE_RATIO, x))
+            * var(&osc.freq_ratio.0)
+            * var_fn(&osc.fine_pitch.0, |x| pow(SEMITONE_RATIO, x))
             * ((settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::Pitch, &[]) >> shape_fn(|x| pow(4.0, x))))
             * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::FinePitch, &[]) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
             * (1.0 + fm_oscs * 50.0);
-        let tone = var(&osc.tone) >> follow(0.01)
+        let tone = var(&osc.tone.0) >> follow(0.01)
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(|x| clamp01(x));
 
@@ -103,7 +121,7 @@ impl Waveform {
 
     fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let lfo = &settings.lfos[index];
-        let f = var(&lfo.freq)
+        let f = var(&lfo.freq.0)
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path) >> shape_fn(|x| pow(200.0, x)))
             >> shape_fn(|x| clamp(0.1, 20.0, x));
         let dt = lfo.delay as f64;
@@ -127,7 +145,7 @@ impl Waveform {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum FilterType {
     Off,
     Ladder,
@@ -167,15 +185,15 @@ impl Synth {
                 lfos: vec![],
                 play_mode: PlayMode::Poly,
                 glide_time: 0.0,
-                pan: shared(0.0),
+                pan: Parameter(shared(0.0)),
                 mod_matrix: vec![Modulation {
                     source: ModSource::Envelope(0),
                     target: ModTarget::Gain,
-                    depth: shared(1.0),
+                    depth: Parameter(shared(1.0)),
                 }, Modulation {
                     source: ModSource::Pressure,
                     target: ModTarget::Gain,
-                    depth: shared(1.0),
+                    depth: Parameter(shared(1.0)),
                 }],
                 prev_freq: None,
             },
@@ -254,6 +272,7 @@ impl Synth {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Settings {
     pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
@@ -261,12 +280,22 @@ pub struct Settings {
     pub lfos: Vec<LFO>,
     pub play_mode: PlayMode,
     pub glide_time: f32,
-    pub pan: Shared, // range -1..1
+    pub pan: Parameter, // range -1..1
     pub mod_matrix: Vec<Modulation>,
     prev_freq: Option<f32>,
 }
 
 impl Settings {
+    pub fn load(path: &str) -> Result<Self, Box<dyn Error>> {
+        let input = fs::read(path)?;
+        Ok(rmp_serde::from_slice::<Self>(&input)?)
+    }
+
+    pub fn save(&self, path: &str) -> Result<(), Box<dyn Error>> {
+        let contents = rmp_serde::to_vec(self)?;
+        Ok(fs::write(path, contents)?)
+    }
+
     fn dsp_component(&self, vars: &VoiceVars, target: ModTarget, path: &[ModSource]) -> Net {
         let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
         for (i, m) in self.mod_matrix.iter().enumerate() {
@@ -438,18 +467,19 @@ impl Settings {
         }
 
         (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
-            * (var(&self.oscs[i].level) >> follow(0.01))
+            * (var(&self.oscs[i].level.0) >> follow(0.01))
             * self.dsp_component(&vars, ModTarget::Level(i), &[])
             * am_oscs
             + mixed_oscs
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Oscillator {
-    pub level: Shared,
-    pub tone: Shared,
-    pub freq_ratio: Shared,
-    pub fine_pitch: Shared,
+    pub level: Parameter,
+    pub tone: Parameter,
+    pub freq_ratio: Parameter,
+    pub fine_pitch: Parameter,
     pub waveform: Waveform,
     pub output: OscOutput,
 }
@@ -457,17 +487,17 @@ pub struct Oscillator {
 impl Oscillator {
     pub fn new() -> Self {
         Self {
-            level: shared(1.0),
-            tone: shared(0.0),
-            freq_ratio: shared(1.0),
-            fine_pitch: shared(0.0),
+            level: Parameter(shared(1.0)),
+            tone: Parameter(shared(0.0)),
+            freq_ratio: Parameter(shared(1.0)),
+            fine_pitch: Parameter(shared(0.0)),
             waveform: Waveform::Sine,
             output: OscOutput::Mix(0),
         }
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum OscOutput {
     Mix(usize),
     AM(usize),
@@ -486,7 +516,7 @@ impl Display for OscOutput {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum KeyTracking {
     None,
     Partial,
@@ -505,18 +535,19 @@ impl KeyTracking {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Filter {
     pub filter_type: FilterType,
-    pub cutoff: Shared,
-    pub resonance: Shared,
+    pub cutoff: Parameter,
+    pub resonance: Parameter,
     pub key_tracking: KeyTracking,
 }
 
 impl Filter {
     pub fn new() -> Self {
         Self {
-            cutoff: shared(20_000.0),
-            resonance: shared(0.1),
+            cutoff: Parameter(shared(20_000.0)),
+            resonance: Parameter(shared(0.1)),
             key_tracking: KeyTracking::None,
             filter_type: FilterType::Off,
         }
@@ -541,11 +572,12 @@ impl Filter {
             FilterType::Off => panic!("unreachable"),
         };
         (pass()
-            | var(&self.cutoff) * kt * cutoff_mod >> shape_fn(|x| clamp(0.0, 22_000.0, x))
-            | var(&self.resonance) + reso_mod) >> f
+            | var(&self.cutoff.0) * kt * cutoff_mod >> shape_fn(|x| clamp(0.0, 22_000.0, x))
+            | var(&self.resonance.0) + reso_mod) >> f
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ADSR {
     pub attack: f32,
     pub decay: f32,
@@ -589,9 +621,10 @@ impl ADSR {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct LFO {
     pub waveform: Waveform,
-    pub freq: Shared,
+    pub freq: Parameter,
     pub delay: f32,
 }
 
@@ -599,16 +632,17 @@ impl LFO {
     pub fn new() -> Self {
         Self {
             waveform: Waveform::Triangle,
-            freq: shared(1.0),
+            freq: Parameter(shared(1.0)),
             delay: 0.0,
         }
     }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Modulation {
     pub source: ModSource,
     pub target: ModTarget,
-    pub depth: Shared,
+    pub depth: Parameter,
 }
 
 impl Modulation {
@@ -616,7 +650,7 @@ impl Modulation {
         Self {
             source: ModSource::Modulation,
             target: ModTarget::Gain,
-            depth: shared(0.0),
+            depth: Parameter(shared(0.0)),
         }
     }
 
@@ -637,7 +671,7 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             }
         };
-        let d = var(&self.depth) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
+        let d = var(&self.depth.0) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
         if self.target.is_additive() {
             net * d
         } else if self.source.is_bipolar() {
@@ -648,7 +682,7 @@ impl Modulation {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum ModSource {
     Pitch,
     Pressure,
@@ -681,7 +715,7 @@ impl ModSource {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum ModTarget {
     Gain,
     Pan,
@@ -755,7 +789,7 @@ impl Voice {
         };
         let filter_net = settings.filter.make_net(&settings, &vars);
         let net = ((settings.make_osc(0, &vars) >> filter_net) * settings.dsp_component(&vars, ModTarget::Gain, &[])
-            | var(&settings.pan) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
+            | var(&settings.pan.0) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             * VOICE_GAIN >> panner();
         Self {
             vars,
