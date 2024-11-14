@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 
 use config::Config;
 use fx::GlobalFX;
+use macroquad::ui::root_ui;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use rfd::FileDialog;
@@ -21,15 +22,22 @@ mod synth;
 mod song;
 mod adsr;
 mod fx;
+mod ui;
 
 use input::MidiEvent;
 use synth_tracker::init_audio;
+use ui::UIStyle;
 
 const APP_NAME: &str = "Synth Tracker";
 
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "inst";
+
+const LIGHT_THEME: Theme = Theme {
+    bg: Color { r: 0.99, g: 0.99, b: 0.99, a: 1.0 },
+    fg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+};
 
 struct MessageBuffer {
     capacity: usize,
@@ -121,6 +129,7 @@ struct App {
     selected_lfo: usize,
     global_fx: GlobalFX,
     song_editor: song::Editor,
+    style: UIStyle,
 }
 
 impl App {
@@ -148,11 +157,18 @@ impl App {
             selected_lfo: 0,
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
+            style: UIStyle {
+                font: load_ttf_font_from_bytes(include_bytes!("font/RobotoMono-Regular.ttf"))
+                    .expect("included font should be loadable"),
+                theme: LIGHT_THEME,
+            },
         }
     }
 
     fn handle_keys(&mut self) {
-        for key in get_keys_released() {
+        let (pressed, released) = (get_keys_pressed(), get_keys_released());
+
+        for key in released {
             if let Some(_) = input::note_from_key(key, &self.tuning, self.octave) {
                 self.synth.note_off(Key {
                     origin: KeyOrigin::Keyboard,
@@ -162,7 +178,7 @@ impl App {
             }
         }
 
-        for key in get_keys_pressed() {
+        for key in pressed{
             if let Some(note) = input::note_from_key(key, &self.tuning, self.octave) {
                 self.synth.note_on(Key {
                     origin: KeyOrigin::Keyboard,
@@ -207,8 +223,8 @@ impl App {
                     Some(MidiEvent::NoteOff { channel, key, .. }) => {
                         self.synth.note_off(Key{
                             origin: KeyOrigin::Midi,
-                            channel: channel,
-                            key: key,
+                            channel,
+                            key,
                         }, &mut self.seq);
                     },
                     Some(MidiEvent::NoteOn { channel, key, velocity }) => {
@@ -216,14 +232,14 @@ impl App {
                             let note = input::note_from_midi(v[1] as i8, &self.tuning);
                             self.synth.note_on(Key {
                                 origin: KeyOrigin::Midi,
-                                channel: channel,
-                                key: key,
+                                channel,
+                                key,
                             }, self.tuning.midi_pitch(&note), velocity as f32 / 127.0, &mut self.seq);
                         } else {
                             self.synth.note_off(Key {
                                 origin: KeyOrigin::Midi,
-                                channel: channel,
-                                key: key,
+                                channel,
+                                key,
                             }, &mut self.seq);
                         }
                     },
@@ -231,8 +247,8 @@ impl App {
                         if self.config.midi_send_pressure == Some(true) {
                             self.synth.poly_pressure(Key {
                                 origin: KeyOrigin::Midi,
-                                channel: channel,
-                                key: key,
+                                channel,
+                                key,
                             }, pressure as f32 / 127.0);
                         }
                     },
@@ -293,10 +309,27 @@ impl App {
         }
     }
 
-    fn update(&mut self) {
+    fn frame(&mut self) {
         self.handle_keys();
         self.handle_midi();
         self.check_midi_reconnect();
+        self.draw();
+    }
+
+    fn draw(&self) {
+        clear_background(self.style.theme.bg);
+
+        for (i, msg) in self.messages.iter().enumerate() {
+            let font_size: u16 = 14;
+            draw_text_ex(msg, font_size as f32, (font_size * (i as u16 + 1)) as f32, TextParams {
+                font_size,
+                font: Some(&self.style.font),
+                color: self.style.theme.fg,
+                ..Default::default()
+            });
+        }
+
+        ui::draw_button("Test button", 100.0, 100.0, &self.style);
     }
 }
 
@@ -673,7 +706,22 @@ impl App {
 //     }
 // }
 
-#[macroquad::main("Synth Tracker")]
+struct Theme {
+    bg: Color,
+    fg: Color,
+}
+
+fn window_conf() -> Conf {
+    Conf {
+        window_title: APP_NAME.to_owned(),
+        window_width: 1280,
+        window_height: 720,
+        // TODO: icon
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
 async fn main() -> Result<(), Box<dyn Error>> {
     let mut seq = Sequencer::new(false, 2);
 
@@ -685,25 +733,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut app = App::new(seq, global_fx);
 
-    let font = load_ttf_font_from_bytes(include_bytes!("font/RobotoMono-Regular.ttf"))?;
-
     loop {
-        app.update();
-
-        clear_background(RED);
-
-        draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
-        draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
-        draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
-        
-        for i in 0..50 {
-            draw_text_ex("Hello, world!", 20.0, 20.0 * i as f32, TextParams {
-                font_size: 20,
-                font: Some(&font),
-                ..Default::default()
-            });
-        }
-
+        app.frame();
         next_frame().await
     }
 }
