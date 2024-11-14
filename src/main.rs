@@ -94,19 +94,23 @@ impl Midi {
         MidiInput::new(&format!("{} input #{}", APP_NAME, self.input_id))
     }
 
-    fn selected_port(&self) -> Option<MidiInputPort> {
-        self.port_selection.as_ref().map(|selection| {
-            self.input.as_ref().map(|input| {
+    fn selected_port(&self) -> Result<MidiInputPort, &'static str> {
+        if let Some(selection) = &self.port_selection {
+            if let Some(input) = &self.input {
                 for port in input.ports() {
                     if let Ok(name) = input.port_name(&port) {
                         if name == *selection {
-                            return Some(port)
+                            return Ok(port)
                         }
                     }
                 }
-                None
-            })?
-        })?
+                Err("Selected MIDI device not found")
+            } else {
+                Err("Could not open MIDI")
+            }
+        } else {
+            Err("No MIDI device selected")
+        }
     }
 }
 
@@ -181,7 +185,7 @@ impl App {
 
     fn midi_connect(&mut self) -> Result<MidiInputConnection<Sender<Vec<u8>>>, Box<dyn Error>> {
         match self.midi.selected_port() {
-            Some(port) => {
+            Ok(port) => {
                 match self.midi.new_input() {
                     Ok(mut input) => {
                         // ignore SysEx, time, and active sensing
@@ -202,7 +206,7 @@ impl App {
                     Err(e) => Err(Box::new(e)),
                 }
             },
-            None => Err("no MIDI port selected".into()),
+            Err(e) => Err(e.into()),
         }
     }
 
