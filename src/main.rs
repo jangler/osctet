@@ -34,11 +34,6 @@ const APP_NAME: &str = "Synth Tracker";
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "inst";
 
-const LIGHT_THEME: Theme = Theme {
-    bg: Color { r: 0.99, g: 0.99, b: 0.99, a: 1.0 },
-    fg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
-};
-
 struct MessageBuffer {
     capacity: usize,
     messages: VecDeque<String>,
@@ -158,9 +153,11 @@ impl App {
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
             style: UIStyle {
-                font: load_ttf_font_from_bytes(include_bytes!("font/RobotoMono-Regular.ttf"))
+                variable_font: load_ttf_font_from_bytes(include_bytes!("font/Roboto-Regular.ttf"))
                     .expect("included font should be loadable"),
-                theme: LIGHT_THEME,
+                monospace_font: load_ttf_font_from_bytes(include_bytes!("font/RobotoMono-Regular.ttf"))
+                    .expect("included font should be loadable"),
+                theme: ui::LIGHT_THEME,
             },
         }
     }
@@ -313,23 +310,25 @@ impl App {
         self.handle_keys();
         self.handle_midi();
         self.check_midi_reconnect();
-        self.draw();
+        self.process_ui();
     }
-
-    fn draw(&self) {
+    
+    fn process_ui(&mut self) {
         clear_background(self.style.theme.bg);
 
         for (i, msg) in self.messages.iter().enumerate() {
             let font_size: u16 = 14;
             draw_text_ex(msg, font_size as f32, (font_size * (i as u16 + 1)) as f32, TextParams {
                 font_size,
-                font: Some(&self.style.font),
+                font: Some(&self.style.variable_font),
                 color: self.style.theme.fg,
                 ..Default::default()
             });
         }
 
-        ui::draw_button("Test button", 100.0, 100.0, &self.style);
+        if ui::button("Test button", 100.0, 100.0, &self.style) {
+            self.messages.push("Button clicked".to_owned());
+        }
     }
 }
 
@@ -705,11 +704,6 @@ impl App {
 //         });
 //     }
 // }
-
-struct Theme {
-    bg: Color,
-    fg: Color,
-}
 
 fn window_conf() -> Conf {
     Conf {
