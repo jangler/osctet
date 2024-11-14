@@ -26,7 +26,6 @@ mod ui;
 
 use input::MidiEvent;
 use synth_tracker::init_audio;
-use ui::UIStyle;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -124,7 +123,7 @@ struct App {
     selected_lfo: usize,
     global_fx: GlobalFX,
     song_editor: song::Editor,
-    style: UIStyle,
+    ui: ui::UI,
 }
 
 impl App {
@@ -152,13 +151,7 @@ impl App {
             selected_lfo: 0,
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
-            style: UIStyle {
-                variable_font: load_ttf_font_from_bytes(include_bytes!("font/Roboto-Regular.ttf"))
-                    .expect("included font should be loadable"),
-                monospace_font: load_ttf_font_from_bytes(include_bytes!("font/RobotoMono-Regular.ttf"))
-                    .expect("included font should be loadable"),
-                theme: ui::LIGHT_THEME,
-            },
+            ui: ui::UI::new(),
         }
     }
 
@@ -314,21 +307,22 @@ impl App {
     }
     
     fn process_ui(&mut self) {
-        clear_background(self.style.theme.bg);
+        self.ui.new_frame();
 
-        for (i, msg) in self.messages.iter().enumerate() {
-            let font_size: u16 = 14;
-            draw_text_ex(msg, font_size as f32, (font_size * (i as u16 + 1)) as f32, TextParams {
-                font_size,
-                font: Some(&self.style.variable_font),
-                color: self.style.theme.fg,
-                ..Default::default()
-            });
-        }
-
-        if ui::button("Test button", 100.0, 100.0, &self.style) {
+        if self.ui.button("Test button") {
             self.messages.push("Button clicked".to_owned());
         }
+
+        if let Some(input) = self.midi.input.as_ref() {
+            let port_names: Vec<String> = input.ports().into_iter()
+                .map(|p| input.port_name(&p).unwrap_or("(unknown)".to_owned()))
+                .collect();
+            if let Some(index) = self.ui.combo_box("MIDI input", &port_names) {
+                self.midi.port_selection = port_names.get(index).cloned();
+            }
+        }
+
+        self.ui.message_buffer(&self.messages, 200.0);
     }
 }
 
