@@ -73,6 +73,7 @@ impl Default for ComboBoxState {
 pub struct UI {
     pub style: UIStyle,
     combo_boxes: HashMap<String, ComboBoxState>,
+    bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
     layout: Layout,
@@ -89,17 +90,43 @@ impl UI {
                 theme: LIGHT_THEME,
             },
             combo_boxes: HashMap::new(),
-            cursor_x: MARGIN,
-            cursor_y: MARGIN,
+            bounds: Default::default(),
+            cursor_x: 0.0,
+            cursor_y: 0.0,
             layout: Layout::Vertical,
         }
     }
 
     pub fn new_frame(&mut self) {
+        self.bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            w: screen_width(),
+            h: screen_height(),
+        };
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
         
         clear_background(self.style.theme.bg);
+    }
+
+    pub fn start_bottom_panel(&mut self) {
+        let params = self.style.text_params(FontStyle::Variable);
+        let h = params.font_size as f32 + MARGIN * 2.0;
+        draw_line(self.bounds.x, self.bounds.h - h,
+            self.bounds.x + self.bounds.w, self.bounds.h - h,
+            LINE_THICKNESS, self.style.theme.fg);
+        self.layout = Layout::Horizontal;
+        self.cursor_x = self.bounds.x;
+        self.cursor_y = self.bounds.h - h;
+    }
+
+    pub fn end_bottom_panel(&mut self) {
+        let params = self.style.text_params(FontStyle::Variable);
+        let h = params.font_size as f32 + MARGIN * 2.0;
+        self.bounds.h -= h;
+        self.cursor_x = self.bounds.x;
+        self.cursor_y = self.bounds.y;
     }
 
     fn update_cursor(&mut self, w: f32, h: f32) {
@@ -114,6 +141,11 @@ impl UI {
         let dim = measure_text(label, params.font, params.font_size, params.font_scale);
         draw_text_ex(label, x + MARGIN, y + MARGIN + dim.offset_y, params);
         Rect { x, y, w: dim.width + MARGIN, h: dim.height + MARGIN }
+    }
+    
+    pub fn label(&mut self, label: &str) {
+        let rect = self.draw_text(label, self.cursor_x, self.cursor_y);
+        self.update_cursor(rect.w, rect.h);
     }
 
     fn text_rect(&self, label: &str, x: f32, y: f32) -> (Rect, MouseEvent) {
@@ -147,8 +179,8 @@ impl UI {
 
     /// Draws a button and returns true if it was clicked this frame.
     pub fn button(&mut self, label: &str) -> bool {
-        let (rect, event) = self.text_rect(label, self.cursor_x, self.cursor_y);
-        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
+        let (rect, event) = self.text_rect(label, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
+        self.update_cursor(rect.w + MARGIN * 2.0, rect.h + MARGIN * 2.0);
         event == MouseEvent::Released
     }
     

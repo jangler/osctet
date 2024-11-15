@@ -313,17 +313,18 @@ impl App {
     fn process_ui(&mut self) {
         self.ui.new_frame();
 
+        self.ui.start_bottom_panel();
+        self.ui.label("MIDI input");
+        let s = if let Some(name) = &self.midi.port_name {
+            &name
+        } else {
+            "(none)"
+        };
+        self.ui.button(s);
+        self.ui.end_bottom_panel();
+
         if self.ui.button("Test button") {
             self.messages.push("Button clicked".to_owned());
-        }
-
-        if let Some(input) = self.midi.input.as_ref() {
-            let port_names: Vec<String> = input.ports().into_iter()
-                .map(|p| input.port_name(&p).unwrap_or("(unknown)".to_owned()))
-                .collect();
-            if let Some(index) = self.ui.combo_box("MIDI input", &port_names) {
-                self.midi.port_selection = port_names.get(index).cloned();
-            }
         }
 
         self.ui.message_buffer(&self.messages, 200.0);
