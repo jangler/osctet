@@ -5,7 +5,7 @@ use macroquad::prelude::*;
 use crate::MessageBuffer;
 
 const MARGIN: f32 = 5.0;
-const LINE_THICKNESS: f32 = 3.0;
+const LINE_THICKNESS: f32 = 1.5;
 
 pub struct Theme {
     pub bg: Color,
@@ -33,7 +33,7 @@ enum FontStyle {
 }
 
 impl UIStyle {
-    fn text_params(&self, font_style: FontStyle) -> TextParams {
+    pub fn text_params(&self, font_style: FontStyle) -> TextParams {
         TextParams {
             font: Some(match font_style {
                 FontStyle::Variable => &self.variable_font,
@@ -112,7 +112,7 @@ impl UI {
 
     pub fn start_bottom_panel(&mut self) {
         let params = self.style.text_params(FontStyle::Variable);
-        let h = params.font_size as f32 + MARGIN * 2.0;
+        let h = params.font_size as f32 + MARGIN * 4.0;
         draw_line(self.bounds.x, self.bounds.h - h,
             self.bounds.x + self.bounds.w, self.bounds.h - h,
             LINE_THICKNESS, self.style.theme.fg);
@@ -123,7 +123,7 @@ impl UI {
 
     pub fn end_bottom_panel(&mut self) {
         let params = self.style.text_params(FontStyle::Variable);
-        let h = params.font_size as f32 + MARGIN * 2.0;
+        let h = params.font_size as f32 + MARGIN * 4.0;
         self.bounds.h -= h;
         self.cursor_x = self.bounds.x;
         self.cursor_y = self.bounds.y;
@@ -144,8 +144,8 @@ impl UI {
     }
     
     pub fn label(&mut self, label: &str) {
-        let rect = self.draw_text(label, self.cursor_x, self.cursor_y);
-        self.update_cursor(rect.w, rect.h);
+        let rect = self.draw_text(label, self.cursor_x, self.cursor_y + MARGIN);
+        self.update_cursor(rect.w, rect.h + MARGIN);
     }
 
     fn text_rect(&self, label: &str, x: f32, y: f32) -> (Rect, MouseEvent) {
@@ -166,7 +166,7 @@ impl UI {
         }
     
         draw_text_ex(label, x + MARGIN, y + MARGIN + dim.offset_y, params);
-        draw_rectangle_lines(x, y, rect.w, rect.h, LINE_THICKNESS, self.style.theme.fg);
+        draw_rectangle_lines(x, y, rect.w, rect.h, LINE_THICKNESS * 2.0, self.style.theme.fg);
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
@@ -222,6 +222,80 @@ impl UI {
         draw_rectangle_lines(
             self.cursor_x, init_y,
             width, self.cursor_y - init_y,
-            LINE_THICKNESS, self.style.theme.fg);
+            LINE_THICKNESS * 2.0, self.style.theme.fg);
     }
+}
+
+pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
+    let params = style.text_params(FontStyle::Variable);
+    let r = center(fit_strings(params.clone(), &[message.to_owned()]));
+    draw_rectangle(r.x, r.y, r.w, r.h, style.theme.bg);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, style.theme.fg);
+    draw_text_topleft(params.clone(), message, r.x, r.y);
+
+    let click = is_mouse_button_released(MouseButton::Left);
+    let mouse_pos = {
+        let (x, y) = mouse_position();
+        Vec2 { x, y }
+    };
+    click && !r.contains(mouse_pos)
+}
+
+// second return value is whether to close the dialog
+pub fn choice_dialog(style: &UIStyle, title: &str, choices: &[String]) -> (Option<usize>, bool) {
+    let params = style.text_params(FontStyle::Variable);
+    let mut strings = vec![
+        title.to_string(),
+        "".to_string(), // empty line between title & choices
+    ];
+    strings.append(&mut choices.to_vec());
+    let mut r = center(fit_strings(params.clone(), &strings));
+    draw_rectangle(r.x, r.y, r.w, r.h, style.theme.bg);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, style.theme.fg);
+
+    let click = is_mouse_button_released(MouseButton::Left);
+    let mouse_pos = {
+        let (x, y) = mouse_position();
+        Vec2 { x, y }
+    };
+    if click && !r.contains(mouse_pos) {
+        return (None, true)
+    }
+
+    draw_text_topleft(params.clone(), title, r.x, r.y);
+    r.y += params.font_size as f32;
+    for (i, choice) in choices.iter().enumerate() {
+        r.y += params.font_size as f32;
+        let dim = draw_text_topleft(params.clone(), choice, r.x, r.y);
+        if dim.contains(mouse_pos) {
+            if click {
+                return (Some(i), true)
+            }
+        }
+    } 
+    (None, false)
+}
+
+fn fit_strings(params: TextParams, v: &[String]) -> Rect {
+    let mut rect: Rect = Default::default();
+    for (i, s) in v.iter().enumerate() {
+        let dim = measure_text(s, params.font, params.font_size, params.font_scale);
+        rect.w = rect.w.max(dim.width + MARGIN * 2.0);
+        rect.h = rect.h.max(dim.height * (i + 1) as f32 + MARGIN * 2.0);
+    }
+    rect
+}
+
+fn center(r: Rect) -> Rect {
+    Rect {
+        x: screen_width() / 2.0 - r.w / 2.0,
+        y: screen_height() / 2.0 - r.h / 2.0,
+        ..r
+    }
+}
+
+fn draw_text_topleft(params: TextParams, label: &str, x: f32, y: f32) -> Rect {
+    let dim = measure_text(label, params.font, params.font_size, params.font_scale);
+    draw_text_ex(label, (x + MARGIN).round(), (y + MARGIN + dim.offset_y).round(), params);
+    Rect { x, y, w: dim.width + MARGIN, h: dim.height + MARGIN }
 }

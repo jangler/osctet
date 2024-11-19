@@ -26,6 +26,7 @@ mod ui;
 
 use input::MidiEvent;
 use synth_tracker::init_audio;
+use ui::UIStyle;
 
 const APP_NAME: &str = "Synth Tracker";
 
@@ -114,6 +115,11 @@ impl Midi {
     }
 }
 
+pub enum Dialog {
+    Midi,
+    Alert(String),
+}
+
 struct App {
     tuning: pitch::Tuning,
     messages: MessageBuffer,
@@ -128,6 +134,8 @@ struct App {
     global_fx: GlobalFX,
     song_editor: song::Editor,
     ui: ui::UI,
+    dialog: Option<Dialog>,
+    dialog_first_frame: bool,
 }
 
 impl App {
@@ -156,6 +164,8 @@ impl App {
             global_fx,
             song_editor: song::Editor::new(song::Song::new()),
             ui: ui::UI::new(),
+            dialog: None,
+            dialog_first_frame: false,
         }
     }
 
@@ -172,13 +182,20 @@ impl App {
             }
         }
 
-        for key in pressed{
+        for key in pressed {
             if let Some(note) = input::note_from_key(key, &self.tuning, self.octave) {
                 self.synth.note_on(Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
                     key: input::u8_from_key(key),
                 }, self.tuning.midi_pitch(&note), 100.0 / 127.0, &mut self.seq);
+            } else {
+                match key {
+                    KeyCode::Escape => {
+                        self.dialog = None
+                    }
+                    _ => (),
+                }
             }
         }
     }
@@ -304,10 +321,13 @@ impl App {
     }
 
     fn frame(&mut self) {
+        self.dialog_first_frame = false;
+
         self.handle_keys();
         self.handle_midi();
         self.check_midi_reconnect();
         self.process_ui();
+        self.process_dialog();
     }
     
     fn process_ui(&mut self) {
@@ -320,14 +340,52 @@ impl App {
         } else {
             "(none)"
         };
-        self.ui.button(s);
+        if self.ui.button(s) {
+            self.open_dialog(Dialog::Midi);
+        }
         self.ui.end_bottom_panel();
 
         if self.ui.button("Test button") {
-            self.messages.push("Button clicked".to_owned());
+            self.open_dialog(Dialog::Alert("Button clicked".to_owned()));
         }
 
         self.ui.message_buffer(&self.messages, 200.0);
+    }
+
+    fn process_dialog(&mut self) {
+        match &self.dialog {
+            Some(Dialog::Alert(s)) => self.alert_dialog(&s.clone()),
+            Some(Dialog::Midi) => self.midi_dialog(),
+            None => (),
+        }
+    }
+
+    fn alert_dialog(&mut self, s: &str) {
+        if ui::alert_dialog(&self.ui.style, s) && !self.dialog_first_frame {
+            self.dialog = None;
+        }
+    }
+
+    fn midi_dialog(&mut self) {
+        if let Some(input) = &self.midi.input {
+            let names: Vec<String> = input.ports().into_iter()
+                .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)")))
+                .collect();
+            let (index, close) = ui::choice_dialog(&self.ui.style, "Select MIDI input device", &names);
+            if let Some(index) = index {
+                self.midi.port_selection = names.get(index).cloned();
+            }
+            if close && !self.dialog_first_frame {
+                self.dialog = None;
+            }
+        } else {
+            self.open_dialog(Dialog::Alert("MIDI error".to_string()));
+        }
+    }
+
+    fn open_dialog(&mut self, dialog: Dialog) {
+        self.dialog = Some(dialog);
+        self.dialog_first_frame = true;
     }
 }
 
