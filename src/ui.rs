@@ -1,6 +1,7 @@
 //! Basic immediate-mode GUI library implemented on top of macroquad.
-//! Macroquad has its own built-in UI library, but the demos don't give me
-//! much faith in it.
+//!
+//! Not polished for general reuse. Macroquad also has its own built-in UI
+//! library, but the demos don't give me much faith in it.
 
 use std::collections::HashMap;
 
@@ -35,6 +36,7 @@ fn mouse_position_vec2() -> Vec2 {
     Vec2 { x, y }
 }
 
+/// Color theme.
 pub struct Theme {
     pub bg: Color,
     pub fg: Color,
@@ -49,12 +51,13 @@ pub const LIGHT_THEME: Theme = Theme {
     click: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },
 };
 
-pub struct UIStyle {
+/// UI style, including font and color theme.
+pub struct Style {
     pub font: Font,
     pub theme: Theme,
 }
 
-impl UIStyle {
+impl Style {
     pub fn text_params(&self) -> TextParams {
         TextParams {
             font: Some(&self.font),
@@ -82,8 +85,9 @@ struct ComboBoxState {
     options: Vec<String>,
 }
 
+/// Draws widgets and tracks UI state.
 pub struct UI {
-    pub style: UIStyle,
+    pub style: Style,
     combo_boxes: HashMap<String, ComboBoxState>,
     tabs: HashMap<String, usize>,
     bounds: Rect,
@@ -95,7 +99,7 @@ pub struct UI {
 impl UI {
     pub fn new() -> Self {
         Self {
-            style: UIStyle {
+            style: Style {
                 font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
                     .expect("included font should be loadable"),
                 theme: LIGHT_THEME,
@@ -328,7 +332,7 @@ impl UI {
     }
 }
 
-pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
+pub fn alert_dialog(style: &Style, message: &str) -> bool {
     let params = style.text_params();
     let r = center(fit_strings(params.clone(), &[message.to_owned()]));
     draw_rectangle(r.x, r.y, r.w, r.h, style.theme.bg);

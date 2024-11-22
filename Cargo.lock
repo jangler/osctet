@@ -1534,6 +1534,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "osctet"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "fundsp",
+ "macroquad",
+ "midir",
+ "rand",
+ "rfd",
+ "rmp-serde",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2003,21 +2018,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "synth-tracker"
-version = "0.1.0"
-dependencies = [
- "cpal",
- "fundsp",
- "macroquad",
- "midir",
- "rand",
- "rfd",
- "rmp-serde",
- "serde",
- "toml",
 ]
 
 [[package]]

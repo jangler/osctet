@@ -1,3 +1,5 @@
+//! Subtractive/FM synth engine.
+
 use core::f64;
 use std::{collections::HashMap, error::Error, fmt::Display, fs, path::Path, u64};
 

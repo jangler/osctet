@@ -1,3 +1,5 @@
+//! Tuning and notation utilities.
+
 use std::fmt;
 use std::cmp::max;
 
