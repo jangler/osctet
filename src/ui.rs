@@ -1,8 +1,10 @@
+//! Basic immediate-mode GUI library implemented on top of macroquad.
+//! Macroquad has its own built-in UI library, but the demos don't give me
+//! much faith in it.
+
 use std::collections::HashMap;
 
 use macroquad::prelude::*;
-
-use crate::MessageBuffer;
 
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
@@ -198,7 +200,8 @@ impl UI {
     pub fn checkbox(&mut self, label: &str, value: &mut bool) -> bool {
         let button_text = if *value { "X" } else { " " };
         let clicked = self.button(button_text);
-        let label_rect = self.draw_text(label, self.cursor_x - MARGIN, self.cursor_y + MARGIN);
+        self.cursor_x -= MARGIN;
+        let label_rect = self.draw_text(label, self.cursor_x, self.cursor_y + MARGIN);
         self.update_cursor(label_rect.w, label_rect.h);
         if clicked {
             *value = !*value;
@@ -275,19 +278,6 @@ impl UI {
         self.update_cursor(button_rect.w + label_dim.w + MARGIN, button_rect.h + MARGIN);
     
         return_val
-    }
-
-    pub fn message_buffer(&mut self, messages: &MessageBuffer, width: f32) {
-        let init_y = self.cursor_y;
-        for msg in messages.iter() {
-            let rect = self.draw_text(msg, self.cursor_x, self.cursor_y);
-            self.update_cursor(0.0, rect.h);
-        }
-        self.update_cursor(0.0, MARGIN);
-        draw_rectangle_lines(
-            self.cursor_x, init_y,
-            width, self.cursor_y - init_y,
-            LINE_THICKNESS * 2.0, self.style.theme.fg);
     }
 }
 

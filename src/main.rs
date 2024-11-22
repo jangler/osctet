@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::error::Error;
+use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::collections::VecDeque;
@@ -32,33 +33,6 @@ const APP_NAME: &str = "Osctet";
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "inst";
-
-struct MessageBuffer {
-    capacity: usize,
-    messages: VecDeque<String>,
-}
-
-impl MessageBuffer {
-    fn new(capacity: usize) -> Self {
-        MessageBuffer {
-            capacity,
-            messages: VecDeque::new(),
-        }
-    }
-
-    fn push(&mut self, msg: String) {
-        self.messages.push_front(msg);
-        self.messages.truncate(self.capacity);
-    }
-
-    fn report(&mut self, e: &impl std::fmt::Display) {
-        self.push(format!("{}", e));
-    }
-
-    fn iter(&self) -> impl Iterator<Item = &'_ String> {
-        self.messages.iter().rev()
-    }
-}
 
 struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll
@@ -120,7 +94,6 @@ pub enum Dialog {
 
 struct App {
     tuning: pitch::Tuning,
-    messages: MessageBuffer,
     synth: Synth,
     seq: Sequencer,
     octave: i8,
@@ -139,19 +112,18 @@ struct App {
 
 impl App {
     fn new(seq: Sequencer, global_fx: GlobalFX) -> Self {
-        let mut messages = MessageBuffer::new(100);
+        let mut err: Option<Box<dyn Error>> = None;
         let config = match Config::load() {
             Ok(c) => c,
             Err(e) => {
-                messages.push(format!("Could not load config: {}", &e));
+                err = Some(e);
                 Config::default()
             },
         };
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
-        App {
+        let mut app = App {
             tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
-            messages,
             synth: Synth::new(),
             seq,
             octave: 4,
@@ -166,7 +138,11 @@ impl App {
             dialog: None,
             dialog_first_frame: false,
             fullscreen: false,
+        };
+        if let Some(err) = err {
+            app.report(err);
         }
+        app
     }
 
     fn handle_keys(&mut self) {
@@ -308,17 +284,14 @@ impl App {
                         c.close();
                     }
                     self.midi.port_name = self.midi.port_selection.clone();
-                    self.midi.port_name.as_ref().inspect(|name| {
-                        self.messages.push(format!("Connected to {} for MIDI input", name));
-                    });
                     self.config.default_midi_input = self.midi.port_name.clone();
                     if let Err(e) = self.config.save() {
-                        self.messages.push(format!("Error saving config: {}", e));
+                        self.report(e);
                     };
                 },
                 Err(e) => {
                     self.midi.port_selection = None;
-                    self.messages.report(&e);
+                    self.report(e);
                 },
             }
         }
@@ -354,7 +327,7 @@ impl App {
             if self.ui.checkbox("Use aftertouch", &mut v) {
                 self.config.midi_send_pressure = Some(v);
                 if let Err(e) = self.config.save() {
-                    self.messages.report(&e);
+                    self.report(e);
                 }
             }
         } else {
@@ -369,9 +342,11 @@ impl App {
 
         self.ui.combo_box("Test combo box", "(none)",
             || vec!["one".to_string(), "two".to_string(), "three".to_string()]);
-
-        self.ui.message_buffer(&self.messages, 200.0);
     }
+
+    fn report(&mut self, e: impl Display) {
+        self.dialog = Some(Dialog::Alert(e.to_string()));
+    } 
 
     fn process_dialog(&mut self) {
         match &self.dialog {
