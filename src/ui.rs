@@ -97,6 +97,7 @@ pub struct UI {
     pub style: Style,
     combo_boxes: HashMap<String, ComboBoxState>,
     tabs: HashMap<String, usize>,
+    grabbed_slider: Option<String>,
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
@@ -113,6 +114,7 @@ impl UI {
             },
             combo_boxes: HashMap::new(),
             tabs: HashMap::new(),
+            grabbed_slider: None,
             bounds: Default::default(),
             cursor_x: 0.0,
             cursor_y: 0.0,
@@ -127,8 +129,13 @@ impl UI {
             w: screen_width(),
             h: screen_height(),
         };
+
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
+
+        if self.grabbed_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
+            self.grabbed_slider = None;
+        }
         
         clear_background(self.style.theme.bg);
     }
@@ -349,7 +356,7 @@ impl UI {
             groove_x + groove_w, groove_y,
             LINE_THICKNESS, self.style.theme.fg);
 
-        // update position
+        // get/set grabbed state
         let hit_rect = Rect {
             x: self.cursor_x + MARGIN,
             w: groove_w + MARGIN * 2.0,
@@ -357,17 +364,25 @@ impl UI {
             h: h + MARGIN * 2.0,
         };
         let mouse_pos = mouse_position_vec2();
-        let (fill, changed) = if hit_rect.contains(mouse_pos) {
-            if is_mouse_button_down(MouseButton::Left) {
-                let new_val = interpolate((mouse_pos.x - groove_x) / groove_w, &range)
-                    .max(*range.start())
-                    .min(*range.end());
-                let changed = new_val != *val;
-                *val = new_val;
-                (self.style.theme.click, changed)
-            } else {
-                (self.style.theme.hover, false)
-            }
+        if is_mouse_button_pressed(MouseButton::Left) && hit_rect.contains(mouse_pos) {
+            self.grabbed_slider = Some(label.to_owned());
+        }
+        let grabbed = if let Some(s) = &self.grabbed_slider {
+            s == label
+        } else {
+            false
+        };
+
+        // update position, get handle color
+        let (fill, changed) = if grabbed {
+            let new_val = interpolate((mouse_pos.x - groove_x) / groove_w, &range)
+                .max(*range.start())
+                .min(*range.end());
+            let changed = new_val != *val;
+            *val = new_val;
+            (self.style.theme.click, changed)
+        } else if hit_rect.contains(mouse_pos) {
+            (self.style.theme.hover, false)
         } else {
             (self.style.theme.bg, false)
         };
