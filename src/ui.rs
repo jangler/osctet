@@ -5,7 +5,7 @@ use macroquad::prelude::*;
 use crate::MessageBuffer;
 
 const MARGIN: f32 = 5.0;
-const LINE_THICKNESS: f32 = 1.5;
+const LINE_THICKNESS: f32 = 1.0;
 
 pub struct Theme {
     pub bg: Color,
@@ -22,24 +22,15 @@ pub const LIGHT_THEME: Theme = Theme {
 };
 
 pub struct UIStyle {
-    pub variable_font: Font,
-    pub monospace_font: Font,
+    pub font: Font,
     pub theme: Theme,
 }
 
-enum FontStyle {
-    Variable,
-    Monospace,
-}
-
 impl UIStyle {
-    pub fn text_params(&self, font_style: FontStyle) -> TextParams {
+    pub fn text_params(&self) -> TextParams {
         TextParams {
-            font: Some(match font_style {
-                FontStyle::Variable => &self.variable_font,
-                FontStyle::Monospace => &self.monospace_font,
-            }),
-            font_size: 14,
+            font: Some(&self.font),
+            font_size: 16,
             color: self.theme.fg,
             ..Default::default()
         }
@@ -83,9 +74,7 @@ impl UI {
     pub fn new() -> Self {
         Self {
             style: UIStyle {
-                variable_font: load_ttf_font_from_bytes(include_bytes!("font/Roboto-Regular.ttf"))
-                    .expect("included font should be loadable"),
-                monospace_font: load_ttf_font_from_bytes(include_bytes!("font/RobotoMono-Regular.ttf"))
+                font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
                     .expect("included font should be loadable"),
                 theme: LIGHT_THEME,
             },
@@ -111,10 +100,10 @@ impl UI {
     }
 
     pub fn start_bottom_panel(&mut self) {
-        let params = self.style.text_params(FontStyle::Variable);
+        let params = self.style.text_params();
         let h = params.font_size as f32 + MARGIN * 4.0;
-        draw_line(self.bounds.x, self.bounds.h - h,
-            self.bounds.x + self.bounds.w, self.bounds.h - h,
+        draw_line(self.bounds.x, self.bounds.h - h + 0.5,
+            self.bounds.x + self.bounds.w, self.bounds.h - h + 0.5,
             LINE_THICKNESS, self.style.theme.fg);
         self.layout = Layout::Horizontal;
         self.cursor_x = self.bounds.x;
@@ -122,7 +111,7 @@ impl UI {
     }
 
     pub fn end_bottom_panel(&mut self) {
-        let params = self.style.text_params(FontStyle::Variable);
+        let params = self.style.text_params();
         let h = params.font_size as f32 + MARGIN * 4.0;
         self.bounds.h -= h;
         self.cursor_x = self.bounds.x;
@@ -137,7 +126,7 @@ impl UI {
     }
 
     fn draw_text(&self, label: &str, x: f32, y: f32) -> Rect {
-        let params = self.style.text_params(FontStyle::Variable);
+        let params = self.style.text_params();
         let dim = measure_text(label, params.font, params.font_size, params.font_scale);
         draw_text_ex(label, x + MARGIN, y + MARGIN + dim.offset_y, params);
         Rect { x, y, w: dim.width + MARGIN, h: dim.height + MARGIN }
@@ -149,7 +138,7 @@ impl UI {
     }
 
     fn text_rect(&self, label: &str, x: f32, y: f32) -> (Rect, MouseEvent) {
-        let params = self.style.text_params(FontStyle::Variable);
+        let params = self.style.text_params();
         let (mouse_x, mouse_y) = mouse_position();
         let dim = measure_text(label, params.font, params.font_size, params.font_scale);
         let rect = Rect { x, y, w: dim.width + MARGIN * 2.0, h: dim.height + MARGIN * 2.0 };
@@ -165,8 +154,9 @@ impl UI {
             draw_rectangle(x, y, rect.w, rect.h, color);
         }
     
-        draw_text_ex(label, x + MARGIN, y + MARGIN + dim.offset_y, params);
-        draw_rectangle_lines(x, y, rect.w, rect.h, LINE_THICKNESS * 2.0, self.style.theme.fg);
+        draw_text_ex(label, (x + MARGIN).round(), (y + MARGIN + dim.offset_y).round(), params);
+        draw_rectangle_lines(x.round(), y.round(), rect.w.round(), rect.h.round(),
+            LINE_THICKNESS * 2.0, self.style.theme.fg);
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
@@ -193,7 +183,7 @@ impl UI {
         let label_dim = draw_text_ex(label,
             self.cursor_x + rect.w + MARGIN,
             self.cursor_y,
-            self.style.text_params(FontStyle::Variable));
+            self.style.text_params());
 
         if event == MouseEvent::Pressed {
             self.combo_boxes.entry(k.clone()).and_modify(|x| x.open = !x.open);
@@ -203,7 +193,7 @@ impl UI {
         if self.combo_boxes.get(&k).is_some_and(|x| x.open) {
             // draw text
             for (i, option) in options.iter().enumerate() {
-                self.text_rect(option, self.cursor_x, self.cursor_y + (i as f32 * self.style.text_params(FontStyle::Variable).font_size as f32));
+                self.text_rect(option, self.cursor_x, self.cursor_y + (i as f32 * self.style.text_params().font_size as f32));
             }
         }
 
@@ -227,7 +217,7 @@ impl UI {
 }
 
 pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
-    let params = style.text_params(FontStyle::Variable);
+    let params = style.text_params();
     let r = center(fit_strings(params.clone(), &[message.to_owned()]));
     draw_rectangle(r.x, r.y, r.w, r.h, style.theme.bg);
     draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, style.theme.fg);
@@ -243,7 +233,7 @@ pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
 
 // second return value is whether to close the dialog
 pub fn choice_dialog(style: &UIStyle, title: &str, choices: &[String]) -> (Option<usize>, bool) {
-    let params = style.text_params(FontStyle::Variable);
+    let params = style.text_params();
     let mut strings = vec![
         title.to_string(),
         "".to_string(), // empty line between title & choices
@@ -288,8 +278,8 @@ fn fit_strings(params: TextParams, v: &[String]) -> Rect {
 
 fn center(r: Rect) -> Rect {
     Rect {
-        x: screen_width() / 2.0 - r.w / 2.0,
-        y: screen_height() / 2.0 - r.h / 2.0,
+        x: (screen_width() / 2.0 - r.w / 2.0).round(),
+        y: (screen_height() / 2.0 - r.h / 2.0).round(),
         ..r
     }
 }
