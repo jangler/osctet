@@ -33,7 +33,7 @@ pub const APP_NAME: &str = "Osctet";
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "inst";
 
-const TABS: [&str; 2] = ["Pattern", "Instruments"];
+const TABS: [&str; 3] = ["Pattern", "Instruments", "Song"];
 
 fn init_audio(mut backend: BlockRateAdapter) -> Result<Stream, Box<dyn Error>> {
     let device = cpal::default_host()
@@ -375,6 +375,7 @@ impl App {
         match self.ui.tab_menu("main", &TABS) {
             0 => self.pattern_tab(),
             1 => self.instruments_tab(),
+            2 => self.song_tab(),
             _ => panic!("bad tab value"),
         }
     }
@@ -387,14 +388,46 @@ impl App {
 
     fn instruments_tab(&mut self) {
         self.ui.layout = ui::Layout::Vertical;
+
+        self.ui.shared_slider("Gain", &self.synth.settings.gain.0, 0.0..=1.0);
+        self.ui.shared_slider("Pan", &self.synth.settings.pan.0, -1.0..=1.0);
+        self.ui.slider("Glide time", &mut self.synth.settings.glide_time, 0.0..=0.5);
+
         if let Some(i) = self.ui.combo_box("Play mode",
             self.synth.settings.play_mode.name(),
             || synth::PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
         ) {
             self.synth.settings.play_mode = synth::PlayMode::VARIANTS[i];
         }
-        self.ui.slider("Glide time", &mut self.synth.settings.glide_time, 0.0..=0.5);
-        self.ui.shared_slider("Pan", &self.synth.settings.pan.0, -1.0..=1.0);
+    }
+
+    fn song_tab(&mut self) {
+        self.ui.layout = ui::Layout::Vertical;
+
+        self.ui.label("Reverb");
+        let fx = &mut self.global_fx;
+        self.ui.shared_slider("Level", &fx.settings.reverb_amount.0, 0.0..=1.0);
+
+        if self.ui.slider("Predelay time", &mut fx.settings.predelay_time, 0.0..=0.1) {
+            fx.commit_predelay();
+        }
+
+        // ugly, but probably about as good as any other solution
+        if self.ui.slider("Room size", &mut fx.settings.reverb_room_size, 5.0..=100.0) {
+            fx.commit_reverb();
+        }
+        if self.ui.slider("Decay time", &mut fx.settings.reverb_time, 0.0..=5.0) {
+            fx.commit_reverb();
+        }
+        if self.ui.slider("Diffusion", &mut fx.settings.reverb_diffusion, 0.0..=1.0) {
+            fx.commit_reverb();
+        }
+        if self.ui.slider("Mod. speed", &mut fx.settings.reverb_mod_speed, 0.0..=1.0) {
+            fx.commit_reverb();
+        }
+        if self.ui.slider("Damping", &mut fx.settings.reverb_damping, 0.0..=6.0) {
+            fx.commit_reverb();
+        }
     }
 
     fn report(&mut self, e: impl Display) {
