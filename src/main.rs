@@ -26,9 +26,8 @@ mod ui;
 
 use input::MidiEvent;
 use synth_tracker::init_audio;
-use ui::UIStyle;
 
-const APP_NAME: &str = "Synth Tracker";
+const APP_NAME: &str = "Osctet";
 
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
@@ -116,7 +115,6 @@ impl Midi {
 }
 
 pub enum Dialog {
-    Midi,
     Alert(String),
 }
 
@@ -340,20 +338,27 @@ impl App {
         self.ui.new_frame();
 
         self.ui.start_bottom_panel();
-        self.ui.label("MIDI input");
-        let s = if let Some(name) = &self.midi.port_name {
-            &name
+        if self.midi.input.is_some() {
+            let s = if let Some(name) = &self.midi.port_name {
+                &name
+            } else {
+                "(none)"
+            };
+            if let Some(i) = self.ui.combo_box("MIDI input", s,
+                || input_names(self.midi.input.as_ref().unwrap())) {
+                self.midi.port_selection = input_names(self.midi.input.as_ref().unwrap()).get(i).cloned();
+            }
+            self.ui.end_bottom_panel();
         } else {
-            "(none)"
-        };
-        if self.ui.button(s) {
-            self.open_dialog(Dialog::Midi);
+            self.ui.label("No MIDI device");
         }
-        self.ui.end_bottom_panel();
 
         if self.ui.button("Test button") {
             self.open_dialog(Dialog::Alert("Button clicked".to_owned()));
         }
+
+        self.ui.combo_box("Test combo box", "(none)",
+            || vec!["one".to_string(), "two".to_string(), "three".to_string()]);
 
         self.ui.message_buffer(&self.messages, 200.0);
     }
@@ -361,7 +366,6 @@ impl App {
     fn process_dialog(&mut self) {
         match &self.dialog {
             Some(Dialog::Alert(s)) => self.alert_dialog(&s.clone()),
-            Some(Dialog::Midi) => self.midi_dialog(),
             None => (),
         }
     }
@@ -372,27 +376,16 @@ impl App {
         }
     }
 
-    fn midi_dialog(&mut self) {
-        if let Some(input) = &self.midi.input {
-            let names: Vec<String> = input.ports().into_iter()
-                .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)")))
-                .collect();
-            let (index, close) = ui::choice_dialog(&self.ui.style, "Select MIDI input device", &names);
-            if let Some(index) = index {
-                self.midi.port_selection = names.get(index).cloned();
-            }
-            if close && !self.dialog_first_frame {
-                self.dialog = None;
-            }
-        } else {
-            self.open_dialog(Dialog::Alert("MIDI error".to_string()));
-        }
-    }
-
     fn open_dialog(&mut self, dialog: Dialog) {
         self.dialog = Some(dialog);
         self.dialog_first_frame = true;
     }
+}
+
+fn input_names(input: &MidiInput) -> Vec<String> {
+    input.ports().into_iter()
+        .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)")))
+        .collect()
 }
 
 // fn shared_slider(ui: &mut Ui, var: &Shared, range: RangeInclusive<f32>, text: &str, log: bool) {

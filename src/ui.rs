@@ -10,15 +10,15 @@ const LINE_THICKNESS: f32 = 1.0;
 pub struct Theme {
     pub bg: Color,
     pub fg: Color,
-    pub mouseover: Color,
+    pub hover: Color,
     pub click: Color,
 }
 
 pub const LIGHT_THEME: Theme = Theme {
     bg: Color { r: 0.99, g: 0.99, b: 0.99, a: 1.0 },
     fg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
-    mouseover: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },
-    click: Color { r: 0.8, g: 0.8, b: 0.8, a: 1.0 },
+    hover: Color { r: 0.95, g: 0.95, b: 0.95, a: 1.0 },
+    click: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },
 };
 
 pub struct UIStyle {
@@ -51,14 +51,7 @@ enum Layout {
 }
 
 struct ComboBoxState {
-    open: bool,
-    index: usize,
-}
-
-impl Default for ComboBoxState {
-    fn default() -> Self {
-        Self { open: false, index: 0, }
-    }
+    options: Vec<String>,
 }
 
 pub struct UI {
@@ -101,7 +94,7 @@ impl UI {
 
     pub fn start_bottom_panel(&mut self) {
         let params = self.style.text_params();
-        let h = params.font_size as f32 + MARGIN * 4.0;
+        let h = params.font_size as f32 + MARGIN * 3.0;
         draw_line(self.bounds.x, self.bounds.h - h + 0.5,
             self.bounds.x + self.bounds.w, self.bounds.h - h + 0.5,
             LINE_THICKNESS, self.style.theme.fg);
@@ -129,7 +122,7 @@ impl UI {
         let params = self.style.text_params();
         let dim = measure_text(label, params.font, params.font_size, params.font_scale);
         draw_text_ex(label, x + MARGIN, y + MARGIN + dim.offset_y, params);
-        Rect { x, y, w: dim.width + MARGIN, h: dim.height + MARGIN }
+        Rect { x, y, w: dim.width + MARGIN * 2.0, h: dim.height + MARGIN * 2.0 }
     }
     
     pub fn label(&mut self, label: &str) {
@@ -149,7 +142,7 @@ impl UI {
             let color = if is_mouse_button_down(MouseButton::Left) {
                 self.style.theme.click
             } else {
-                self.style.theme.mouseover
+                self.style.theme.hover
             };
             draw_rectangle(x, y, rect.w, rect.h, color);
         }
@@ -175,31 +168,74 @@ impl UI {
     }
     
     /// Draws a combo box. If a value was selected this frame, returns the value's index.
-    pub fn combo_box(&mut self, label: &str, options: &Vec<String>) -> Option<usize> {
-        let k = label.to_owned();
-        let state = self.combo_boxes.entry(k.clone()).or_insert(Default::default());
-        let button_text = format!("{} v", options.get(state.index).unwrap_or(&"".to_owned())); // nasty!
-        let (rect, event) = self.text_rect(&button_text, self.cursor_x, self.cursor_y);
-        let label_dim = draw_text_ex(label,
-            self.cursor_x + rect.w + MARGIN,
-            self.cursor_y,
-            self.style.text_params());
+    pub fn combo_box(&mut self, label: &str, button_text: &str, get_options: impl Fn() -> Vec<String>) -> Option<usize> {
+        // draw button and label
+        let (button_rect, event) = self.text_rect(&button_text, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
+        let label_dim = self.draw_text(label, self.cursor_x + button_rect.w + MARGIN, self.cursor_y + MARGIN);
 
-        if event == MouseEvent::Pressed {
-            self.combo_boxes.entry(k.clone()).and_modify(|x| x.open = !x.open);
+        // check to open list
+        let open = self.combo_boxes.contains_key(label);
+        if event == MouseEvent::Pressed && !open {
+            self.combo_boxes.insert(label.to_owned(), ComboBoxState {
+                options: get_options(),
+            });
         }
 
+        let lmb_press = is_mouse_button_pressed(MouseButton::Left);
+        let mut return_val = None;
 
-        if self.combo_boxes.get(&k).is_some_and(|x| x.open) {
-            // draw text
-            for (i, option) in options.iter().enumerate() {
-                self.text_rect(option, self.cursor_x, self.cursor_y + (i as f32 * self.style.text_params().font_size as f32));
+        if let Some(state) = self.combo_boxes.get(label) {
+            // should options be drawn above or below the button?
+            let y_direction = if self.cursor_y > screen_height() / 2.0 {
+                -1.0
+            } else {
+                1.0
+            };
+
+            // draw bounding box
+            let w = fit_strings(self.style.text_params(), &state.options).w;
+            let h = button_rect.h * state.options.len() as f32 + 2.0;
+            let bg_rect = Rect {
+                x: button_rect.x,
+                y: if y_direction < 0.0 {
+                    button_rect.y - h + 1.0
+                } else {
+                    button_rect.y + button_rect.h - 1.0
+                },
+                w,
+                h,
+            };
+            draw_rectangle(bg_rect.x, bg_rect.y, bg_rect.w, bg_rect.h, self.style.theme.bg);
+            draw_rectangle_lines(bg_rect.x, bg_rect.y, bg_rect.w, bg_rect.h, LINE_THICKNESS * 2.0, self.style.theme.fg);
+
+            // draw options
+            let mut hit_rect = Rect {
+                x: bg_rect.x + 1.0,
+                y: bg_rect.y + 1.0,
+                w: bg_rect.w - 2.0,
+                h: button_rect.h,
+            };
+            let mouse_pos = mouse_position_vec2();
+            for (i, option) in state.options.iter().enumerate() {
+                if hit_rect.contains(mouse_pos) {
+                    draw_rectangle(hit_rect.x, hit_rect.y, hit_rect.w, hit_rect.h, self.style.theme.hover);
+                    if lmb_press {
+                        return_val = Some(i)
+                    }
+                }
+                self.draw_text(&option, hit_rect.x, hit_rect.y);
+                hit_rect.y += hit_rect.h;
             }
         }
 
-        self.update_cursor(rect.w.max(label_dim.width) + MARGIN, rect.h + MARGIN);
+        // check to close list
+        if open && (lmb_press || is_key_pressed(KeyCode::Escape)) {
+            self.combo_boxes.remove(label);
+        }
+
+        self.update_cursor(button_rect.w + label_dim.w + MARGIN, button_rect.h + MARGIN);
     
-        None
+        return_val
     }
 
     pub fn message_buffer(&mut self, messages: &MessageBuffer, width: f32) {
@@ -214,6 +250,11 @@ impl UI {
             width, self.cursor_y - init_y,
             LINE_THICKNESS * 2.0, self.style.theme.fg);
     }
+}
+
+fn mouse_position_vec2() -> Vec2 {
+    let (x, y) = mouse_position();
+    Vec2 { x, y }
 }
 
 pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
@@ -231,47 +272,13 @@ pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
     click && !r.contains(mouse_pos)
 }
 
-// second return value is whether to close the dialog
-pub fn choice_dialog(style: &UIStyle, title: &str, choices: &[String]) -> (Option<usize>, bool) {
-    let params = style.text_params();
-    let mut strings = vec![
-        title.to_string(),
-        "".to_string(), // empty line between title & choices
-    ];
-    strings.append(&mut choices.to_vec());
-    let mut r = center(fit_strings(params.clone(), &strings));
-    draw_rectangle(r.x, r.y, r.w, r.h, style.theme.bg);
-    draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, style.theme.fg);
-
-    let click = is_mouse_button_released(MouseButton::Left);
-    let mouse_pos = {
-        let (x, y) = mouse_position();
-        Vec2 { x, y }
-    };
-    if click && !r.contains(mouse_pos) {
-        return (None, true)
-    }
-
-    draw_text_topleft(params.clone(), title, r.x, r.y);
-    r.y += params.font_size as f32;
-    for (i, choice) in choices.iter().enumerate() {
-        r.y += params.font_size as f32;
-        let dim = draw_text_topleft(params.clone(), choice, r.x, r.y);
-        if dim.contains(mouse_pos) {
-            if click {
-                return (Some(i), true)
-            }
-        }
-    } 
-    (None, false)
-}
-
 fn fit_strings(params: TextParams, v: &[String]) -> Rect {
     let mut rect: Rect = Default::default();
-    for (i, s) in v.iter().enumerate() {
+    rect.h += MARGIN;
+    for s in v {
         let dim = measure_text(s, params.font, params.font_size, params.font_scale);
         rect.w = rect.w.max(dim.width + MARGIN * 2.0);
-        rect.h = rect.h.max(dim.height * (i + 1) as f32 + MARGIN * 2.0);
+        rect.h += dim.height + MARGIN * 2.0;
     }
     rect
 }
