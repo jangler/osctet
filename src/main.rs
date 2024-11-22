@@ -338,6 +338,7 @@ impl App {
         self.ui.new_frame();
 
         self.ui.start_bottom_panel();
+
         if self.midi.input.is_some() {
             let s = if let Some(name) = &self.midi.port_name {
                 &name
@@ -348,10 +349,19 @@ impl App {
                 || input_names(self.midi.input.as_ref().unwrap())) {
                 self.midi.port_selection = input_names(self.midi.input.as_ref().unwrap()).get(i).cloned();
             }
-            self.ui.end_bottom_panel();
+
+            let mut v = self.config.midi_send_pressure.unwrap_or(true);
+            if self.ui.checkbox("Use aftertouch", &mut v) {
+                self.config.midi_send_pressure = Some(v);
+                if let Err(e) = self.config.save() {
+                    self.messages.report(&e);
+                }
+            }
         } else {
             self.ui.label("No MIDI device");
         }
+        
+        self.ui.end_bottom_panel();
 
         if self.ui.button("Test button") {
             self.open_dialog(Dialog::Alert("Button clicked".to_owned()));

@@ -193,6 +193,18 @@ impl UI {
         self.update_cursor(rect.w + MARGIN * 2.0, rect.h + MARGIN * 2.0);
         event == MouseEvent::Released
     }
+
+    /// Draws a checkbox and returns true if it was changed this frame.
+    pub fn checkbox(&mut self, label: &str, value: &mut bool) -> bool {
+        let button_text = if *value { "X" } else { " " };
+        let clicked = self.button(button_text);
+        let label_rect = self.draw_text(label, self.cursor_x - MARGIN, self.cursor_y + MARGIN);
+        self.update_cursor(label_rect.w, label_rect.h);
+        if clicked {
+            *value = !*value;
+        }
+        clicked
+    }
     
     /// Draws a combo box. If a value was selected this frame, returns the value's index.
     pub fn combo_box(&mut self, label: &str, button_text: &str, get_options: impl Fn() -> Vec<String>) -> Option<usize> {
