@@ -3,8 +3,9 @@
 //! Not polished for general reuse. Macroquad also has its own built-in UI
 //! library, but the demos don't give me much faith in it.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::RangeInclusive};
 
+use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
 const MARGIN: f32 = 5.0;
@@ -34,6 +35,12 @@ fn text_width(text: &str, params: &TextParams) -> f32 {
 fn mouse_position_vec2() -> Vec2 {
     let (x, y) = mouse_position();
     Vec2 { x, y }
+}
+
+/// Draw a rectangle with fill and stroke colors.
+fn draw_filled_rect(r: Rect, fill: Color, stroke: Color) {
+    draw_rectangle(r.x, r.y, r.w, r.h, fill);
+    draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, stroke);
 }
 
 /// Color theme.
@@ -76,7 +83,7 @@ enum MouseEvent {
 }
 
 #[derive(PartialEq)]
-enum Layout {
+pub enum Layout {
     Vertical,
     Horizontal,
 }
@@ -93,7 +100,7 @@ pub struct UI {
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
-    layout: Layout,
+    pub layout: Layout,
 }
 
 impl UI {
@@ -253,8 +260,7 @@ impl UI {
                 w: state.options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
                 h,
             };
-            draw_rectangle(bg_rect.x, bg_rect.y, bg_rect.w, bg_rect.h, self.style.theme.bg);
-            draw_rectangle_lines(bg_rect.x, bg_rect.y, bg_rect.w, bg_rect.h, LINE_THICKNESS * 2.0, self.style.theme.fg);
+            draw_filled_rect(bg_rect, self.style.theme.bg, self.style.theme.fg);
 
             // draw options
             let mut hit_rect = Rect {
@@ -330,13 +336,80 @@ impl UI {
         self.cursor_y += cap_height(&params) + MARGIN * 2.0;
         selected_index
     }
+
+    /// Draws a slider and returns true if the value was changed.
+    pub fn slider(&mut self, label: &str, val: &mut f32, range: RangeInclusive<f32>) -> bool {
+        let h = cap_height(&self.style.text_params());
+
+        // draw groove
+        let groove_w = 100.0;
+        let groove_x = self.cursor_x + MARGIN * 2.0;
+        let groove_y = (self.cursor_y + MARGIN * 2.0 + h * 0.5).round() + 0.5;
+        draw_line(groove_x, groove_y,
+            groove_x + groove_w, groove_y,
+            LINE_THICKNESS, self.style.theme.fg);
+
+        // update position
+        let hit_rect = Rect {
+            x: self.cursor_x + MARGIN,
+            w: groove_w + MARGIN * 2.0,
+            y: self.cursor_y + MARGIN,
+            h: h + MARGIN * 2.0,
+        };
+        let mouse_pos = mouse_position_vec2();
+        let (fill, changed) = if hit_rect.contains(mouse_pos) {
+            if is_mouse_button_down(MouseButton::Left) {
+                let new_val = interpolate((mouse_pos.x - groove_x) / groove_w, &range)
+                    .max(*range.start())
+                    .min(*range.end());
+                let changed = new_val != *val;
+                *val = new_val;
+                (self.style.theme.click, changed)
+            } else {
+                (self.style.theme.hover, false)
+            }
+        } else {
+            (self.style.theme.bg, false)
+        };
+        
+        // draw handle
+        let f = deinterpolate(*val, &range);
+        let handle_rect = Rect {
+            x: self.cursor_x + MARGIN + (f * groove_w).round(),
+            w: MARGIN * 2.0,
+            ..hit_rect
+        };
+        draw_filled_rect(handle_rect, fill, self.style.theme.fg);
+
+        // draw label
+        let text_rect = self.draw_text(label,
+            self.cursor_x + MARGIN * 3.0 + groove_w,
+            self.cursor_y + MARGIN);
+
+        self.update_cursor(groove_w + text_rect.w + MARGIN, h + MARGIN * 3.0);
+        changed
+    }
+
+    pub fn shared_slider(&mut self, label: &str, param: &Shared, range: RangeInclusive<f32>) {
+        let mut val = param.value();
+        if self.slider(label, &mut val, range) {
+            param.set(val);
+        }
+    }
+}
+
+fn interpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
+    range.start() + x * (range.end() - range.start())
+}
+
+fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
+    (x - range.start()) / (range.end() - range.start())
 }
 
 pub fn alert_dialog(style: &Style, message: &str) -> bool {
     let params = style.text_params();
     let r = center(fit_strings(params.clone(), &[message.to_owned()]));
-    draw_rectangle(r.x, r.y, r.w, r.h, style.theme.bg);
-    draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, style.theme.fg);
+    draw_filled_rect(r, style.theme.bg, style.theme.fg);
     draw_text_topleft(params.clone(), message, r.x, r.y);
 
     let click = is_mouse_button_released(MouseButton::Left);

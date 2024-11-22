@@ -386,8 +386,15 @@ impl App {
     }
 
     fn instruments_tab(&mut self) {
-        self.ui.combo_box("Test combo box", "(none)",
-            || vec!["one".to_string(), "two".to_string(), "three".to_string()]);
+        self.ui.layout = ui::Layout::Vertical;
+        if let Some(i) = self.ui.combo_box("Play mode",
+            self.synth.settings.play_mode.name(),
+            || synth::PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
+        ) {
+            self.synth.settings.play_mode = synth::PlayMode::VARIANTS[i];
+        }
+        self.ui.slider("Glide time", &mut self.synth.settings.glide_time, 0.0..=0.5);
+        self.ui.shared_slider("Pan", &self.synth.settings.pan.0, -1.0..=1.0);
     }
 
     fn report(&mut self, e: impl Display) {
