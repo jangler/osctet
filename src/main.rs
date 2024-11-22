@@ -136,6 +136,7 @@ struct App {
     ui: ui::UI,
     dialog: Option<Dialog>,
     dialog_first_frame: bool,
+    fullscreen: bool,
 }
 
 impl App {
@@ -166,6 +167,7 @@ impl App {
             ui: ui::UI::new(),
             dialog: None,
             dialog_first_frame: false,
+            fullscreen: false,
         }
     }
 
@@ -193,6 +195,10 @@ impl App {
                 match key {
                     KeyCode::Escape => {
                         self.dialog = None
+                    },
+                    KeyCode::F11 => {
+                        self.fullscreen = !self.fullscreen;
+                        set_fullscreen(self.fullscreen);
                     }
                     _ => (),
                 }
