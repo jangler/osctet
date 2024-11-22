@@ -7,6 +7,32 @@ use crate::MessageBuffer;
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
 
+/// Draws text with the top-left corner at (x, y), plus margins.
+/// Returns the bounds of the text, plus margins.
+fn draw_text_topleft(params: TextParams, label: &str, x: f32, y: f32) -> Rect {
+    let dim = draw_text_ex(label,
+        (x + MARGIN).round(),
+        (y + MARGIN + cap_height(&params)).round(),
+        params);
+    Rect { x, y, w: dim.width + MARGIN * 2.0, h: dim.height + MARGIN * 2.0 }
+}
+
+/// Returns the height of a capital letter.
+fn cap_height(params: &TextParams) -> f32 {
+    measure_text("X", params.font, params.font_size, params.font_scale).offset_y
+}
+
+/// Returns the width of rendered text.
+fn text_width(text: &str, params: &TextParams) -> f32 {
+    measure_text(text, params.font, params.font_size, params.font_scale).width
+}
+
+/// Returns mouse position as a `Vec2`.
+fn mouse_position_vec2() -> Vec2 {
+    let (x, y) = mouse_position();
+    Vec2 { x, y }
+}
+
 pub struct Theme {
     pub bg: Color,
     pub fg: Color,
@@ -94,7 +120,7 @@ impl UI {
 
     pub fn start_bottom_panel(&mut self) {
         let params = self.style.text_params();
-        let h = params.font_size as f32 + MARGIN * 3.0;
+        let h = params.font_size as f32 + MARGIN * 2.0;
         draw_line(self.bounds.x, self.bounds.h - h + 0.5,
             self.bounds.x + self.bounds.w, self.bounds.h - h + 0.5,
             LINE_THICKNESS, self.style.theme.fg);
@@ -118,24 +144,25 @@ impl UI {
         }
     }
 
+    /// Convenience wrapper around `draw_text_topleft`.
     fn draw_text(&self, label: &str, x: f32, y: f32) -> Rect {
-        let params = self.style.text_params();
-        let dim = measure_text(label, params.font, params.font_size, params.font_scale);
-        draw_text_ex(label, x + MARGIN, y + MARGIN + dim.offset_y, params);
-        Rect { x, y, w: dim.width + MARGIN * 2.0, h: dim.height + MARGIN * 2.0 }
+        draw_text_topleft(self.style.text_params(), label, x, y)
     }
     
     pub fn label(&mut self, label: &str) {
-        let rect = self.draw_text(label, self.cursor_x, self.cursor_y + MARGIN);
-        self.update_cursor(rect.w, rect.h + MARGIN);
+        let rect = self.draw_text(label, self.cursor_x, self.cursor_y);
+        self.update_cursor(rect.w, rect.h);
     }
 
     fn text_rect(&self, label: &str, x: f32, y: f32) -> (Rect, MouseEvent) {
         let params = self.style.text_params();
-        let (mouse_x, mouse_y) = mouse_position();
-        let dim = measure_text(label, params.font, params.font_size, params.font_scale);
-        let rect = Rect { x, y, w: dim.width + MARGIN * 2.0, h: dim.height + MARGIN * 2.0 };
-        let mouse_hit = rect.contains(Vec2 { x: mouse_x, y: mouse_y });
+        let rect = Rect {
+            x,
+            y,
+            w: text_width(label, &params) + MARGIN * 2.0,
+            h: cap_height(&params) + MARGIN * 2.0,
+        };
+        let mouse_hit = rect.contains(mouse_position_vec2());
     
         // draw fill based on mouse state
         if mouse_hit {
@@ -147,7 +174,7 @@ impl UI {
             draw_rectangle(x, y, rect.w, rect.h, color);
         }
     
-        draw_text_ex(label, (x + MARGIN).round(), (y + MARGIN + dim.offset_y).round(), params);
+        draw_text_topleft(params, label, x, y);
         draw_rectangle_lines(x.round(), y.round(), rect.w.round(), rect.h.round(),
             LINE_THICKNESS * 2.0, self.style.theme.fg);
     
@@ -193,7 +220,7 @@ impl UI {
             };
 
             // draw bounding box
-            let w = fit_strings(self.style.text_params(), &state.options).w;
+            let params = self.style.text_params();
             let h = button_rect.h * state.options.len() as f32 + 2.0;
             let bg_rect = Rect {
                 x: button_rect.x,
@@ -202,7 +229,7 @@ impl UI {
                 } else {
                     button_rect.y + button_rect.h - 1.0
                 },
-                w,
+                w: state.options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
                 h,
             };
             draw_rectangle(bg_rect.x, bg_rect.y, bg_rect.w, bg_rect.h, self.style.theme.bg);
@@ -223,7 +250,7 @@ impl UI {
                         return_val = Some(i)
                     }
                 }
-                self.draw_text(&option, hit_rect.x, hit_rect.y);
+                self.draw_text(&option, hit_rect.x - 1.0, hit_rect.y - 1.0);
                 hit_rect.y += hit_rect.h;
             }
         }
@@ -250,11 +277,6 @@ impl UI {
             width, self.cursor_y - init_y,
             LINE_THICKNESS * 2.0, self.style.theme.fg);
     }
-}
-
-fn mouse_position_vec2() -> Vec2 {
-    let (x, y) = mouse_position();
-    Vec2 { x, y }
 }
 
 pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
@@ -289,10 +311,4 @@ fn center(r: Rect) -> Rect {
         y: (screen_height() / 2.0 - r.h / 2.0).round(),
         ..r
     }
-}
-
-fn draw_text_topleft(params: TextParams, label: &str, x: f32, y: f32) -> Rect {
-    let dim = measure_text(label, params.font, params.font_size, params.font_scale);
-    draw_text_ex(label, (x + MARGIN).round(), (y + MARGIN + dim.offset_y).round(), params);
-    Rect { x, y, w: dim.width + MARGIN, h: dim.height + MARGIN }
 }
