@@ -85,6 +85,7 @@ struct ComboBoxState {
 pub struct UI {
     pub style: UIStyle,
     combo_boxes: HashMap<String, ComboBoxState>,
+    tabs: HashMap<String, usize>,
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
@@ -100,6 +101,7 @@ impl UI {
                 theme: LIGHT_THEME,
             },
             combo_boxes: HashMap::new(),
+            tabs: HashMap::new(),
             bounds: Default::default(),
             cursor_x: 0.0,
             cursor_y: 0.0,
@@ -279,6 +281,51 @@ impl UI {
     
         return_val
     }
+
+    /// Draws a tab menu. Returns the index of the selected tab.
+    pub fn tab_menu(&mut self, id: &str, labels: &[&str]) -> usize {
+        let params = self.style.text_params();
+        let mut selected_index = self.tabs.get(id).cloned().unwrap_or_default();
+        let mut x = self.cursor_x;
+        let mouse_pos = mouse_position_vec2();
+        let h = cap_height(&params) + MARGIN * 2.0;
+        draw_line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
+            self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
+            LINE_THICKNESS, self.style.theme.fg);
+        for (i, label) in labels.iter().enumerate() {
+            let r = Rect {
+                x,
+                y: self.cursor_y,
+                w: text_width(label, &params) + MARGIN * 2.0,
+                h,
+            };
+            if i == selected_index {
+                // erase line segment
+                draw_line(r.x, r.y + r.h + LINE_THICKNESS * 0.5,
+                    r.x + r.w - LINE_THICKNESS, r.y + r.h + LINE_THICKNESS * 0.5,
+                    LINE_THICKNESS, self.style.theme.bg);
+            } else {
+                // fill background
+                let color = if r.contains(mouse_pos) {
+                    if is_mouse_button_pressed(MouseButton::Left) {
+                        self.tabs.insert(id.to_owned(), i);
+                        selected_index = i;
+                    }
+                    self.style.theme.click
+                } else {
+                    self.style.theme.hover
+                };
+                draw_rectangle(r.x, r.y, r.w - LINE_THICKNESS, r.h, color);
+            }
+            self.draw_text(label, x, self.cursor_y);
+            x += r.w;
+            draw_line(x - LINE_THICKNESS * 0.5, self.cursor_y,
+                x - LINE_THICKNESS *0.5, self.cursor_y + r.h,
+                LINE_THICKNESS, self.style.theme.fg);
+        }
+        self.cursor_y += cap_height(&params) + MARGIN * 2.0;
+        selected_index
+    }
 }
 
 pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
@@ -298,7 +345,6 @@ pub fn alert_dialog(style: &UIStyle, message: &str) -> bool {
 
 fn fit_strings(params: TextParams, v: &[String]) -> Rect {
     let mut rect: Rect = Default::default();
-    rect.h += MARGIN;
     for s in v {
         let dim = measure_text(s, params.font, params.font_size, params.font_scale);
         rect.w = rect.w.max(dim.width + MARGIN * 2.0);

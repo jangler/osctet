@@ -34,6 +34,8 @@ const APP_NAME: &str = "Osctet";
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "inst";
 
+const TABS: [&str; 2] = ["Pattern", "Instruments"];
+
 struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll
     // create a new input just for that (see Boddlnagg/midir#90).
@@ -336,16 +338,26 @@ impl App {
         
         self.ui.end_bottom_panel();
 
+        match self.ui.tab_menu("main", &TABS) {
+            0 => self.pattern_tab(),
+            1 => self.instruments_tab(),
+            _ => panic!("bad tab value"),
+        }
+    }
+
+    fn pattern_tab(&mut self) {
         if self.ui.button("Test button") {
             self.open_dialog(Dialog::Alert("Button clicked".to_owned()));
         }
+    }
 
+    fn instruments_tab(&mut self) {
         self.ui.combo_box("Test combo box", "(none)",
             || vec!["one".to_string(), "two".to_string(), "three".to_string()]);
     }
 
     fn report(&mut self, e: impl Display) {
-        self.dialog = Some(Dialog::Alert(e.to_string()));
+        self.open_dialog(Dialog::Alert(e.to_string()));
     } 
 
     fn process_dialog(&mut self) {
