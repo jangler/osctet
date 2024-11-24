@@ -95,6 +95,41 @@ struct ComboBoxState {
     list_rect: Rect,
 }
 
+enum Graphic {
+    Rect(Rect, Color, Option<Color>),
+    Line(f32, f32, f32, f32, Color),
+    Text(f32, f32, String, Color),
+}
+
+impl Graphic {
+    fn draw(&self, params: &TextParams) {
+        match self {
+            Self::Rect(rect, fill, stroke) => {
+                if let Some(stroke) = stroke {
+                    draw_filled_rect(*rect, *fill, *stroke);
+                } else {
+                    draw_rectangle(rect.x, rect.y, rect.w, rect.h, *fill);
+                }
+            },
+            Self::Line(x1, y1, x2, y2, color) => {
+                draw_line(*x1, *y1, *x2, *y2, LINE_THICKNESS, *color);
+            },
+            Self::Text(x, y, text, color) => {
+                let params = TextParams {
+                    color: *color,
+                    ..*params
+                };
+                draw_text_topleft(params, text, *x, *y);
+            }
+        }
+    }
+}
+
+struct DrawOp {
+    z: i8,
+    graphic: Graphic,
+}
+
 /// Draws widgets and tracks UI state.
 pub struct UI {
     pub style: Style,
@@ -104,6 +139,8 @@ pub struct UI {
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
+    cursor_z: i8,
+    draw_queue: Vec<DrawOp>,
     pub layout: Layout,
 }
 
@@ -121,7 +158,9 @@ impl UI {
             bounds: Default::default(),
             cursor_x: 0.0,
             cursor_y: 0.0,
+            cursor_z: 0,
             layout: Layout::Vertical,
+            draw_queue: Vec::new(),
         }
     }
 
@@ -135,6 +174,7 @@ impl UI {
 
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
+        self.cursor_z = 0;
 
         if self.grabbed_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
             self.grabbed_slider = None;
@@ -144,17 +184,59 @@ impl UI {
     }
 
     pub fn end_frame(&mut self) {
-        if self.open_combo_box.is_some() {
-            self.combo_box_list(true);
+        let params = self.style.text_params();
+        self.draw_queue.sort_by_key(|x| x.z);
+        for op in &self.draw_queue {
+            op.graphic.draw(&params);
         }
+        self.draw_queue.clear();
+    }
+
+    fn push_graphic(&mut self, graphic: Graphic) {
+        self.draw_queue.push(DrawOp {
+            z: self.cursor_z,
+            graphic,
+        })
+    }
+
+    fn push_graphics(&mut self, gfx: Vec<Graphic>) {   
+        for gfx in gfx {
+            self.push_graphic(gfx);
+        }
+    }
+
+    fn push_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
+        self.push_graphic(Graphic::Line(x1, y1, x2, y2, color));
+    }
+
+    fn push_rect(&mut self, rect: Rect, fill: Color, stroke: Option<Color>) {
+        self.push_graphic(Graphic::Rect(rect, fill, stroke));
+    }
+
+    fn push_text(&mut self, x: f32, y: f32, text: String, color: Color) -> Rect {
+        let params = self.style.text_params();
+        let rect = Rect {
+            x,
+            y,
+            w: text_width(&text, &params) + MARGIN * 2.0,
+            h: cap_height(&params) + MARGIN * 2.0,
+        };
+        self.push_graphic(Graphic::Text(x, y, text, color));
+        rect
     }
 
     pub fn start_bottom_panel(&mut self) {
         let params = self.style.text_params();
         let h = params.font_size as f32 + MARGIN * 2.0;
-        draw_line(self.bounds.x, self.bounds.h - h + 0.5,
+        self.cursor_z = 1;
+        self.push_rect(Rect {
+            y: self.bounds.h - h,
+            h, 
+            ..self.bounds
+        }, self.style.theme.bg, None);
+        self.push_line(self.bounds.x, self.bounds.h - h + 0.5,
             self.bounds.x + self.bounds.w, self.bounds.h - h + 0.5,
-            LINE_THICKNESS, self.style.theme.fg);
+            self.style.theme.fg);
         self.layout = Layout::Horizontal;
         self.cursor_x = self.bounds.x;
         self.cursor_y = self.bounds.h - h;
@@ -166,6 +248,7 @@ impl UI {
         self.bounds.h -= h;
         self.cursor_x = self.bounds.x;
         self.cursor_y = self.bounds.y;
+        self.cursor_z = 0;
     }
 
     fn update_cursor(&mut self, w: f32, h: f32) {
@@ -186,18 +269,14 @@ impl UI {
         }
         rect.contains(pt)
     }
-
-    /// Convenience wrapper around `draw_text_topleft`.
-    fn draw_text(&self, label: &str, x: f32, y: f32) -> Rect {
-        draw_text_topleft(self.style.text_params(), label, x, y)
-    }
     
     pub fn label(&mut self, label: &str) {
-        let rect = self.draw_text(label, self.cursor_x, self.cursor_y);
+        let rect = self.push_text(self.cursor_x, self.cursor_y,
+            label.to_owned(), self.style.theme.fg);
         self.update_cursor(rect.w, rect.h);
     }
 
-    fn text_rect(&self, label: &str, x: f32, y: f32) -> (Rect, MouseEvent) {
+    fn text_rect(&mut self, label: &str, x: f32, y: f32) -> (Rect, MouseEvent) {
         let params = self.style.text_params();
         let rect = Rect {
             x,
@@ -208,18 +287,18 @@ impl UI {
         let mouse_hit = self.mouse_hits(rect);
     
         // draw fill based on mouse state
-        if mouse_hit {
-            let color = if is_mouse_button_down(MouseButton::Left) {
+        let fill = if mouse_hit {
+            if is_mouse_button_down(MouseButton::Left) {
                 self.style.theme.click
             } else {
                 self.style.theme.hover
-            };
-            draw_rectangle(x, y, rect.w, rect.h, color);
-        }
-    
-        draw_text_topleft(params, label, x, y);
-        draw_rectangle_lines(x.round(), y.round(), rect.w.round(), rect.h.round(),
-            LINE_THICKNESS * 2.0, self.style.theme.fg);
+            }
+        } else {
+            self.style.theme.bg
+        };
+
+        self.push_rect(rect, fill, Some(self.style.theme.fg));
+        self.push_text(x, y, label.to_owned(), self.style.theme.fg);
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
@@ -242,7 +321,8 @@ impl UI {
         let button_text = if *value { "X" } else { " " };
         let clicked = self.button(button_text);
         self.cursor_x -= MARGIN;
-        let label_rect = self.draw_text(label, self.cursor_x, self.cursor_y + MARGIN);
+        let label_rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
+            label.to_owned(), self.style.theme.fg);
         self.update_cursor(label_rect.w, label_rect.h);
         if clicked {
             *value = !*value;
@@ -256,7 +336,8 @@ impl UI {
     ) -> Option<usize> {
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
-        let label_dim = self.draw_text(label, self.cursor_x + button_rect.w + MARGIN, self.cursor_y + MARGIN);
+        let label_dim = self.push_text(self.cursor_x + button_rect.w + MARGIN,
+            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
         let params = self.style.text_params();
 
         // check to open list
@@ -277,7 +358,7 @@ impl UI {
                 state.button_rect = button_rect;
                 state.list_rect = combo_box_list_rect(&params, button_rect, &state.options);
             }
-            self.combo_box_list(false)
+            self.combo_box_list(open)
         } else {
             None
         };
@@ -296,17 +377,19 @@ impl UI {
     }
 
     /// Draw the list of the active combo box.
-    fn combo_box_list(&mut self, frame_end: bool) -> Option<usize> {
+    fn combo_box_list(&mut self, already_open: bool) -> Option<usize> {
+        let old_z = self.cursor_z;
+        self.cursor_z = 2;
         let state = self.open_combo_box.as_ref().unwrap();
-        let bg_rect = state.list_rect;
-        
-        draw_filled_rect(bg_rect, self.style.theme.bg, self.style.theme.fg);
+        let mut gfx = vec![
+            Graphic::Rect(state.list_rect, self.style.theme.bg, Some(self.style.theme.fg))
+        ];
 
         // draw options
         let mut hit_rect = Rect {
-            x: bg_rect.x + 1.0,
-            y: bg_rect.y + 1.0,
-            w: bg_rect.w - 2.0,
+            x: state.list_rect.x + 1.0,
+            y: state.list_rect.y + 1.0,
+            w: state.list_rect.w - 2.0,
             h: state.button_rect.h,
         };
         let mouse_pos = mouse_position_vec2();
@@ -314,19 +397,25 @@ impl UI {
         let lmb = is_mouse_button_released(MouseButton::Left);
         for (i, option) in state.options.iter().enumerate() {
             if hit_rect.contains(mouse_pos) {
-                draw_rectangle(hit_rect.x, hit_rect.y, hit_rect.w, hit_rect.h, self.style.theme.hover);
+                gfx.push(Graphic::Rect(hit_rect, self.style.theme.hover, None));
                 if lmb {
                     return_val = Some(i)
                 }
             }
-            self.draw_text(&option, hit_rect.x - 1.0, hit_rect.y - 1.0);
+            gfx.push(Graphic::Text(hit_rect.x - 1.0, hit_rect.y - 1.0,
+                option.to_owned(), self.style.theme.fg));
             hit_rect.y += hit_rect.h;
         }
 
         // check to close. other close conditions are in combo_box()
-        if frame_end && lmb && !state.button_rect.contains(mouse_position_vec2()) {
+        if return_val.is_some() || (already_open
+            && is_mouse_button_pressed(MouseButton::Left)
+            && !state.list_rect.contains(mouse_position_vec2())) {
             self.open_combo_box = None;
         }
+
+        self.push_graphics(gfx);
+        self.cursor_z = old_z;
 
         return_val
     }
@@ -336,11 +425,12 @@ impl UI {
         let params = self.style.text_params();
         let mut selected_index = self.tabs.get(id).cloned().unwrap_or_default();
         let mut x = self.cursor_x;
-        let mouse_pos = mouse_position_vec2();
         let h = cap_height(&params) + MARGIN * 2.0;
-        draw_line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
-            self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
-            LINE_THICKNESS, self.style.theme.fg);
+        let mut gfx = vec![
+            Graphic::Line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
+                self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
+                self.style.theme.fg)
+        ];
         for (i, label) in labels.iter().enumerate() {
             let r = Rect {
                 x,
@@ -350,9 +440,9 @@ impl UI {
             };
             if i == selected_index {
                 // erase line segment
-                draw_line(r.x, r.y + r.h + LINE_THICKNESS * 0.5,
+                gfx.push(Graphic::Line(r.x, r.y + r.h + LINE_THICKNESS * 0.5,
                     r.x + r.w - LINE_THICKNESS, r.y + r.h + LINE_THICKNESS * 0.5,
-                    LINE_THICKNESS, self.style.theme.bg);
+                    self.style.theme.bg));
             } else {
                 // fill background
                 let color = if self.mouse_hits(r) {
@@ -364,15 +454,17 @@ impl UI {
                 } else {
                     self.style.theme.hover
                 };
-                draw_rectangle(r.x, r.y, r.w - LINE_THICKNESS, r.h, color);
+                gfx.push(Graphic::Rect(Rect {w: r.w - LINE_THICKNESS, ..r }, color, None));
             }
-            self.draw_text(label, x, self.cursor_y);
+            gfx.push(Graphic::Text(x, self.cursor_y,
+                label.to_string(), self.style.theme.fg));
             x += r.w;
-            draw_line(x - LINE_THICKNESS * 0.5, self.cursor_y,
+            gfx.push(Graphic::Line(x - LINE_THICKNESS * 0.5, self.cursor_y,
                 x - LINE_THICKNESS *0.5, self.cursor_y + r.h,
-                LINE_THICKNESS, self.style.theme.fg);
+                self.style.theme.fg));
         }
         self.cursor_y += cap_height(&params) + MARGIN * 2.0;
+        self.push_graphics(gfx);
         selected_index
     }
 
@@ -435,9 +527,8 @@ impl UI {
         draw_filled_rect(handle_rect, fill, self.style.theme.fg);
 
         // draw label
-        let text_rect = self.draw_text(label,
-            self.cursor_x + MARGIN * 3.0 + groove_w,
-            self.cursor_y + MARGIN);
+        let text_rect = self.push_text(self.cursor_x + MARGIN * 3.0 + groove_w,
+            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
 
         self.update_cursor(groove_w + text_rect.w + MARGIN, h + MARGIN * 3.0);
         changed
