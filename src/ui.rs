@@ -225,9 +225,12 @@ impl UI {
         rect
     }
 
+    fn bottom_panel_height(&self) -> f32 {
+        cap_height(&self.style.text_params()) + MARGIN * 4.0
+    }
+
     pub fn start_bottom_panel(&mut self) {
-        let params = self.style.text_params();
-        let h = params.font_size as f32 + MARGIN * 2.0;
+        let h = self.bottom_panel_height();
         self.cursor_z = 1;
         self.push_rect(Rect {
             y: self.bounds.h - h,
@@ -266,6 +269,9 @@ impl UI {
             if state.list_rect.contains(pt) {
                 return false
             }
+        }
+        if self.cursor_z < 1 && screen_height() - self.bottom_panel_height() < pt.y {
+            return false
         }
         rect.contains(pt)
     }
