@@ -347,7 +347,7 @@ impl App {
     }
     
     fn process_ui(&mut self) {
-        self.ui.new_frame();
+        self.ui.start_frame();
 
         self.ui.start_bottom_panel();
 
@@ -381,6 +381,8 @@ impl App {
             2 => self.song_tab(),
             _ => panic!("bad tab value"),
         }
+
+        self.ui.end_frame();
     }
 
     fn pattern_tab(&mut self) {

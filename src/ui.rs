@@ -89,13 +89,16 @@ pub enum Layout {
 }
 
 struct ComboBoxState {
+    id: String,
     options: Vec<String>,
+    button_rect: Rect,
+    list_rect: Rect,
 }
 
 /// Draws widgets and tracks UI state.
 pub struct UI {
     pub style: Style,
-    combo_boxes: HashMap<String, ComboBoxState>,
+    open_combo_box: Option<ComboBoxState>,
     tabs: HashMap<String, usize>,
     grabbed_slider: Option<String>,
     bounds: Rect,
@@ -112,7 +115,7 @@ impl UI {
                     .expect("included font should be loadable"),
                 theme: LIGHT_THEME,
             },
-            combo_boxes: HashMap::new(),
+            open_combo_box: None,
             tabs: HashMap::new(),
             grabbed_slider: None,
             bounds: Default::default(),
@@ -122,7 +125,7 @@ impl UI {
         }
     }
 
-    pub fn new_frame(&mut self) {
+    pub fn start_frame(&mut self) {
         self.bounds = Rect {
             x: 0.0,
             y: 0.0,
@@ -138,6 +141,12 @@ impl UI {
         }
         
         clear_background(self.style.theme.bg);
+    }
+
+    pub fn end_frame(&mut self) {
+        if self.open_combo_box.is_some() {
+            self.combo_box_list(true);
+        }
     }
 
     pub fn start_bottom_panel(&mut self) {
@@ -166,6 +175,18 @@ impl UI {
         }
     }
 
+    /// Check whether the mouse is within the rect and unoccluded.
+    fn mouse_hits(&self, rect: Rect) -> bool {
+        let pt = mouse_position_vec2();
+        // TODO: account for dialogs
+        if let Some(state) = &self.open_combo_box {
+            if state.list_rect.contains(pt) {
+                return false
+            }
+        }
+        rect.contains(pt)
+    }
+
     /// Convenience wrapper around `draw_text_topleft`.
     fn draw_text(&self, label: &str, x: f32, y: f32) -> Rect {
         draw_text_topleft(self.style.text_params(), label, x, y)
@@ -184,7 +205,7 @@ impl UI {
             w: text_width(label, &params) + MARGIN * 2.0,
             h: cap_height(&params) + MARGIN * 2.0,
         };
-        let mouse_hit = rect.contains(mouse_position_vec2());
+        let mouse_hit = self.mouse_hits(rect);
     
         // draw fill based on mouse state
         if mouse_hit {
@@ -236,68 +257,77 @@ impl UI {
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
         let label_dim = self.draw_text(label, self.cursor_x + button_rect.w + MARGIN, self.cursor_y + MARGIN);
+        let params = self.style.text_params();
 
         // check to open list
-        let open = self.combo_boxes.contains_key(id);
+        let open = self.open_combo_box.as_ref().is_some_and(|x| x.id == id);
         if event == MouseEvent::Pressed && !open {
-            self.combo_boxes.insert(id.to_owned(), ComboBoxState {
-                options: get_options(),
+            let options = get_options();
+            let list_rect = combo_box_list_rect(&params, button_rect, &options);
+            self.open_combo_box = Some(ComboBoxState {
+                id: id.to_owned(),
+                options,
+                button_rect,
+                list_rect,
             });
         }
 
-        let lmb_press = is_mouse_button_pressed(MouseButton::Left);
-        let mut return_val = None;
-
-        if let Some(state) = self.combo_boxes.get(id) {
-            // should options be drawn above or below the button?
-            let y_direction = if self.cursor_y > screen_height() / 2.0 {
-                -1.0
-            } else {
-                1.0
-            };
-
-            // draw bounding box
-            let params = self.style.text_params();
-            let h = button_rect.h * state.options.len() as f32 + 2.0;
-            let bg_rect = Rect {
-                x: button_rect.x,
-                y: if y_direction < 0.0 {
-                    button_rect.y - h + 1.0
-                } else {
-                    button_rect.y + button_rect.h - 1.0
-                },
-                w: state.options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
-                h,
-            };
-            draw_filled_rect(bg_rect, self.style.theme.bg, self.style.theme.fg);
-
-            // draw options
-            let mut hit_rect = Rect {
-                x: bg_rect.x + 1.0,
-                y: bg_rect.y + 1.0,
-                w: bg_rect.w - 2.0,
-                h: button_rect.h,
-            };
-            let mouse_pos = mouse_position_vec2();
-            for (i, option) in state.options.iter().enumerate() {
-                if hit_rect.contains(mouse_pos) {
-                    draw_rectangle(hit_rect.x, hit_rect.y, hit_rect.w, hit_rect.h, self.style.theme.hover);
-                    if lmb_press {
-                        return_val = Some(i)
-                    }
-                }
-                self.draw_text(&option, hit_rect.x - 1.0, hit_rect.y - 1.0);
-                hit_rect.y += hit_rect.h;
+        let return_val = if open {
+            if let Some(state) = &mut self.open_combo_box {
+                state.button_rect = button_rect;
+                state.list_rect = combo_box_list_rect(&params, button_rect, &state.options);
             }
-        }
+            self.combo_box_list(false)
+        } else {
+            None
+        };
 
-        // check to close list
-        if open && (lmb_press || is_key_pressed(KeyCode::Escape)) {
-            self.combo_boxes.remove(id);
+        // check to close. other close conditions are in combo_box_list()
+        if open && (is_key_pressed(KeyCode::Escape) ||
+            (is_mouse_button_pressed(MouseButton::Left)
+                && button_rect.contains(mouse_position_vec2()))
+        ) {
+            self.open_combo_box = None;
         }
 
         self.update_cursor(button_rect.w + label_dim.w + MARGIN, button_rect.h + MARGIN);
     
+        return_val
+    }
+
+    /// Draw the list of the active combo box.
+    fn combo_box_list(&mut self, frame_end: bool) -> Option<usize> {
+        let state = self.open_combo_box.as_ref().unwrap();
+        let bg_rect = state.list_rect;
+        
+        draw_filled_rect(bg_rect, self.style.theme.bg, self.style.theme.fg);
+
+        // draw options
+        let mut hit_rect = Rect {
+            x: bg_rect.x + 1.0,
+            y: bg_rect.y + 1.0,
+            w: bg_rect.w - 2.0,
+            h: state.button_rect.h,
+        };
+        let mouse_pos = mouse_position_vec2();
+        let mut return_val = None;
+        let lmb = is_mouse_button_released(MouseButton::Left);
+        for (i, option) in state.options.iter().enumerate() {
+            if hit_rect.contains(mouse_pos) {
+                draw_rectangle(hit_rect.x, hit_rect.y, hit_rect.w, hit_rect.h, self.style.theme.hover);
+                if lmb {
+                    return_val = Some(i)
+                }
+            }
+            self.draw_text(&option, hit_rect.x - 1.0, hit_rect.y - 1.0);
+            hit_rect.y += hit_rect.h;
+        }
+
+        // check to close. other close conditions are in combo_box()
+        if frame_end && lmb && !state.button_rect.contains(mouse_position_vec2()) {
+            self.open_combo_box = None;
+        }
+
         return_val
     }
 
@@ -325,7 +355,7 @@ impl UI {
                     LINE_THICKNESS, self.style.theme.bg);
             } else {
                 // fill background
-                let color = if r.contains(mouse_pos) {
+                let color = if self.mouse_hits(r) {
                     if is_mouse_button_pressed(MouseButton::Left) {
                         self.tabs.insert(id.to_owned(), i);
                         selected_index = i;
@@ -372,7 +402,7 @@ impl UI {
             h: h + MARGIN * 2.0,
         };
         let mouse_pos = mouse_position_vec2();
-        if is_mouse_button_pressed(MouseButton::Left) && hit_rect.contains(mouse_pos) {
+        if is_mouse_button_pressed(MouseButton::Left) && self.mouse_hits(hit_rect) {
             self.grabbed_slider = Some(id.to_string());
         }
         let grabbed = if let Some(s) = &self.grabbed_slider {
@@ -389,7 +419,7 @@ impl UI {
             let changed = new_val != *val;
             *val = new_val;
             (self.style.theme.click, changed)
-        } else if hit_rect.contains(mouse_pos) {
+        } else if self.mouse_hits(hit_rect) {
             (self.style.theme.hover, false)
         } else {
             (self.style.theme.bg, false)
@@ -460,5 +490,35 @@ fn center(r: Rect) -> Rect {
         x: (screen_width() / 2.0 - r.w / 2.0).round(),
         y: (screen_height() / 2.0 - r.h / 2.0).round(),
         ..r
+    }
+}
+
+fn combo_box_list_rect(params: &TextParams, button_rect: Rect, options: &[String]) -> Rect {
+    // should options be drawn above or below the button?
+    let y_direction = if button_rect.y > screen_height() / 2.0 {
+        -1.0
+    } else {
+        1.0
+    };
+
+    let h = button_rect.h * options.len() as f32 + 2.0;
+    Rect {
+        x: button_rect.x,
+        y: if y_direction < 0.0 {
+            button_rect.y - h + 1.0
+        } else {
+            button_rect.y + button_rect.h - 1.0
+        },
+        w: options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
+        h,
+    }
+}
+
+fn screen_rect() -> Rect {
+    Rect {
+        x: 0.0,
+        y: 0.0,
+        w: screen_width(),
+        h: screen_height(),
     }
 }
