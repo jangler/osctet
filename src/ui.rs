@@ -344,6 +344,10 @@ impl UI {
         selected_index
     }
 
+    pub fn set_tab(&mut self, id: &str, index: usize) {
+        self.tabs.insert(id.to_owned(), index);
+    }
+
     /// Draws a slider and returns true if the value was changed.
     pub fn slider(&mut self, label: &str, val: &mut f32, range: RangeInclusive<f32>) -> bool {
         let h = cap_height(&self.style.text_params());

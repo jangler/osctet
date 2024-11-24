@@ -206,6 +206,9 @@ impl App {
                     KeyCode::Escape => {
                         self.dialog = None
                     },
+                    KeyCode::F1 => self.ui.set_tab("main", 0),
+                    KeyCode::F2 => self.ui.set_tab("main", 1),
+                    KeyCode::F3 => self.ui.set_tab("main", 2),
                     KeyCode::F11 => {
                         self.fullscreen = !self.fullscreen;
                         set_fullscreen(self.fullscreen);
