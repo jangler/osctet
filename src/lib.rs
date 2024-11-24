@@ -12,7 +12,7 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
 use rfd::FileDialog;
-use synth::{FilterType, Key, KeyOrigin, KeyTracking, ModTarget, PlayMode, Synth, Waveform};
+use synth::{FilterType, Key, KeyOrigin, KeyTracking, ModTarget, OscOutput, Oscillator, PlayMode, Synth, Waveform};
 use macroquad::prelude::*;
 
 pub mod pitch;
@@ -357,7 +357,7 @@ impl App {
             } else {
                 "(none)"
             };
-            if let Some(i) = self.ui.combo_box("MIDI input", s,
+            if let Some(i) = self.ui.combo_box("midi_input", "MIDI input", s,
                 || input_names(self.midi.input.as_ref().unwrap())) {
                 self.midi.port_selection = input_names(self.midi.input.as_ref().unwrap()).get(i).cloned();
             }
@@ -390,17 +390,51 @@ impl App {
     }
 
     fn instruments_tab(&mut self) {
+        let settings = &mut self.synth.settings;
         self.ui.layout = ui::Layout::Vertical;
 
-        self.ui.shared_slider("Gain", &self.synth.settings.gain.0, 0.0..=1.0);
-        self.ui.shared_slider("Pan", &self.synth.settings.pan.0, -1.0..=1.0);
-        self.ui.slider("Glide time", &mut self.synth.settings.glide_time, 0.0..=0.5);
+        self.ui.shared_slider("gain", "Gain", &settings.gain.0, 0.0..=1.0);
+        self.ui.shared_slider("pan", "Pan", &settings.pan.0, -1.0..=1.0);
+        self.ui.slider("glide_time", "Glide time", &mut settings.glide_time, 0.0..=0.5);
 
-        if let Some(i) = self.ui.combo_box("Play mode",
-            self.synth.settings.play_mode.name(),
+        if let Some(i) = self.ui.combo_box("play_mode",
+            "Play mode", settings.play_mode.name(),
             || synth::PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
         ) {
-            self.synth.settings.play_mode = synth::PlayMode::VARIANTS[i];
+            settings.play_mode = synth::PlayMode::VARIANTS[i];
+        }
+
+        let mut removed_osc = None;
+        for (i, osc) in settings.oscs.iter_mut().enumerate() {
+            self.ui.label(&format!("Osc {}", i + 1));
+            self.ui.shared_slider(&format!("osc_{}_level", i),
+                "Level", &osc.level.0, 0.0..=1.0);
+            self.ui.shared_slider(&format!("osc_{}_tone", i),
+                "Tone", &osc.tone.0, 0.0..=1.0);
+            self.ui.shared_slider(&format!("osc_{}_ratio", i),
+                "Freq. ratio", &osc.freq_ratio.0, 0.5..=16.0);
+            self.ui.shared_slider(&format!("osc_{}_tune", i),
+                "Finetune", &osc.fine_pitch.0, -0.5..=0.5);
+            if let Some(i) = self.ui.combo_box(&format!("osc_{}_wave", i),
+                "Waveform", osc.waveform.name(),
+                || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
+                osc.waveform = Waveform::VARIANTS[i];
+            }
+            let outputs = OscOutput::choices(i);
+            if let Some(i) = self.ui.combo_box(&format!("osc_{}_output", i),
+                "Output", &osc.output.to_string(),
+                || outputs.iter().map(|x| x.to_string()).collect()) {
+                osc.output = outputs[i];
+            }
+            if i > 0 && self.ui.button("Remove") {
+                removed_osc = Some(i);
+            }
+        }
+        if let Some(i) = removed_osc {
+            settings.remove_osc(i);
+        }
+        if self.ui.button("Add") {
+            settings.oscs.push(Oscillator::new());
         }
     }
 
@@ -409,26 +443,33 @@ impl App {
 
         self.ui.label("Reverb");
         let fx = &mut self.global_fx;
-        self.ui.shared_slider("Level", &fx.settings.reverb_amount.0, 0.0..=1.0);
+        self.ui.shared_slider("level",
+            "Level", &fx.settings.reverb_amount.0, 0.0..=1.0);
 
-        if self.ui.slider("Predelay time", &mut fx.settings.predelay_time, 0.0..=0.1) {
+        if self.ui.slider("predelay",
+            "Predelay time", &mut fx.settings.predelay_time, 0.0..=0.1) {
             fx.commit_predelay();
         }
 
         // ugly, but probably about as good as any other solution
-        if self.ui.slider("Room size", &mut fx.settings.reverb_room_size, 5.0..=100.0) {
+        if self.ui.slider("room_size",
+            "Room size", &mut fx.settings.reverb_room_size, 5.0..=100.0) {
             fx.commit_reverb();
         }
-        if self.ui.slider("Decay time", &mut fx.settings.reverb_time, 0.0..=5.0) {
+        if self.ui.slider("decay_time",
+            "Decay time", &mut fx.settings.reverb_time, 0.0..=5.0) {
             fx.commit_reverb();
         }
-        if self.ui.slider("Diffusion", &mut fx.settings.reverb_diffusion, 0.0..=1.0) {
+        if self.ui.slider("diffusion",
+            "Diffusion", &mut fx.settings.reverb_diffusion, 0.0..=1.0) {
             fx.commit_reverb();
         }
-        if self.ui.slider("Mod. speed", &mut fx.settings.reverb_mod_speed, 0.0..=1.0) {
+        if self.ui.slider("mod_speed",
+            "Mod. speed", &mut fx.settings.reverb_mod_speed, 0.0..=1.0) {
             fx.commit_reverb();
         }
-        if self.ui.slider("Damping", &mut fx.settings.reverb_damping, 0.0..=6.0) {
+        if self.ui.slider("damping",
+            "Damping", &mut fx.settings.reverb_damping, 0.0..=6.0) {
             fx.commit_reverb();
         }
     }

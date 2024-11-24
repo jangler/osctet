@@ -230,15 +230,17 @@ impl UI {
     }
     
     /// Draws a combo box. If a value was selected this frame, returns the value's index.
-    pub fn combo_box(&mut self, label: &str, button_text: &str, get_options: impl Fn() -> Vec<String>) -> Option<usize> {
+    pub fn combo_box(&mut self, id: &str, label: &str, button_text: &str,
+        get_options: impl Fn() -> Vec<String>
+    ) -> Option<usize> {
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
         let label_dim = self.draw_text(label, self.cursor_x + button_rect.w + MARGIN, self.cursor_y + MARGIN);
 
         // check to open list
-        let open = self.combo_boxes.contains_key(label);
+        let open = self.combo_boxes.contains_key(id);
         if event == MouseEvent::Pressed && !open {
-            self.combo_boxes.insert(label.to_owned(), ComboBoxState {
+            self.combo_boxes.insert(id.to_owned(), ComboBoxState {
                 options: get_options(),
             });
         }
@@ -246,7 +248,7 @@ impl UI {
         let lmb_press = is_mouse_button_pressed(MouseButton::Left);
         let mut return_val = None;
 
-        if let Some(state) = self.combo_boxes.get(label) {
+        if let Some(state) = self.combo_boxes.get(id) {
             // should options be drawn above or below the button?
             let y_direction = if self.cursor_y > screen_height() / 2.0 {
                 -1.0
@@ -291,7 +293,7 @@ impl UI {
 
         // check to close list
         if open && (lmb_press || is_key_pressed(KeyCode::Escape)) {
-            self.combo_boxes.remove(label);
+            self.combo_boxes.remove(id);
         }
 
         self.update_cursor(button_rect.w + label_dim.w + MARGIN, button_rect.h + MARGIN);
@@ -349,7 +351,9 @@ impl UI {
     }
 
     /// Draws a slider and returns true if the value was changed.
-    pub fn slider(&mut self, label: &str, val: &mut f32, range: RangeInclusive<f32>) -> bool {
+    pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
+        range: RangeInclusive<f32>
+    ) -> bool {
         let h = cap_height(&self.style.text_params());
 
         // draw groove
@@ -369,10 +373,10 @@ impl UI {
         };
         let mouse_pos = mouse_position_vec2();
         if is_mouse_button_pressed(MouseButton::Left) && hit_rect.contains(mouse_pos) {
-            self.grabbed_slider = Some(label.to_owned());
+            self.grabbed_slider = Some(id.to_string());
         }
         let grabbed = if let Some(s) = &self.grabbed_slider {
-            s == label
+            s == id
         } else {
             false
         };
@@ -409,9 +413,11 @@ impl UI {
         changed
     }
 
-    pub fn shared_slider(&mut self, label: &str, param: &Shared, range: RangeInclusive<f32>) {
+    pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
+        range: RangeInclusive<f32>
+    ) {
         let mut val = param.value();
-        if self.slider(label, &mut val, range) {
+        if self.slider(id, label, &mut val, range) {
             param.set(val);
         }
     }

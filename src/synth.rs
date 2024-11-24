@@ -355,19 +355,6 @@ impl Settings {
         v
     }
 
-    pub fn outputs(&self, osc_index: usize) -> Vec<OscOutput> {
-        if osc_index == 0 {
-            vec![OscOutput::Mix(0)]
-        } else {
-            (0..osc_index).flat_map(|i| if i + 1 == osc_index {
-                // only allow modulating the oscillator directly to the left
-                vec![OscOutput::Mix(i), OscOutput::AM(i), OscOutput::FM(i)]
-            } else {
-                vec![OscOutput::Mix(i)]
-            }).collect()
-        }
-    }
-
     pub fn remove_osc(&mut self, i: usize) {
         if i < self.oscs.len() {
             self.oscs.remove(i);
@@ -512,6 +499,21 @@ pub enum OscOutput {
     Mix(usize),
     AM(usize),
     FM(usize),
+}
+
+impl OscOutput {
+    pub fn choices(index: usize) -> Vec<OscOutput> {
+        if index == 0 {
+            vec![OscOutput::Mix(0)]
+        } else {
+            (0..index).flat_map(|i| if i + 1 == index {
+                // only allow modulating the oscillator directly to the left
+                vec![OscOutput::Mix(i), OscOutput::AM(i), OscOutput::FM(i)]
+            } else {
+                vec![OscOutput::Mix(i)]
+            }).collect()
+        }
+    }
 }
 
 impl Display for OscOutput {
