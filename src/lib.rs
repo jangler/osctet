@@ -312,7 +312,11 @@ impl App {
     }
 
     fn frame(&mut self) {
-        self.handle_keys();
+        if self.ui.accepting_keyboard_input() {
+            self.synth.clear_keyboard_notes(&mut self.seq);
+        } else {
+            self.handle_keys();
+        }
         self.handle_midi();
         self.check_midi_reconnect();
         self.process_ui();

@@ -14,6 +14,7 @@ pub mod instruments_tab;
 
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
+const SLIDER_WIDTH: f32 = 100.0;
 
 enum Dialog {
     Alert(String),
@@ -103,6 +104,11 @@ struct ComboBoxState {
     list_rect: Rect,
 }
 
+struct SliderState {
+    id: String,
+    text: String,
+}
+
 enum Graphic {
     Rect(Rect, Color, Option<Color>),
     Line(f32, f32, f32, f32, Color),
@@ -144,6 +150,7 @@ pub struct UI {
     open_combo_box: Option<ComboBoxState>,
     tabs: HashMap<String, usize>,
     grabbed_slider: Option<String>,
+    focused_slider: Option<SliderState>,
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
@@ -167,6 +174,7 @@ impl UI {
             open_combo_box: None,
             tabs: HashMap::new(),
             grabbed_slider: None,
+            focused_slider: None,
             bounds: Default::default(),
             cursor_x: 0.0,
             cursor_y: 0.0,
@@ -218,6 +226,9 @@ impl UI {
         if close {
             self.dialog = None;
         }
+
+        // drain char queue
+        while let Some(_) = get_char_pressed() {}
     }
 
     pub fn start_grid(&mut self, column_widths: &[f32], column_names: &[&str]) {
@@ -562,10 +573,20 @@ impl UI {
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>
     ) -> bool {
+        // are we in text entry mode?
+        if self.focused_slider.as_ref().is_some_and(|x| x.id == id) {
+            if is_key_pressed(KeyCode::Escape)
+                || is_mouse_button_released(MouseButton::Left) {
+                self.focused_slider = None;
+            } else {
+                return self.slider_text_entry(label, val, range);
+            }
+        }
+
         let h = cap_height(&self.style.text_params());
 
         // draw groove
-        let groove_w = 100.0;
+        let groove_w = SLIDER_WIDTH;
         let groove_x = self.cursor_x + MARGIN * 2.0;
         let groove_y = (self.cursor_y + MARGIN * 2.0 + h * 0.5).round() + 0.5;
         draw_line(groove_x, groove_y,
@@ -580,8 +601,16 @@ impl UI {
             h: h + MARGIN * 2.0,
         };
         let mouse_pos = mouse_position_vec2();
-        if is_mouse_button_pressed(MouseButton::Left) && self.mouse_hits(hit_rect) {
-            self.grabbed_slider = Some(id.to_string());
+        if self.mouse_hits(hit_rect) {
+            if is_mouse_button_pressed(MouseButton::Left) {
+                self.grabbed_slider = Some(id.to_string());
+            }
+            if is_mouse_button_pressed(MouseButton::Right) {
+                self.focused_slider = Some(SliderState {
+                    id: id.to_string(),
+                    text: val.to_string(),
+                });
+            }
         }
         let grabbed = if let Some(s) = &self.grabbed_slider {
             s == id
@@ -620,6 +649,66 @@ impl UI {
         changed
     }
 
+    fn slider_text_entry(&mut self, label: &str, val: &mut f32,
+        range: RangeInclusive<f32>
+    ) -> bool {
+        // another silly little dance for the borrow checker
+        let mut text = self.focused_slider.as_ref().unwrap().text.clone();
+        let mut changed = false;
+        if self.text_box(label, MARGIN, SLIDER_WIDTH, &mut text) {
+            match text.parse::<f32>() {
+                Ok(f) => {
+                    *val = f.max(*range.start()).min(*range.end());
+                    changed = true;
+                },
+                Err(e) => self.report(e),
+            }
+            self.focused_slider = None;
+        }
+        if let Some(focus) = self.focused_slider.as_mut() {
+            focus.text = text;
+        }
+        changed
+    }
+
+    /// Returns true if the text was submitted (i.e. Enter was pressed).
+    fn text_box(&mut self, label: &str, offset_x: f32, width: f32,
+        text: &mut String
+    ) -> bool {
+        let box_rect = Rect {
+            x: self.cursor_x + MARGIN + offset_x,
+            y: self.cursor_y + MARGIN,
+            w: width,
+            h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
+        };
+        self.push_rect(box_rect, self.style.theme.bg, Some(self.style.theme.fg));
+
+        // handle text editing
+        while let Some(c) = get_char_pressed() {
+            if !c.is_ascii_control() {
+                text.push(c);
+            }
+        }
+        if is_key_pressed(KeyCode::Backspace) {
+            text.pop();
+        }
+
+        let text_rect = self.push_text(box_rect.x, box_rect.y,
+            text.clone(), self.style.theme.fg);
+        
+        let line_x = text_rect.x + text_rect.w - MARGIN + 0.5;
+        self.push_line(line_x, text_rect.y + MARGIN - 1.0,
+            line_x, text_rect.y + text_rect.h - MARGIN + 1.0,
+            self.style.theme.fg);
+
+        let label_rect = self.push_text(box_rect.x + box_rect.w + MARGIN,
+            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
+        
+        self.update_cursor(width + label_rect.w + MARGIN, box_rect.h + MARGIN);
+        
+        is_key_pressed(KeyCode::Enter)
+    }
+
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
         range: RangeInclusive<f32>
     ) {
@@ -635,6 +724,10 @@ impl UI {
 
     pub fn report(&mut self, e: impl Display) {
         self.open_dialog(Dialog::Alert(e.to_string()));
+    }
+
+    pub fn accepting_keyboard_input(&self) -> bool {
+        self.focused_slider.is_some()
     }
 }
 
