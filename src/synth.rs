@@ -92,7 +92,7 @@ impl Waveform {
         }
     }
 
-    fn make_osc_net(&self, settings: &Settings, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
+    fn make_osc_net(&self, settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
         let prev_freq = settings.prev_freq.unwrap_or(vars.freq.value());
         let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq as f64 } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
@@ -121,7 +121,7 @@ impl Waveform {
         Net::wrap(au)
     }
 
-    fn make_lfo_net(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+    fn make_lfo_net(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path) >> shape_fn(|x| pow(200.0, x)))
@@ -173,7 +173,7 @@ impl FilterType {
 }
 
 pub struct Synth {
-    pub settings: Settings,
+    pub settings: Patch,
     voices: HashMap<Key, Voice>,
     bend_memory: [f32; 16],
     mod_memory: f32,
@@ -182,7 +182,7 @@ pub struct Synth {
 impl Synth {
     pub fn new() -> Self {
         Self {
-            settings: Settings {
+            settings: Patch {
                 gain: Parameter(shared(1.0)),
                 oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
@@ -278,7 +278,7 @@ impl Synth {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Settings {
+pub struct Patch {
     pub gain: Parameter,
     pub pan: Parameter, // range -1..1
     pub glide_time: f32,
@@ -294,7 +294,7 @@ pub struct Settings {
     prev_freq: Option<f32>, // for glide
 }
 
-impl Settings {
+impl Patch {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         Ok(rmp_serde::from_slice::<Self>(&input)?)
@@ -595,7 +595,7 @@ impl Filter {
         }
     }
 
-    fn make_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
+    fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize) -> Net {
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
             KeyTracking::Partial => Net::wrap(Box::new(var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
@@ -637,7 +637,7 @@ impl ADSR {
         }
     }
 
-    fn make_node(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+    fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let attack = self.attack as f64;
         let power = self.power as f64;
         let scale = settings.dsp_component(vars, ModTarget::EnvSpeed(index), path)
@@ -694,7 +694,7 @@ impl Modulation {
         }
     }
 
-    fn dsp_component(&self, settings: &Settings, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+    fn dsp_component(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let mut path = path.to_vec();
         path.push(self.source);
         let net = match self.source {
@@ -818,7 +818,7 @@ struct Voice {
 }
 
 impl Voice {
-    fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, settings: &Settings, seq: &mut Sequencer) -> Self {
+    fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, settings: &Patch, seq: &mut Sequencer) -> Self {
         let gate = shared(1.0);
         let vars = VoiceVars {
             freq: shared(midi_hz(pitch + bend)),

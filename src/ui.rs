@@ -8,6 +8,8 @@ use std::{collections::HashMap, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
+pub mod instruments_tab;
+
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
 
