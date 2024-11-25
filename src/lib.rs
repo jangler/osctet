@@ -321,6 +321,19 @@ impl App {
     fn process_ui(&mut self) {
         self.ui.start_frame();
 
+        self.bottom_panel();
+
+        match self.ui.tab_menu("main", &TABS) {
+            0 => ui::general_tab::draw(&mut self.ui, &mut self.module.fx),
+            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
+            2 => ui::instruments_tab::draw(&mut self.ui, &mut self.synth.settings),
+            _ => panic!("bad tab value"),
+        }
+
+        self.ui.end_frame();
+    }
+    
+    fn bottom_panel(&mut self) {
         self.ui.start_bottom_panel();
 
         if self.midi.input.is_some() {
@@ -346,15 +359,6 @@ impl App {
         }
         
         self.ui.end_bottom_panel();
-
-        match self.ui.tab_menu("main", &TABS) {
-            0 => ui::general_tab::draw(&mut self.ui, &mut self.module.fx),
-            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
-            2 => ui::instruments_tab::draw(&mut self.ui, &mut self.synth.settings),
-            _ => panic!("bad tab value"),
-        }
-
-        self.ui.end_frame();
     }
 }
 

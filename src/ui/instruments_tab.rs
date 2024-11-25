@@ -268,7 +268,7 @@ fn file_ops(ui: &mut UI, patch: &mut Patch) {
             .save_file() {
             match patch.save(&path) {
                 Ok(_) => (),
-                Err(e) => (), // TODO: alert
+                Err(e) => ui.report(e),
             }
         }
     }
@@ -280,7 +280,7 @@ fn file_ops(ui: &mut UI, patch: &mut Patch) {
                 Ok(p) => {
                     *patch = p;
                 },
-                Err(e) => (), // TODO: alert
+                Err(e) => ui.report(e),
             }
         }
     }

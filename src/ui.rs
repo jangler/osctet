@@ -506,6 +506,12 @@ impl UI {
         let mut x = self.cursor_x;
         let h = cap_height(&params) + MARGIN * 2.0;
         let mut gfx = vec![
+            Graphic::Rect(Rect {
+                x: self.bounds.x,
+                y: self.cursor_y,
+                w: self.bounds.w,
+                h: h
+            }, self.style.theme.hover, None),
             Graphic::Line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
                 self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
                 self.style.theme.fg)
@@ -522,19 +528,20 @@ impl UI {
                 gfx.push(Graphic::Line(r.x, r.y + r.h + LINE_THICKNESS * 0.5,
                     r.x + r.w - LINE_THICKNESS, r.y + r.h + LINE_THICKNESS * 0.5,
                     self.style.theme.bg));
-            } else {
-                // fill background
-                let color = if self.mouse_hits(r) {
-                    if is_mouse_button_pressed(MouseButton::Left) {
-                        self.tabs.insert(id.to_owned(), i);
-                        selected_index = i;
-                    }
-                    self.style.theme.click
-                } else {
-                    self.style.theme.hover
-                };
-                gfx.push(Graphic::Rect(Rect {w: r.w - LINE_THICKNESS, ..r }, color, None));
             }
+            // fill background
+            let color = if i == selected_index {
+                self.style.theme.bg
+            } else if self.mouse_hits(r) {
+                if is_mouse_button_pressed(MouseButton::Left) {
+                    self.tabs.insert(id.to_owned(), i);
+                    selected_index = i;
+                }
+                self.style.theme.click
+            } else {
+                self.style.theme.hover
+            };
+            gfx.push(Graphic::Rect(Rect {w: r.w - LINE_THICKNESS, ..r }, color, None));
             gfx.push(Graphic::Text(x, self.cursor_y,
                 label.to_string(), self.style.theme.fg));
             x += r.w;
@@ -622,7 +629,7 @@ impl UI {
         }
     }
 
-    pub fn open_dialog(&mut self, dialog: Dialog) {
+    fn open_dialog(&mut self, dialog: Dialog) {
         self.dialog = Some(dialog);
     }
 
