@@ -1,7 +1,6 @@
 //! Microtonal tracker with built-in subtractive/FM synth.
 
 use std::error::Error;
-use std::fmt::Display;
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 use config::Config;
@@ -9,6 +8,7 @@ use fx::GlobalFX;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
+use module::Module;
 use synth::{Key, KeyOrigin, Synth};
 use macroquad::prelude::*;
 
@@ -16,17 +16,18 @@ pub mod pitch;
 mod input;
 mod config;
 pub mod synth;
-mod song;
+mod pattern;
 mod adsr;
 mod fx;
 pub mod ui;
+mod module;
 
 use input::MidiEvent;
 
 /// Application name, for window title, etc.
 pub const APP_NAME: &str = "Osctet";
 
-const TABS: [&str; 3] = ["Pattern", "Instruments", "Song"];
+const TABS: [&str; 3] = ["General", "Pattern", "Instruments"];
 
 fn init_audio(mut backend: BlockRateAdapter) -> Result<Stream, Box<dyn Error>> {
     let device = cpal::default_host()
@@ -117,10 +118,6 @@ impl Midi {
     }
 }
 
-enum Dialog {
-    Alert(String),
-}
-
 struct App {
     tuning: pitch::Tuning,
     synth: Synth,
@@ -128,11 +125,8 @@ struct App {
     octave: i8,
     midi: Midi,
     config: Config,
-    global_fx: GlobalFX,
-    song_editor: song::Editor,
+    module: Module,
     ui: ui::UI,
-    dialog: Option<Dialog>,
-    dialog_first_frame: bool,
     fullscreen: bool,
 }
 
@@ -155,15 +149,12 @@ impl App {
             octave: 4,
             midi,
             config,
-            global_fx,
-            song_editor: song::Editor::new(song::Song::new()),
+            module: Module::new(global_fx),
             ui: ui::UI::new(),
-            dialog: None,
-            dialog_first_frame: false,
             fullscreen: false,
         };
         if let Some(err) = err {
-            app.report(err);
+            app.ui.report(err);
         }
         app
     }
@@ -190,9 +181,6 @@ impl App {
                 }, self.tuning.midi_pitch(&note), 100.0 / 127.0, &mut self.seq);
             } else {
                 match key {
-                    KeyCode::Escape => {
-                        self.dialog = None
-                    },
                     KeyCode::F1 => self.ui.set_tab("main", 0),
                     KeyCode::F2 => self.ui.set_tab("main", 1),
                     KeyCode::F3 => self.ui.set_tab("main", 2),
@@ -312,25 +300,22 @@ impl App {
                     self.midi.port_name = self.midi.port_selection.clone();
                     self.config.default_midi_input = self.midi.port_name.clone();
                     if let Err(e) = self.config.save() {
-                        self.report(e);
+                        self.ui.report(e);
                     };
                 },
                 Err(e) => {
                     self.midi.port_selection = None;
-                    self.report(e);
+                    self.ui.report(e);
                 },
             }
         }
     }
 
     fn frame(&mut self) {
-        self.dialog_first_frame = false;
-
         self.handle_keys();
         self.handle_midi();
         self.check_midi_reconnect();
         self.process_ui();
-        self.process_dialog();
     }
     
     fn process_ui(&mut self) {
@@ -353,7 +338,7 @@ impl App {
             if self.ui.checkbox("Use aftertouch", &mut v) {
                 self.config.midi_send_pressure = Some(v);
                 if let Err(e) = self.config.save() {
-                    self.report(e);
+                    self.ui.report(e);
                 }
             }
         } else {
@@ -363,77 +348,13 @@ impl App {
         self.ui.end_bottom_panel();
 
         match self.ui.tab_menu("main", &TABS) {
-            0 => self.pattern_tab(),
-            1 => ui::instruments_tab::draw(&mut self.ui, &mut self.synth.settings),
-            2 => self.song_tab(),
+            0 => ui::general_tab::draw(&mut self.ui, &mut self.module.fx),
+            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
+            2 => ui::instruments_tab::draw(&mut self.ui, &mut self.synth.settings),
             _ => panic!("bad tab value"),
         }
 
         self.ui.end_frame();
-    }
-
-    fn pattern_tab(&mut self) {
-        if self.ui.button("Test button") {
-            self.open_dialog(Dialog::Alert("Button clicked".to_owned()));
-        }
-    }
-
-    fn song_tab(&mut self) {
-        self.ui.layout = ui::Layout::Vertical;
-
-        self.ui.label("Reverb");
-        let fx = &mut self.global_fx;
-        self.ui.shared_slider("level",
-            "Level", &fx.settings.reverb_amount.0, 0.0..=1.0);
-
-        if self.ui.slider("predelay",
-            "Predelay time", &mut fx.settings.predelay_time, 0.0..=0.1) {
-            fx.commit_predelay();
-        }
-
-        // ugly, but probably about as good as any other solution
-        if self.ui.slider("room_size",
-            "Room size", &mut fx.settings.reverb_room_size, 5.0..=100.0) {
-            fx.commit_reverb();
-        }
-        if self.ui.slider("decay_time",
-            "Decay time", &mut fx.settings.reverb_time, 0.0..=5.0) {
-            fx.commit_reverb();
-        }
-        if self.ui.slider("diffusion",
-            "Diffusion", &mut fx.settings.reverb_diffusion, 0.0..=1.0) {
-            fx.commit_reverb();
-        }
-        if self.ui.slider("mod_speed",
-            "Mod. speed", &mut fx.settings.reverb_mod_speed, 0.0..=1.0) {
-            fx.commit_reverb();
-        }
-        if self.ui.slider("damping",
-            "Damping", &mut fx.settings.reverb_damping, 0.0..=6.0) {
-            fx.commit_reverb();
-        }
-    }
-
-    fn report(&mut self, e: impl Display) {
-        self.open_dialog(Dialog::Alert(e.to_string()));
-    } 
-
-    fn process_dialog(&mut self) {
-        match &self.dialog {
-            Some(Dialog::Alert(s)) => self.alert_dialog(&s.clone()),
-            None => (),
-        }
-    }
-
-    fn alert_dialog(&mut self, s: &str) {
-        if ui::alert_dialog(&self.ui.style, s) && !self.dialog_first_frame {
-            self.dialog = None;
-        }
-    }
-
-    fn open_dialog(&mut self, dialog: Dialog) {
-        self.dialog = Some(dialog);
-        self.dialog_first_frame = true;
     }
 }
 

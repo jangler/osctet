@@ -3,15 +3,21 @@
 //! Not polished for general reuse. Macroquad also has its own built-in UI
 //! library, but the demos don't give me much faith in it.
 
-use std::{collections::HashMap, ops::RangeInclusive};
+use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
+pub mod general_tab;
+pub mod pattern_tab;
 pub mod instruments_tab;
 
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
+
+enum Dialog {
+    Alert(String),
+}
 
 /// Draws text with the top-left corner at (x, y), plus margins.
 /// Returns the bounds of the text, plus margins.
@@ -147,6 +153,7 @@ pub struct UI {
     column_index: usize,
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
+    dialog: Option<Dialog>,
 }
 
 impl UI {
@@ -169,6 +176,7 @@ impl UI {
             column_index: 0,
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
+            dialog: None,
         }
     }
 
@@ -198,6 +206,18 @@ impl UI {
             op.graphic.draw(&params);
         }
         self.draw_queue.clear();
+
+        let close = if let Some(dialog) = &self.dialog {
+            match dialog {
+                Dialog::Alert(s) => alert_dialog(&self.style, s),
+            };
+            is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Left)
+        } else {
+            false
+        };
+        if close {
+            self.dialog = None;
+        }
     }
 
     pub fn start_grid(&mut self, column_widths: &[f32], column_names: &[&str]) {
@@ -207,7 +227,7 @@ impl UI {
         self.column_widths = column_widths.to_vec();
         self.column_index = 0;
         for name in column_names {
-            self.label(name);
+            self.offset_label(name);
             self.next_cell();
         }
     }
@@ -302,15 +322,24 @@ impl UI {
     /// Check whether the mouse is within the rect and unoccluded.
     fn mouse_hits(&self, rect: Rect) -> bool {
         let pt = mouse_position_vec2();
-        // TODO: account for dialogs
+
+        // dialog open
+        if self.dialog.is_some() {
+            return false
+        }
+
+        // occlusion by combo box
         if let Some(state) = &self.open_combo_box {
             if state.list_rect.contains(pt) {
                 return false
             }
         }
+
+        // occlusion by bottom panel
         if self.cursor_z < 1 && screen_height() - self.bottom_panel_height() < pt.y {
             return false
         }
+
         rect.contains(pt)
     }
     
@@ -592,6 +621,14 @@ impl UI {
             param.set(val);
         }
     }
+
+    pub fn open_dialog(&mut self, dialog: Dialog) {
+        self.dialog = Some(dialog);
+    }
+
+    pub fn report(&mut self, e: impl Display) {
+        self.open_dialog(Dialog::Alert(e.to_string()));
+    }
 }
 
 fn interpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
@@ -602,18 +639,11 @@ fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
     (x - range.start()) / (range.end() - range.start())
 }
 
-pub fn alert_dialog(style: &Style, message: &str) -> bool {
+fn alert_dialog(style: &Style, message: &str) {
     let params = style.text_params();
     let r = center(fit_strings(params.clone(), &[message.to_owned()]));
     draw_filled_rect(r, style.theme.bg, style.theme.fg);
     draw_text_topleft(params.clone(), message, r.x, r.y);
-
-    let click = is_mouse_button_released(MouseButton::Left);
-    let mouse_pos = {
-        let (x, y) = mouse_position();
-        Vec2 { x, y }
-    };
-    click && !r.contains(mouse_pos)
 }
 
 fn fit_strings(params: TextParams, v: &[String]) -> Rect {

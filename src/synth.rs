@@ -182,26 +182,7 @@ pub struct Synth {
 impl Synth {
     pub fn new() -> Self {
         Self {
-            settings: Patch {
-                gain: Parameter(shared(1.0)),
-                oscs: vec![Oscillator::new()],
-                envs: vec![ADSR::new()],
-                filters: Vec::new(),
-                lfos: Vec::new(),
-                play_mode: PlayMode::Poly,
-                glide_time: 0.0,
-                pan: Parameter(shared(0.0)),
-                mod_matrix: vec![Modulation {
-                    source: ModSource::Envelope(0),
-                    target: ModTarget::Gain,
-                    depth: Parameter(shared(1.0)),
-                }, Modulation {
-                    source: ModSource::Pressure,
-                    target: ModTarget::Gain,
-                    depth: Parameter(shared(1.0)),
-                }],
-                prev_freq: None,
-            },
+            settings: Patch::new(),
             voices: HashMap::new(),
             bend_memory: [0.0; 16],
             mod_memory: 0.0,
@@ -295,6 +276,29 @@ pub struct Patch {
 }
 
 impl Patch {
+    pub fn new() -> Self {
+        Self {
+            gain: Parameter(shared(1.0)),
+            oscs: vec![Oscillator::new()],
+            envs: vec![ADSR::new()],
+            filters: Vec::new(),
+            lfos: Vec::new(),
+            play_mode: PlayMode::Poly,
+            glide_time: 0.0,
+            pan: Parameter(shared(0.0)),
+            mod_matrix: vec![Modulation {
+                source: ModSource::Envelope(0),
+                target: ModTarget::Gain,
+                depth: Parameter(shared(1.0)),
+            }, Modulation {
+                source: ModSource::Pressure,
+                target: ModTarget::Gain,
+                depth: Parameter(shared(1.0)),
+            }],
+            prev_freq: None,
+        }
+    }
+
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         Ok(rmp_serde::from_slice::<Self>(&input)?)

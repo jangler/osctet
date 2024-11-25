@@ -3,12 +3,12 @@ use crate::pitch::Note;
 const TICKS_PER_BEAT: u32 = 120;
 
 pub struct Editor {
-    pub song: Song,
+    pub song: Pattern,
     pub cursor: Position,
 }
 
 impl Editor {
-    pub fn new(song: Song) -> Self {
+    pub fn new(song: Pattern) -> Self {
         Self {
             song,
             cursor: Position { tick: 0, channel: 0, column: 0, char: 0 },
@@ -23,11 +23,11 @@ pub struct Position {
     pub char: u8,
 }
 
-pub struct Song {
+pub struct Pattern {
     pub channels: Vec<Channel>,
 }
 
-impl Song {
+impl Pattern {
     pub fn new() -> Self {
         Self {
             channels: vec![Channel::new(), Channel::new(), Channel::new(), Channel::new()],
