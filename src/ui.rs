@@ -571,7 +571,7 @@ impl UI {
 
     /// Draws a slider and returns true if the value was changed.
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>
+        range: RangeInclusive<f32>, unit: Option<&str>
     ) -> bool {
         // are we in text entry mode?
         if self.focused_slider.as_ref().is_some_and(|x| x.id == id) {
@@ -644,8 +644,18 @@ impl UI {
         // draw label
         let text_rect = self.push_text(self.cursor_x + MARGIN * 3.0 + groove_w,
             self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
+        
+        if grabbed {
+            let text = if let Some(unit) = unit {
+                &format!("{:.2} {}", val, unit)
+            } else {
+                &format!("{:.2}", val)
+            };
+            self.tooltip(text, text_rect.x + text_rect.w, text_rect.y);
+        }
 
         self.update_cursor(groove_w + text_rect.w + MARGIN, h + MARGIN * 3.0);
+
         changed
     }
 
@@ -710,10 +720,10 @@ impl UI {
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
-        range: RangeInclusive<f32>
+        range: RangeInclusive<f32>, unit: Option<&str>
     ) {
         let mut val = param.value();
-        if self.slider(id, label, &mut val, range) {
+        if self.slider(id, label, &mut val, range, unit) {
             param.set(val);
         }
     }
@@ -728,6 +738,13 @@ impl UI {
 
     pub fn accepting_keyboard_input(&self) -> bool {
         self.focused_slider.is_some()
+    }
+
+    pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
+        let old_z = self.cursor_z;
+        self.cursor_z = 3;
+        self.text_rect(text, x, y);
+        self.cursor_z = old_z;
     }
 }
 

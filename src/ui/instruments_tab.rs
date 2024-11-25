@@ -49,9 +49,9 @@ pub fn draw(ui: &mut UI, settings: &mut Patch) {
     ui.layout = Layout::Vertical;
 
     ui.label("GENERAL");
-    ui.shared_slider("gain", "Gain", &settings.gain.0, 0.0..=1.0);
-    ui.shared_slider("pan", "Pan", &settings.pan.0, -1.0..=1.0);
-    ui.slider("glide_time", "Glide time", &mut settings.glide_time, 0.0..=0.5);
+    ui.shared_slider("gain", "Gain", &settings.gain.0, 0.0..=1.0, None);
+    ui.shared_slider("pan", "Pan", &settings.pan.0, -1.0..=1.0, None);
+    ui.slider("glide_time", "Glide time", &mut settings.glide_time, 0.0..=0.5, Some("s"));
     if let Some(i) = ui.combo_box("play_mode",
         "Play mode", settings.play_mode.name(),
         || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
@@ -81,16 +81,16 @@ fn oscillator_controls(ui: &mut UI, settings: &mut Patch) {
         ui.offset_label(&(i + 1).to_string());
         ui.next_cell();
         ui.shared_slider(&format!("osc_{}_level", i),
-            "", &osc.level.0, 0.0..=1.0);
+            "", &osc.level.0, 0.0..=1.0, None);
         ui.next_cell();
         ui.shared_slider(&format!("osc_{}_tone", i),
-            "", &osc.tone.0, 0.0..=1.0);
+            "", &osc.tone.0, 0.0..=1.0, None);
         ui.next_cell();
         ui.shared_slider(&format!("osc_{}_ratio", i),
-            "", &osc.freq_ratio.0, 0.5..=16.0);
+            "", &osc.freq_ratio.0, 0.5..=16.0, None);
         ui.next_cell();
         ui.shared_slider(&format!("osc_{}_tune", i),
-            "", &osc.fine_pitch.0, -0.5..=0.5);
+            "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"));
         ui.next_cell();
         if let Some(i) = ui.combo_box(&format!("osc_{}_wave", i),
             "", osc.waveform.name(),
@@ -133,10 +133,10 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         }
         ui.next_cell();
         ui.shared_slider(&format!("filter_{}_cutoff", i), "",
-            &filter.cutoff.0, 20.0..=20_000.0);
+            &filter.cutoff.0, 20.0..=20_000.0, Some("Hz"));
         ui.next_cell();
         ui.shared_slider(&format!("filter_{}_q", i), "",
-            &filter.resonance.0, 0.0..=1.0);
+            &filter.resonance.0, 0.0..=1.0, None);
         ui.next_cell();
         if let Some(i) = ui.combo_box(&format!("filter_{}_keytrack", i),
             "", filter.key_tracking.name(),
@@ -165,13 +165,13 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
     for (i, env) in patch.envs.iter_mut().enumerate() {
         ui.offset_label(&(i + 1).to_string());
         ui.next_cell();
-        ui.slider(&format!("env_{}_A", i), "", &mut env.attack, 0.0..=10.0);
+        ui.slider(&format!("env_{}_A", i), "", &mut env.attack, 0.0..=10.0, Some("s"));
         ui.next_cell();
-        ui.slider(&format!("env_{}_D", i), "", &mut env.decay, 0.01..=10.0);
+        ui.slider(&format!("env_{}_D", i), "", &mut env.decay, 0.01..=10.0, Some("s"));
         ui.next_cell();
-        ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0);
+        ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0, None);
         ui.next_cell();
-        ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0);
+        ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0, Some("s"));
         ui.next_cell();
         if let Some(i) = ui.combo_box(&format!("env_{}_curve", i), "",
             &env.curve_name(), || CURVES.map(|x| x.to_string()).to_vec()) {
@@ -205,9 +205,10 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
             lfo.waveform = Waveform::VARIANTS[i];
         }
         ui.next_cell();
-        ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0, 0.1..=20.0);
+        ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0, 0.1..=20.0,
+            Some("Hz"));
         ui.next_cell();
-        ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay, 0.0..=10.0);
+        ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay, 0.0..=10.0, Some("s"));
         ui.next_cell();
         if ui.button("X") {
             removed_lfo = Some(i);
@@ -244,7 +245,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
             m.target = targets[i];
         }
         ui.next_cell();
-        ui.shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0, -1.0..=1.0);
+        ui.shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0, -1.0..=1.0, None);
         ui.next_cell();
         if ui.button("X") {
             removed_mod = Some(i);
