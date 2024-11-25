@@ -150,23 +150,24 @@ impl Waveform {
 
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum FilterType {
-    Off,
     Ladder,
     Lowpass,
     Highpass,
     Bandpass,
+    Notch,
 }
 
 impl FilterType {
-    pub const VARIANTS: [FilterType; 5] = [Self::Off, Self::Ladder, Self::Lowpass, Self::Highpass, Self::Bandpass];
+    pub const VARIANTS: [FilterType; 5] =
+        [Self::Ladder, Self::Lowpass, Self::Highpass, Self::Bandpass, Self::Notch];
     
     pub fn name(&self) -> &str {
         match self {
-            Self::Off => "Off",
             Self::Ladder => "Ladder",
             Self::Lowpass => "Lowpass",
             Self::Highpass => "Highpass",
             Self::Bandpass => "Bandpass",
+            Self::Notch => "Notch",
         }
     }
 }
@@ -185,8 +186,8 @@ impl Synth {
                 gain: Parameter(shared(1.0)),
                 oscs: vec![Oscillator::new()],
                 envs: vec![ADSR::new()],
-                filter: Filter::new(),
-                lfos: vec![],
+                filters: Vec::new(),
+                lfos: Vec::new(),
                 play_mode: PlayMode::Poly,
                 glide_time: 0.0,
                 pan: Parameter(shared(0.0)),
@@ -282,7 +283,7 @@ pub struct Settings {
     pub pan: Parameter, // range -1..1
     pub glide_time: f32,
     pub play_mode: PlayMode,
-    pub filter: Filter,
+    pub filters: Vec<Filter>,
     pub oscs: Vec<Oscillator>,
     pub envs: Vec<ADSR>,
     pub lfos: Vec<LFO>,
@@ -339,9 +340,9 @@ impl Settings {
                 v.push(ModTarget::Tone(i));
             }
         }
-        if self.filter.filter_type != FilterType::Off {
-            v.push(ModTarget::FilterCutoff);
-            v.push(ModTarget::FilterQ);
+        for i in 0..self.filters.len() {
+            v.push(ModTarget::FilterCutoff(i));
+            v.push(ModTarget::FilterQ(i));
         }
         for i in 0..self.envs.len() {
             v.push(ModTarget::EnvSpeed(i));
@@ -382,6 +383,27 @@ impl Settings {
                 if let Some(n) = m.target.osc() {
                     if n > i {
                         m.target = ModTarget::Tone(n - 1);
+                    }
+                }
+            }
+        }
+    }
+    
+    pub fn remove_filter(&mut self, i: usize) {
+        if i < self.filters.len() {
+            self.filters.remove(i);
+
+            // update mod matrix for new indices
+            self.mod_matrix.retain(|m| m.target != ModTarget::FilterCutoff(i)
+                && m.target != ModTarget::FilterQ(i));
+            for m in self.mod_matrix.iter_mut() {
+                if let ModTarget::FilterCutoff(n) = m.target {
+                    if n > i {
+                        m.target = ModTarget::FilterCutoff(n - 1);
+                    }
+                } else if let ModTarget::FilterQ(n) = m.target {
+                    if n > i {
+                        m.target = ModTarget::FilterQ(n - 1);
                     }
                 }
             }
@@ -469,6 +491,14 @@ impl Settings {
             * am_oscs
             + mixed_oscs
     }
+
+    fn make_filter_net(&self, vars: &VoiceVars) -> Net {
+        let mut net = Net::wrap(Box::new(pass()));
+        for (i, filter) in self.filters.iter().enumerate() {
+            net = net >> filter.make_net(self, vars, i);
+        }
+        net
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -521,8 +551,8 @@ impl Display for OscOutput {
         let s = match self {
             Self::Mix(i) if *i == 0 => "Mix",
             Self::Mix(i) => &format!("Mix to osc {}", i + 1),
-            Self::AM(i) => &format!("Ring mod osc {}", i + 1),
-            Self::FM(i) => &format!("Freq mod osc {}", i + 1),
+            Self::AM(i) => &format!("RM to osc {}", i + 1),
+            Self::FM(i) => &format!("FM to osc {}", i + 1),
         };
         f.write_str(s)
     }
@@ -561,27 +591,25 @@ impl Filter {
             cutoff: Parameter(shared(20_000.0)),
             resonance: Parameter(shared(0.1)),
             key_tracking: KeyTracking::None,
-            filter_type: FilterType::Off,
+            filter_type: FilterType::Ladder,
         }
     }
 
-    fn make_net(&self, settings: &Settings, vars: &VoiceVars) -> Net {
-        if self.filter_type == FilterType::Off {
-            return Net::wrap(Box::new(pass()))
-        }
+    fn make_net(&self, settings: &Settings, vars: &VoiceVars, index: usize) -> Net {
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
             KeyTracking::Partial => Net::wrap(Box::new(var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
-        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff, &[]) >> shape_fn(|x| pow(1000.0, x));
-        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ, &[]);
+        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index), &[])
+            >> shape_fn(|x| pow(1000.0, x));
+        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index), &[]);
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),
             FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
             FilterType::Highpass => Net::wrap(Box::new(highpass())),
             FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
-            FilterType::Off => panic!("unreachable"),
+            FilterType::Notch => Net::wrap(Box::new(notch())),
         };
         (pass()
             | var(&self.cutoff.0) * kt * cutoff_mod >> shape_fn(|x| clamp(0.0, 22_000.0, x))
@@ -737,8 +765,8 @@ pub enum ModTarget {
     OscPitch(usize),
     OscFinePitch(usize),
     Tone(usize),
-    FilterCutoff,
-    FilterQ,
+    FilterCutoff(usize),
+    FilterQ(usize),
     EnvSpeed(usize),
     LFORate(usize),
     ModDepth(usize),
@@ -772,8 +800,8 @@ impl Display for ModTarget {
             Self::OscPitch(n) => &format!("Osc {} pitch", n + 1),
             Self::OscFinePitch(n) => &format!("Osc {} fine pitch", n + 1),
             Self::Tone(n) => &format!("Osc {} tone", n + 1),
-            Self::FilterCutoff => "Filter freq",
-            Self::FilterQ => "Filter reso",
+            Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
+            Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
             Self::EnvSpeed(n) => &format!("Env {} speed", n + 1),
             Self::LFORate(n) => &format!("LFO {} freq", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
@@ -801,7 +829,7 @@ impl Voice {
             lfo_phases: settings.lfos.iter().map(|_| random()).collect(),
         };
         let gain = var(&settings.gain.0) * settings.dsp_component(&vars, ModTarget::Gain, &[]) * VOICE_GAIN;
-        let filter_net = settings.filter.make_net(&settings, &vars);
+        let filter_net = settings.make_filter_net(&vars);
         let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
             | var(&settings.pan.0) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             >> panner();

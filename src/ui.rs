@@ -140,6 +140,9 @@ pub struct UI {
     cursor_x: f32,
     cursor_y: f32,
     cursor_z: i8,
+    grid_x: f32,
+    column_widths: Vec<f32>,
+    column_index: usize,
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
 }
@@ -159,6 +162,9 @@ impl UI {
             cursor_x: 0.0,
             cursor_y: 0.0,
             cursor_z: 0,
+            grid_x: 0.0,
+            column_widths: Vec::new(),
+            column_index: 0,
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
         }
@@ -190,6 +196,36 @@ impl UI {
             op.graphic.draw(&params);
         }
         self.draw_queue.clear();
+    }
+
+    pub fn start_grid(&mut self, column_widths: &[f32], column_names: &[&str]) {
+        assert_eq!(column_widths.len(), column_names.len());
+        self.layout = Layout::Horizontal;
+        self.grid_x = self.cursor_x;
+        self.column_widths = column_widths.to_vec();
+        self.column_index = 0;
+        for name in column_names {
+            self.label(name);
+            self.next_cell();
+        }
+    }
+
+    pub fn end_grid(&mut self) {
+        self.layout = Layout::Vertical;
+    }
+
+    pub fn next_cell(&mut self) {
+        self.column_index += 1;
+        if self.column_index >= self.column_widths.len() {
+            self.column_index = 0;
+            self.cursor_y += cap_height(&self.style.text_params()) + MARGIN * 3.0;
+        }
+        self.cursor_x = self.grid_x
+            + self.column_widths[..self.column_index].iter().sum::<f32>();
+    }
+
+    pub fn space(&mut self) {
+        self.update_cursor(MARGIN * 4.0, MARGIN * 4.0);
     }
 
     fn push_graphic(&mut self, graphic: Graphic) {
@@ -278,6 +314,12 @@ impl UI {
     
     pub fn label(&mut self, label: &str) {
         let rect = self.push_text(self.cursor_x, self.cursor_y,
+            label.to_owned(), self.style.theme.fg);
+        self.update_cursor(rect.w, rect.h);
+    }
+
+    pub fn offset_label(&mut self, label: &str) {
+        let rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
             label.to_owned(), self.style.theme.fg);
         self.update_cursor(rect.w, rect.h);
     }
@@ -608,14 +650,5 @@ fn combo_box_list_rect(params: &TextParams, button_rect: Rect, options: &[String
         },
         w: options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
         h,
-    }
-}
-
-fn screen_rect() -> Rect {
-    Rect {
-        x: 0.0,
-        y: 0.0,
-        w: screen_width(),
-        h: screen_height(),
     }
 }
