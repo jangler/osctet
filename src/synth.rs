@@ -93,7 +93,7 @@ impl Waveform {
     }
 
     fn make_osc_net(&self, settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
-        let prev_freq = settings.prev_freq.unwrap_or(vars.freq.value());
+        let prev_freq = vars.prev_freq.unwrap_or(vars.freq.value());
         let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq as f64 } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio.0)
@@ -177,6 +177,7 @@ pub struct Synth {
     voices: HashMap<Key, Voice>,
     bend_memory: [f32; 16],
     mod_memory: f32,
+    prev_freq: Option<f32>,
 }
 
 impl Synth {
@@ -186,6 +187,7 @@ impl Synth {
             voices: HashMap::new(),
             bend_memory: [0.0; 16],
             mod_memory: 0.0,
+            prev_freq: None,
         }
     }
 
@@ -216,8 +218,9 @@ impl Synth {
             },
         };
         if insert_voice {
-           self.voices.insert(key, Voice::new(pitch, bend, pressure, self.mod_memory, &self.settings, seq));
-           self.settings.prev_freq = Some(midi_hz(pitch));
+            self.voices.insert(key, Voice::new(pitch, bend, pressure, self.mod_memory,
+                self.prev_freq, &self.settings, seq));
+            self.prev_freq = Some(midi_hz(pitch));
         }
     }
 
@@ -278,10 +281,6 @@ pub struct Patch {
     pub envs: Vec<ADSR>,
     pub lfos: Vec<LFO>,
     pub mod_matrix: Vec<Modulation>,
-
-    #[serde(skip)]
-    // this doesn't really belong here -- it should go in Synth
-    prev_freq: Option<f32>, // for glide
 }
 
 impl Patch {
@@ -304,7 +303,6 @@ impl Patch {
                 target: ModTarget::Gain,
                 depth: Parameter(shared(1.0)),
             }],
-            prev_freq: None,
         }
     }
 
@@ -831,7 +829,9 @@ struct Voice {
 }
 
 impl Voice {
-    fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, settings: &Patch, seq: &mut Sequencer) -> Self {
+    fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, prev_freq: Option<f32>,
+        settings: &Patch, seq: &mut Sequencer
+    ) -> Self {
         let gate = shared(1.0);
         let vars = VoiceVars {
             freq: shared(midi_hz(pitch + bend)),
@@ -840,6 +840,7 @@ impl Voice {
             modulation: shared(modulation),
             random_values: settings.mod_matrix.iter().map(|_| random()).collect(),
             lfo_phases: settings.lfos.iter().map(|_| random()).collect(),
+            prev_freq,
         };
         let gain = var(&settings.gain.0) * settings.dsp_component(&vars, ModTarget::Gain, &[]) * VOICE_GAIN;
         let filter_net = settings.make_filter_net(&vars);
@@ -869,4 +870,5 @@ struct VoiceVars {
     gate: Shared,
     random_values: Vec<f32>,
     lfo_phases: Vec<f32>,
+    prev_freq: Option<f32>,
 }
