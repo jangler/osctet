@@ -9,10 +9,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::adsr::adsr_scalable;
 
-pub const MAX_ENVS: usize = 4;
-pub const MAX_OSCS: usize = 4;
-pub const MAX_LFOS: usize = 2;
-
 const KEY_TRACKING_REF_FREQ: f32 = 261.6;
 const SEMITONE_RATIO: f32 = 1.059463;
 const VOICE_GAIN: f32 = 0.5; // -6 dB
@@ -172,8 +168,8 @@ impl FilterType {
     }
 }
 
+/// A Synth orchestrates the playing of patches.
 pub struct Synth {
-    pub settings: Patch,
     voices: HashMap<Key, Voice>,
     bend_memory: [f32; 16],
     mod_memory: f32,
@@ -183,7 +179,6 @@ pub struct Synth {
 impl Synth {
     pub fn new() -> Self {
         Self {
-            settings: Patch::new(),
             voices: HashMap::new(),
             bend_memory: [0.0; 16],
             mod_memory: 0.0,
@@ -191,13 +186,15 @@ impl Synth {
         }
     }
 
-    pub fn note_on(&mut self, key: Key, pitch: f32, pressure: f32, seq: &mut Sequencer) {
+    pub fn note_on(&mut self, key: Key, pitch: f32, pressure: f32,
+        patch: &Patch, seq: &mut Sequencer
+    ) {
         let bend = if key.origin == KeyOrigin::Midi {
             self.bend_memory[key.channel as usize]
         } else {
             0.0
         };
-        let insert_voice = match self.settings.play_mode {
+        let insert_voice = match patch.play_mode {
             PlayMode::Poly => true,
             PlayMode::Mono => {
                 for voice in self.voices.values_mut() {
@@ -219,7 +216,7 @@ impl Synth {
         };
         if insert_voice {
             self.voices.insert(key, Voice::new(pitch, bend, pressure, self.mod_memory,
-                self.prev_freq, &self.settings, seq));
+                self.prev_freq, &patch, seq));
             self.prev_freq = Some(midi_hz(pitch));
         }
     }
@@ -270,6 +267,7 @@ impl Synth {
     }
 }
 
+/// A Patch is a configuration of synthesis parameters.
 #[derive(Serialize, Deserialize)]
 pub struct Patch {
     pub gain: Parameter,

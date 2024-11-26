@@ -125,6 +125,7 @@ struct App {
     midi: Midi,
     config: Config,
     module: Module,
+    patch_index: usize,
     ui: ui::UI,
     fullscreen: bool,
 }
@@ -148,6 +149,7 @@ impl App {
             midi,
             config,
             module: Module::new(global_fx),
+            patch_index: 0,
             ui: ui::UI::new(),
             fullscreen: false,
         };
@@ -172,11 +174,14 @@ impl App {
 
         for key in pressed {
             if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
-                self.synth.note_on(Key {
-                    origin: KeyOrigin::Keyboard,
-                    channel: 0,
-                    key: input::u8_from_key(key),
-                }, self.module.tuning.midi_pitch(&note), 100.0 / 127.0, &mut self.seq);
+                if let Some(patch) = self.module.patches.get(self.patch_index) {
+                    self.synth.note_on(Key {
+                        origin: KeyOrigin::Keyboard,
+                        channel: 0,
+                        key: input::u8_from_key(key),
+                    }, self.module.tuning.midi_pitch(&note), 100.0 / 127.0, patch,
+                    &mut self.seq);
+                }
             } else {
                 match key {
                     KeyCode::F1 => self.ui.set_tab("main", 0),
@@ -232,14 +237,16 @@ impl App {
                     },
                     Some(MidiEvent::NoteOn { channel, key, velocity }) => {
                         if velocity != 0 {
-                            let note = input::note_from_midi(v[1] as i8,
-                                &self.module.tuning);
-                            self.synth.note_on(Key {
-                                origin: KeyOrigin::Midi,
-                                channel,
-                                key,
-                            }, self.module.tuning.midi_pitch(&note),
-                                velocity as f32 / 127.0, &mut self.seq);
+                            if let Some(patch) = self.module.patches.get(self.patch_index) {
+                                let note = input::note_from_midi(v[1] as i8,
+                                    &self.module.tuning);
+                                self.synth.note_on(Key {
+                                    origin: KeyOrigin::Midi,
+                                    channel,
+                                    key,
+                                }, self.module.tuning.midi_pitch(&note),
+                                    velocity as f32 / 127.0, patch, &mut self.seq);
+                            }
                         } else {
                             self.synth.note_off(Key {
                                 origin: KeyOrigin::Midi,
@@ -330,7 +337,10 @@ impl App {
         match self.ui.tab_menu("main", &TABS) {
             0 => ui::general_tab::draw(&mut self.ui, &mut self.module),
             1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
-            2 => ui::instruments_tab::draw(&mut self.ui, &mut self.synth.settings),
+            2 => {
+                let patch = self.module.patches.get_mut(self.patch_index);
+                ui::instruments_tab::draw(&mut self.ui, patch);
+            },
             _ => panic!("bad tab value"),
         }
 

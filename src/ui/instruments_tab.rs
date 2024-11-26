@@ -45,32 +45,34 @@ const MOD_COLUMN_WIDTHS: [f32; 5] = [
     NUM_COLUMN_WIDTH, 100.0, 100.0, SLIDER_COLUMN_WIDTH, X_COLUMN_WIDTH,
 ];
 
-pub fn draw(ui: &mut UI, settings: &mut Patch) {
+pub fn draw(ui: &mut UI, patch: Option<&mut Patch>) {
     ui.layout = Layout::Vertical;
 
-    ui.label("GENERAL");
-    ui.shared_slider("gain", "Gain", &settings.gain.0, 0.0..=1.0, None);
-    ui.shared_slider("pan", "Pan", &settings.pan.0, -1.0..=1.0, None);
-    ui.slider("glide_time", "Glide time", &mut settings.glide_time, 0.0..=0.5, Some("s"));
-    if let Some(i) = ui.combo_box("play_mode",
-        "Play mode", settings.play_mode.name(),
-        || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
-    ) {
-        settings.play_mode = PlayMode::VARIANTS[i];
+    if let Some(patch) = patch {
+        ui.label("GENERAL");
+        ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
+        ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);
+        ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"));
+        if let Some(i) = ui.combo_box("play_mode",
+            "Play mode", patch.play_mode.name(),
+            || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
+        ) {
+            patch.play_mode = PlayMode::VARIANTS[i];
+        }
+    
+        ui.space();
+        oscillator_controls(ui, patch);
+        ui.space();
+        filter_controls(ui, patch);
+        ui.space();
+        envelope_controls(ui, patch);
+        ui.space();
+        lfo_controls(ui, patch);
+        ui.space();
+        modulation_controls(ui, patch);
+        ui.space();
+        file_ops(ui, patch);
     }
-
-    ui.space();
-    oscillator_controls(ui, settings);
-    ui.space();
-    filter_controls(ui, settings);
-    ui.space();
-    envelope_controls(ui, settings);
-    ui.space();
-    lfo_controls(ui, settings);
-    ui.space();
-    modulation_controls(ui, settings);
-    ui.space();
-    file_ops(ui, settings);
 }
 
 fn oscillator_controls(ui: &mut UI, settings: &mut Patch) {
