@@ -236,6 +236,15 @@ impl Synth {
         }
     }
 
+    /// Turns off all notes entered via MIDI.
+    pub fn clear_midi_notes(&mut self, seq: &mut Sequencer) {
+        for (key, voice) in &self.voices {
+            if key.origin == KeyOrigin::Midi {
+                voice.off(seq);
+            }
+        }
+    }
+
     pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
         self.bend_memory[channel as usize] = bend;
         for (key, voice) in self.voices.iter_mut() {

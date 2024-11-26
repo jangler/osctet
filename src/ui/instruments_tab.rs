@@ -131,13 +131,13 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
     ui.start_grid(&KIT_COLUMN_WIDTHS, &KIT_COLUMN_NAMES);
     let mut removed_index = None;
     for (i, entry) in module.kit.iter_mut().enumerate() {
-        ui.note_input(&mut entry.input_note);
+        ui.note_input(&format!("kit_{}_input", i), &mut entry.input_note);
         ui.next_cell();
         ui.combo_box(&format!("kit_{}_patch", i), "",
             module.patches.get(entry.patch_index).map(|x| x.name.as_ref()).unwrap_or(""),
             || module.patches.iter().map(|x| x.name.clone()).collect());
         ui.next_cell();
-        ui.note_input(&mut entry.input_note);
+        ui.note_input(&format!("kit_{}_output", i), &mut entry.patch_note);
         ui.next_cell();
         if ui.button("X") {
             removed_index = Some(i);

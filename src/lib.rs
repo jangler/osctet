@@ -174,13 +174,18 @@ impl App {
 
         for key in pressed {
             if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
-                if let Some(patch) = self.module.get_patch(self.patch_index, &note) {
-                    self.synth.note_on(Key {
-                        origin: KeyOrigin::Keyboard,
-                        channel: 0,
-                        key: input::u8_from_key(key),
-                    }, self.module.tuning.midi_pitch(&note), 100.0 / 127.0, patch,
-                    &mut self.seq);
+                if self.ui.accepting_note_input() {
+                    self.ui.note_queue.push(note);
+                } else {
+                    if let Some((patch, note)) =
+                        self.module.map_input(self.patch_index, note) {
+                        self.synth.note_on(Key {
+                            origin: KeyOrigin::Keyboard,
+                            channel: 0,
+                            key: input::u8_from_key(key),
+                        }, self.module.tuning.midi_pitch(&note), 100.0 / 127.0, patch,
+                        &mut self.seq);
+                    }
                 }
             } else {
                 match key {
@@ -227,69 +232,78 @@ impl App {
     fn handle_midi(&mut self) {
         if let Some(rx) = &self.midi.rx {
             while let Ok(v) = rx.try_recv() {
-                match MidiEvent::parse(&v) {
-                    Some(MidiEvent::NoteOff { channel, key, .. }) => {
-                        self.synth.note_off(Key{
-                            origin: KeyOrigin::Midi,
-                            channel,
-                            key,
-                        }, &mut self.seq);
-                    },
-                    Some(MidiEvent::NoteOn { channel, key, velocity }) => {
-                        if velocity != 0 {
-                            let note = input::note_from_midi(v[1] as i8, &self.module.tuning);
-                            if let Some(patch) = self.module.get_patch(self.patch_index, &note) {
-                                self.synth.note_on(Key {
+                if let Some(evt) = MidiEvent::parse(&v) {
+                    if self.ui.accepting_note_input() {
+                        if let MidiEvent::NoteOn { key, .. } = evt {
+                            self.ui.note_queue.push(
+                                input::note_from_midi(key, &self.module.tuning));
+                        }
+                    } else {
+                        match evt {
+                            MidiEvent::NoteOff { channel, key, .. } => {
+                                self.synth.note_off(Key{
                                     origin: KeyOrigin::Midi,
                                     channel,
                                     key,
-                                }, self.module.tuning.midi_pitch(&note),
-                                    velocity as f32 / 127.0, patch, &mut self.seq);
-                            }
-                        } else {
-                            self.synth.note_off(Key {
-                                origin: KeyOrigin::Midi,
-                                channel,
-                                key,
-                            }, &mut self.seq);
-                        }
-                    },
-                    Some(MidiEvent::PolyPressure { channel, key, pressure }) => {
-                        if self.config.midi_send_pressure == Some(true) {
-                            self.synth.poly_pressure(Key {
-                                origin: KeyOrigin::Midi,
-                                channel,
-                                key,
-                            }, pressure as f32 / 127.0);
-                        }
-                    },
-                    Some(MidiEvent::Controller { controller, value, .. }) => {
-                        match controller {
-                            input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                                self.synth.modulate(value as f32 / 127.0);
+                                }, &mut self.seq);
                             },
-                            input::CC_RPN_MSB => self.midi.rpn.0 = value,
-                            input::CC_RPN_LSB => self.midi.rpn.1 = value,
-                            input::CC_DATA_ENTRY_MSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
-                                // set semitones
-                                self.midi.bend_range = self.midi.bend_range % 1.0 + value as f32;
+                            MidiEvent::NoteOn { channel, key, velocity } => {
+                                if velocity != 0 {
+                                    let note = input::note_from_midi(key, &self.module.tuning);
+                                    if let Some((patch, note)) =
+                                        self.module.map_input(self.patch_index, note) {
+                                        self.synth.note_on(Key {
+                                            origin: KeyOrigin::Midi,
+                                            channel,
+                                            key,
+                                        }, self.module.tuning.midi_pitch(&note),
+                                            velocity as f32 / 127.0, patch, &mut self.seq);
+                                    }
+                                } else {
+                                    self.synth.note_off(Key {
+                                        origin: KeyOrigin::Midi,
+                                        channel,
+                                        key,
+                                    }, &mut self.seq);
+                                }
                             },
-                            input:: CC_DATA_ENTRY_LSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
-                                // set cents
-                                self.midi.bend_range = self.midi.bend_range.round() + value as f32 / 100.0;
+                            MidiEvent::PolyPressure { channel, key, pressure } => {
+                                if self.config.midi_send_pressure == Some(true) {
+                                    self.synth.poly_pressure(Key {
+                                        origin: KeyOrigin::Midi,
+                                        channel,
+                                        key,
+                                    }, pressure as f32 / 127.0);
+                                }
                             },
-                            _ => (),
+                            MidiEvent::Controller { controller, value, .. } => {
+                                match controller {
+                                    input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
+                                        self.synth.modulate(value as f32 / 127.0);
+                                    },
+                                    input::CC_RPN_MSB => self.midi.rpn.0 = value,
+                                    input::CC_RPN_LSB => self.midi.rpn.1 = value,
+                                    input::CC_DATA_ENTRY_MSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
+                                        // set semitones
+                                        self.midi.bend_range = self.midi.bend_range % 1.0 + value as f32;
+                                    },
+                                    input:: CC_DATA_ENTRY_LSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
+                                        // set cents
+                                        self.midi.bend_range = self.midi.bend_range.round() + value as f32 / 100.0;
+                                    },
+                                    _ => (),
+                                }
+                            },
+                            MidiEvent::ChannelPressure { channel, pressure } => {
+                                if self.config.midi_send_pressure == Some(true) {
+                                    self.synth.channel_pressure(channel, pressure as f32 / 127.0);
+                                }
+                            },
+                            MidiEvent::Pitch { channel, bend } => {
+                                self.synth.pitch_bend(channel, bend * self.midi.bend_range);
+                            },
                         }
-                    },
-                    Some(MidiEvent::ChannelPressure { channel, pressure }) => {
-                        if self.config.midi_send_pressure == Some(true) {
-                            self.synth.channel_pressure(channel, pressure as f32 / 127.0);
-                        }
-                    },
-                    Some(MidiEvent::Pitch { channel, bend }) => {
-                        self.synth.pitch_bend(channel, bend * self.midi.bend_range);
-                    },
-                    None => (),
+                    }
                 }
             }
         }
@@ -322,6 +336,9 @@ impl App {
             self.synth.clear_keyboard_notes(&mut self.seq);
         } else {
             self.handle_keys();
+        }
+        if self.ui.accepting_note_input() {
+            self.synth.clear_midi_notes(&mut self.seq);
         }
         self.handle_midi();
         self.check_midi_reconnect();

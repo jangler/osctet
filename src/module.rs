@@ -33,19 +33,20 @@ impl Module {
         todo!()
     }
 
-    pub fn get_patch(&self, index: Option<usize>, note: &Note) -> Option<&Patch> {
-        if let Some(index) = index {
-            self.patches.get(index)
+    pub fn map_input(&self,
+        patch_index: Option<usize>, note: Note
+    ) -> Option<(&Patch, Note)> {
+        if let Some(index) = patch_index {
+            self.patches.get(index).map(|x| (x, note))
         } else {
             self.get_kit_patch(note)
         }
     }
 
-    fn get_kit_patch(&self, note: &Note) -> Option<&Patch> {
+    fn get_kit_patch(&self, note: Note) -> Option<(&Patch, Note)> {
         self.kit.iter()
-            .find(|x| x.input_note == *note)
-            .map(|x| self.patches.get(x.patch_index))
-            .flatten()
+            .find(|x| x.input_note == note)
+            .map(|x| (self.patches.get(x.patch_index).unwrap(), x.patch_note))
     }
 }
 

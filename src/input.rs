@@ -67,13 +67,13 @@ pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8) -> Option<Note> {
     }
 }
 
-pub fn note_from_midi(n: i8, t: &Tuning) -> Note {
+pub fn note_from_midi(n: u8, t: &Tuning) -> Note {
     let f = |nominal, accidentals| {
         Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
             nominal,
             demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
-            equave: n / 12 - 1,
+            equave: (n as i8) / 12 - 1,
         }
     };
     match n % 12 {

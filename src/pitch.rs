@@ -101,7 +101,7 @@ impl Tuning {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub struct Note {
     pub arrows: i8,
     pub nominal: Nominal,

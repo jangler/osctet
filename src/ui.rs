@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
-use crate::pitch::Note;
+use crate::{input, pitch::Note};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -151,7 +151,7 @@ pub struct UI {
     pub style: Style,
     open_combo_box: Option<ComboBoxState>,
     tabs: HashMap<String, usize>,
-    grabbed_slider: Option<String>,
+    focused_slider: Option<String>,
     focused_text: Option<TextEditState>,
     bounds: Rect,
     cursor_x: f32,
@@ -164,6 +164,8 @@ pub struct UI {
     pub layout: Layout,
     dialog: Option<Dialog>,
     group_rect: Option<Rect>,
+    focused_note: Option<String>,
+    pub note_queue: Vec<Note>,
 }
 
 impl UI {
@@ -176,7 +178,7 @@ impl UI {
             },
             open_combo_box: None,
             tabs: HashMap::new(),
-            grabbed_slider: None,
+            focused_slider: None,
             focused_text: None,
             bounds: Default::default(),
             cursor_x: 0.0,
@@ -189,6 +191,8 @@ impl UI {
             draw_queue: Vec::new(),
             dialog: None,
             group_rect: None,
+            focused_note: None,
+            note_queue: Vec::new(),
         }
     }
 
@@ -204,8 +208,8 @@ impl UI {
         self.cursor_y = MARGIN;
         self.cursor_z = 0;
 
-        if self.grabbed_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
-            self.grabbed_slider = None;
+        if self.focused_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
+            self.focused_slider = None;
         }
         
         clear_background(self.style.theme.bg);
@@ -256,8 +260,9 @@ impl UI {
             self.dialog = None;
         }
 
-        // drain char queue
+        // drain input queues
         while let Some(_) = get_char_pressed() {}
+        self.note_queue.clear();
     }
 
     pub fn start_grid(&mut self, column_widths: &[f32], column_names: &[&str]) {
@@ -643,7 +648,7 @@ impl UI {
         let mouse_pos = mouse_position_vec2();
         if self.mouse_hits(hit_rect) {
             if is_mouse_button_pressed(MouseButton::Left) {
-                self.grabbed_slider = Some(id.to_string());
+                self.focused_slider = Some(id.to_string());
             }
             if is_mouse_button_pressed(MouseButton::Right) {
                 self.focused_text = Some(TextEditState {
@@ -652,7 +657,7 @@ impl UI {
                 });
             }
         }
-        let grabbed = if let Some(s) = &self.grabbed_slider {
+        let grabbed = if let Some(s) = &self.focused_slider {
             s == id
         } else {
             false
@@ -860,6 +865,10 @@ impl UI {
         self.focused_text.is_some()
     }
 
+    pub fn accepting_note_input(&self) -> bool {
+        self.focused_note.is_some()
+    }
+
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
         let old_z = self.cursor_z;
         self.cursor_z = 3;
@@ -867,9 +876,42 @@ impl UI {
         self.cursor_z = old_z;
     }
 
-    pub fn note_input(&mut self, note: &mut Note) {
-        let (rect, _) = self.text_rect(&note.to_string(),
-            self.cursor_x + MARGIN, self.cursor_y + MARGIN);
+    pub fn note_input(&mut self, id: &str, note: &mut Note) {
+        let params = self.style.text_params();
+        let label = note.to_string();
+
+        let rect = Rect {
+            x: self.cursor_x + MARGIN,
+            y: self.cursor_y + MARGIN,
+            w: text_width(&label, &params) + MARGIN * 2.0,
+            h: cap_height(&params) + MARGIN * 2.0,
+        };
+        let mouse_hit = self.mouse_hits(rect);
+
+        if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
+            self.focused_note = Some(id.to_owned());
+        }
+        let focused = self.focused_note.as_ref().is_some_and(|x| x == id);
+    
+        // draw fill based on mouse state
+        let fill = if focused {
+            self.style.theme.click
+        } else if mouse_hit {
+            self.style.theme.hover
+        } else {
+            self.style.theme.bg
+        };
+
+        if focused {
+            if let Some(input_note) = self.note_queue.pop() {
+                *note = input_note;
+                self.focused_note = None;
+            }
+        }
+
+        self.push_rect(rect, fill, Some(self.style.theme.fg));
+        self.push_text(rect.x, rect.y, label, self.style.theme.fg);
+
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
     }
 }
@@ -884,7 +926,8 @@ fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
 
 fn alert_dialog(style: &Style, message: &str) {
     let params = style.text_params();
-    let r = center(fit_strings(params.clone(), &[message.to_owned()]));
+    let mut r = center(fit_strings(params.clone(), &[message.to_owned()]));
+    r.h += MARGIN;
     draw_filled_rect(r, style.theme.bg, style.theme.fg);
     draw_text_topleft(params.clone(), message, r.x, r.y);
 }
