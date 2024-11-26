@@ -46,14 +46,18 @@ const MOD_COLUMN_WIDTHS: [f32; 5] = [
 ];
 
 pub fn draw(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
-    ui.first_column();
+    ui.start_group();
     patch_list(ui, patches, patch_index);
+    ui.layout = Layout::Horizontal;
+    ui.end_group();
     if let Some(patch) = patches.get_mut(*patch_index) {
         patch_controls(ui, patch);
     }
 }
 
 fn patch_list(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
+    ui.layout = Layout::Vertical;
+
     // don't understand how to do this without cloning
     let names: Vec<String> = patches.iter().map(|x| x.name.clone()).collect();
     ui.list_box(&names, patch_index, 10);
@@ -98,7 +102,7 @@ fn patch_list(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
 }
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.next_column();
+    ui.layout = Layout::Vertical;
     ui.label("GENERAL");
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);

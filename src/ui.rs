@@ -161,8 +161,7 @@ pub struct UI {
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
     dialog: Option<Dialog>,
-    column_width: f32,
-    column_top: f32,
+    group_rect: Option<Rect>,
 }
 
 impl UI {
@@ -187,8 +186,7 @@ impl UI {
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
             dialog: None,
-            column_top: 0.0,
-            column_width: 0.0,
+            group_rect: None,
         }
     }
 
@@ -203,7 +201,6 @@ impl UI {
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
         self.cursor_z = 0;
-        self.column_width = 0.0;
 
         if self.grabbed_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
             self.grabbed_slider = None;
@@ -212,17 +209,29 @@ impl UI {
         clear_background(self.style.theme.bg);
     }
 
-    pub fn first_column(&mut self) {
-        self.column_top = self.cursor_y;
-        self.column_width = 0.0;
-        self.layout = Layout::Vertical;
+    pub fn start_group(&mut self) {
+        self.group_rect = Some(Rect {
+            x: self.cursor_x,
+            y: self.cursor_y,
+            w: 0.0,
+            h: 0.0,
+        });
     }
 
-    pub fn next_column(&mut self) {
-        self.layout = Layout::Vertical;
-        self.cursor_y = self.column_top;
-        self.cursor_x += self.column_width;
-        self.column_width = 0.0;
+    pub fn end_group(&mut self) {
+        if let Some(rect) = self.group_rect {
+            match self.layout {
+                Layout::Horizontal => {
+                    self.cursor_x = rect.x + rect.w;
+                    self.cursor_y = rect.y;
+                },
+                Layout::Vertical => {
+                    self.cursor_x = rect.x;
+                    self.cursor_y = rect.y + rect.h;
+                },
+            }
+        }
+        self.group_rect = None;
     }
 
     pub fn end_frame(&mut self) {
@@ -292,12 +301,23 @@ impl UI {
         }
     }
 
+    fn expand_group_rect(&mut self, x: f32, y: f32) {
+        if self.cursor_z == 0 {
+            if let Some(rect) = &mut self.group_rect {
+                rect.w = rect.w.max(x - rect.x);
+                rect.h = rect.h.max(y - rect.y);
+            }
+        }
+    }
+
     fn push_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
         self.push_graphic(Graphic::Line(x1, y1, x2, y2, color));
+        self.expand_group_rect(x1.max(x2), y1.max(y2));
     }
 
     fn push_rect(&mut self, rect: Rect, fill: Color, stroke: Option<Color>) {
         self.push_graphic(Graphic::Rect(rect, fill, stroke));
+        self.expand_group_rect(rect.x + rect.w, rect.y + rect.h);
     }
 
     fn push_text(&mut self, x: f32, y: f32, text: String, color: Color) -> Rect {
@@ -309,6 +329,7 @@ impl UI {
             h: cap_height(&params) + MARGIN * 2.0,
         };
         self.push_graphic(Graphic::Text(x, y, text, color));
+        self.expand_group_rect(rect.x + rect.w, rect.y + rect.h);
         rect
     }
 
@@ -344,10 +365,7 @@ impl UI {
     fn update_cursor(&mut self, w: f32, h: f32) {
         match self.layout {
             Layout::Horizontal => self.cursor_x += w,
-            Layout::Vertical => {
-                self.cursor_y += h;
-                self.column_width = self.column_width.max(w);
-            },
+            Layout::Vertical => self.cursor_y += h,
         }
     }
 
