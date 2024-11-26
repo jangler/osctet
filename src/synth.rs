@@ -270,6 +270,7 @@ impl Synth {
 /// A Patch is a configuration of synthesis parameters.
 #[derive(Serialize, Deserialize)]
 pub struct Patch {
+    pub name: String, // TODO: should this be serialized?
     pub gain: Parameter,
     pub pan: Parameter, // range -1..1
     pub glide_time: f32,
@@ -284,6 +285,7 @@ pub struct Patch {
 impl Patch {
     pub fn new() -> Self {
         Self {
+            name: String::from("init"),
             gain: Parameter(shared(1.0)),
             oscs: vec![Oscillator::new()],
             envs: vec![ADSR::new()],

@@ -338,8 +338,8 @@ impl App {
             0 => ui::general_tab::draw(&mut self.ui, &mut self.module),
             1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
             2 => {
-                let patch = self.module.patches.get_mut(self.patch_index);
-                ui::instruments_tab::draw(&mut self.ui, patch);
+                ui::instruments_tab::draw(&mut self.ui, &mut self.module.patches,
+                    &mut self.patch_index);
             },
             _ => panic!("bad tab value"),
         }

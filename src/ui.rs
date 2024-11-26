@@ -161,6 +161,8 @@ pub struct UI {
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
     dialog: Option<Dialog>,
+    column_width: f32,
+    column_top: f32,
 }
 
 impl UI {
@@ -185,6 +187,8 @@ impl UI {
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
             dialog: None,
+            column_top: 0.0,
+            column_width: 0.0,
         }
     }
 
@@ -199,12 +203,26 @@ impl UI {
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
         self.cursor_z = 0;
+        self.column_width = 0.0;
 
         if self.grabbed_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
             self.grabbed_slider = None;
         }
         
         clear_background(self.style.theme.bg);
+    }
+
+    pub fn first_column(&mut self) {
+        self.column_top = self.cursor_y;
+        self.column_width = 0.0;
+        self.layout = Layout::Vertical;
+    }
+
+    pub fn next_column(&mut self) {
+        self.layout = Layout::Vertical;
+        self.cursor_y = self.column_top;
+        self.cursor_x += self.column_width;
+        self.column_width = 0.0;
     }
 
     pub fn end_frame(&mut self) {
@@ -326,7 +344,10 @@ impl UI {
     fn update_cursor(&mut self, w: f32, h: f32) {
         match self.layout {
             Layout::Horizontal => self.cursor_x += w,
-            Layout::Vertical => self.cursor_y += h,
+            Layout::Vertical => {
+                self.cursor_y += h;
+                self.column_width = self.column_width.max(w);
+            },
         }
     }
 
@@ -402,7 +423,7 @@ impl UI {
     /// Draws a button and returns true if it was clicked this frame.
     pub fn button(&mut self, label: &str) -> bool {
         let (rect, event) = self.text_rect(label, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
-        self.update_cursor(rect.w + MARGIN * 2.0, rect.h + MARGIN * 2.0);
+        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN * 2.0);
         event == MouseEvent::Released
     }
 
@@ -410,7 +431,6 @@ impl UI {
     pub fn checkbox(&mut self, label: &str, value: &mut bool) -> bool {
         let button_text = if *value { "X" } else { " " };
         let clicked = self.button(button_text);
-        self.cursor_x -= MARGIN;
         let label_rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
             label.to_owned(), self.style.theme.fg);
         self.update_cursor(label_rect.w, label_rect.h);
@@ -755,6 +775,50 @@ impl UI {
         focused && is_key_pressed(KeyCode::Enter)
     }
 
+    pub fn list_box(&mut self, options: &[String], index: &mut usize, min_chars: usize) {
+        let params = self.style.text_params();
+        let line_height = cap_height(&params) + MARGIN * 2.0;
+        let list_rect = Rect {
+            x: self.cursor_x + MARGIN,
+            y: self.cursor_y + MARGIN,
+            w: options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params)))
+                .max(text_width("x", &params) * min_chars as f32)
+                + MARGIN * 2.0,
+            h: line_height * options.len() as f32 + 2.0,
+        };
+
+        let mut gfx = vec![
+            Graphic::Rect(list_rect, self.style.theme.bg, Some(self.style.theme.fg))
+        ];
+
+        // draw options
+        let mut hit_rect = Rect {
+            x: list_rect.x + 1.0,
+            y: list_rect.y + 1.0,
+            w: list_rect.w - 2.0,
+            h: line_height,
+        };
+        let mouse_pos = mouse_position_vec2();
+        let lmb = is_mouse_button_released(MouseButton::Left);
+        for (i, option) in options.iter().enumerate() {
+            if i == *index {
+                gfx.push(Graphic::Rect(hit_rect, self.style.theme.click, None));
+            } else if hit_rect.contains(mouse_pos) {
+                gfx.push(Graphic::Rect(hit_rect, self.style.theme.hover, None));
+                if lmb {
+                    *index = i;
+                }
+            }
+            gfx.push(Graphic::Text(hit_rect.x - 1.0, hit_rect.y,
+                option.to_owned(), self.style.theme.fg));
+            hit_rect.y += hit_rect.h;
+        }
+
+        self.push_graphics(gfx);
+
+        self.update_cursor(list_rect.w + MARGIN * 2.0, list_rect.h + MARGIN);
+    }
+
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
         range: RangeInclusive<f32>, unit: Option<&str>
     ) {
@@ -804,7 +868,7 @@ fn fit_strings(params: TextParams, v: &[String]) -> Rect {
     for s in v {
         let dim = measure_text(s, params.font, params.font_size, params.font_scale);
         rect.w = rect.w.max(dim.width + MARGIN * 2.0);
-        rect.h += dim.height + MARGIN * 2.0;
+        rect.h += dim.height + MARGIN;
     }
     rect
 }

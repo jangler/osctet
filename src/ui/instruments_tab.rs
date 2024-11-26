@@ -45,41 +45,89 @@ const MOD_COLUMN_WIDTHS: [f32; 5] = [
     NUM_COLUMN_WIDTH, 100.0, 100.0, SLIDER_COLUMN_WIDTH, X_COLUMN_WIDTH,
 ];
 
-pub fn draw(ui: &mut UI, patch: Option<&mut Patch>) {
-    ui.layout = Layout::Vertical;
-
-    if let Some(patch) = patch {
-        ui.label("GENERAL");
-        ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
-        ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);
-        ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"));
-        if let Some(i) = ui.combo_box("play_mode",
-            "Play mode", patch.play_mode.name(),
-            || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
-        ) {
-            patch.play_mode = PlayMode::VARIANTS[i];
-        }
-    
-        ui.space();
-        oscillator_controls(ui, patch);
-        ui.space();
-        filter_controls(ui, patch);
-        ui.space();
-        envelope_controls(ui, patch);
-        ui.space();
-        lfo_controls(ui, patch);
-        ui.space();
-        modulation_controls(ui, patch);
-        ui.space();
-        file_ops(ui, patch);
+pub fn draw(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
+    ui.first_column();
+    patch_list(ui, patches, patch_index);
+    if let Some(patch) = patches.get_mut(*patch_index) {
+        patch_controls(ui, patch);
     }
 }
 
-fn oscillator_controls(ui: &mut UI, settings: &mut Patch) {
+fn patch_list(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
+    // don't understand how to do this without cloning
+    let names: Vec<String> = patches.iter().map(|x| x.name.clone()).collect();
+    ui.list_box(&names, patch_index, 10);
+
+    ui.layout = Layout::Horizontal;
+    if ui.button("Add") {
+        patches.push(Patch::new());
+        *patch_index = patches.len() - 1;
+    }
+    if ui.button("Remove") {
+        if *patch_index < patches.len() {
+            patches.remove(*patch_index);
+            if *patch_index > 0 && *patch_index >= patches.len() {
+                *patch_index -= 1;
+            }
+        }
+    }
+    if ui.button("Save") {
+        if let Some(patch) = patches.get(*patch_index) {
+            if let Some(path) = FileDialog::new()
+                .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                .save_file() {
+                if let Err(e) = patch.save(&path) {
+                    ui.report(e);
+                }
+            }
+        }
+    }
+    if ui.button("Load") {
+        if let Some(path) = FileDialog::new()
+            .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+            .pick_file() {
+            match Patch::load(&path) {
+                Ok(p) => {
+                    patches.push(p); 
+                    *patch_index = patches.len() - 1;
+                },
+                Err(e) => ui.report(e),
+            }
+        }
+    }
+}
+
+fn patch_controls(ui: &mut UI, patch: &mut Patch) {
+    ui.next_column();
+    ui.label("GENERAL");
+    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
+    ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);
+    ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"));
+    if let Some(i) = ui.combo_box("play_mode",
+        "Play mode", patch.play_mode.name(),
+        || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
+    ) {
+        patch.play_mode = PlayMode::VARIANTS[i];
+    }
+
+    ui.space();
+    oscillator_controls(ui, patch);
+    ui.space();
+    filter_controls(ui, patch);
+    ui.space();
+    envelope_controls(ui, patch);
+    ui.space();
+    lfo_controls(ui, patch);
+    ui.space();
+    modulation_controls(ui, patch);
+    ui.space();
+}
+
+fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
     let mut removed_osc = None;
     ui.label("OSCILLATORS");
     ui.start_grid(&OSC_COLUMN_WIDTHS, &OSC_COLUMN_NAMES);
-    for (i, osc) in settings.oscs.iter_mut().enumerate() {
+    for (i, osc) in patch.oscs.iter_mut().enumerate() {
         ui.offset_label(&(i + 1).to_string());
         ui.next_cell();
         ui.shared_slider(&format!("osc_{}_level", i),
@@ -113,11 +161,11 @@ fn oscillator_controls(ui: &mut UI, settings: &mut Patch) {
         ui.next_cell();
     }
     if let Some(i) = removed_osc {
-        settings.remove_osc(i);
+        patch.remove_osc(i);
     }
     ui.end_grid();
     if ui.button("+") {
-        settings.oscs.push(Oscillator::new());
+        patch.oscs.push(Oscillator::new());
     }
 }
 
@@ -260,31 +308,5 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
     ui.end_grid();
     if ui.button("+") {
         patch.mod_matrix.push(Modulation::default());
-    }
-}
-
-fn file_ops(ui: &mut UI, patch: &mut Patch) {
-    ui.layout = Layout::Horizontal;
-    if ui.button("Save patch") {
-        if let Some(path) = FileDialog::new()
-            .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
-            .save_file() {
-            match patch.save(&path) {
-                Ok(_) => (),
-                Err(e) => ui.report(e),
-            }
-        }
-    }
-    if ui.button("Load patch") {
-        if let Some(path) = FileDialog::new()
-            .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
-            .pick_file() {
-            match Patch::load(&path) {
-                Ok(p) => {
-                    *patch = p;
-                },
-                Err(e) => ui.report(e),
-            }
-        }
     }
 }
