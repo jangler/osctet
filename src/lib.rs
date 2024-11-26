@@ -119,7 +119,6 @@ impl Midi {
 }
 
 struct App {
-    tuning: pitch::Tuning,
     synth: Synth,
     seq: Sequencer,
     octave: i8,
@@ -143,7 +142,6 @@ impl App {
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
         let mut app = App {
-            tuning: pitch::Tuning::divide(2.0, 12, 1).unwrap(),
             synth: Synth::new(),
             seq,
             octave: 4,
@@ -163,7 +161,7 @@ impl App {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
 
         for key in released {
-            if let Some(_) = input::note_from_key(key, &self.tuning, self.octave) {
+            if let Some(_) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.synth.note_off(Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
@@ -173,12 +171,12 @@ impl App {
         }
 
         for key in pressed {
-            if let Some(note) = input::note_from_key(key, &self.tuning, self.octave) {
+            if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.synth.note_on(Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
                     key: input::u8_from_key(key),
-                }, self.tuning.midi_pitch(&note), 100.0 / 127.0, &mut self.seq);
+                }, self.module.tuning.midi_pitch(&note), 100.0 / 127.0, &mut self.seq);
             } else {
                 match key {
                     KeyCode::F1 => self.ui.set_tab("main", 0),
@@ -234,12 +232,14 @@ impl App {
                     },
                     Some(MidiEvent::NoteOn { channel, key, velocity }) => {
                         if velocity != 0 {
-                            let note = input::note_from_midi(v[1] as i8, &self.tuning);
+                            let note = input::note_from_midi(v[1] as i8,
+                                &self.module.tuning);
                             self.synth.note_on(Key {
                                 origin: KeyOrigin::Midi,
                                 channel,
                                 key,
-                            }, self.tuning.midi_pitch(&note), velocity as f32 / 127.0, &mut self.seq);
+                            }, self.module.tuning.midi_pitch(&note),
+                                velocity as f32 / 127.0, &mut self.seq);
                         } else {
                             self.synth.note_off(Key {
                                 origin: KeyOrigin::Midi,
@@ -328,7 +328,7 @@ impl App {
         self.bottom_panel();
 
         match self.ui.tab_menu("main", &TABS) {
-            0 => ui::general_tab::draw(&mut self.ui, &mut self.module.fx),
+            0 => ui::general_tab::draw(&mut self.ui, &mut self.module),
             1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
             2 => ui::instruments_tab::draw(&mut self.ui, &mut self.synth.settings),
             _ => panic!("bad tab value"),

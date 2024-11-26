@@ -1,11 +1,17 @@
-use crate::fx::GlobalFX;
+use crate::{fx::GlobalFX, module::Module, pitch::Tuning};
 
 use super::*;
 
-pub fn draw(ui: &mut UI, fx: &mut GlobalFX) {
+pub fn draw(ui: &mut UI, module: &mut Module) {
     ui.layout = Layout::Vertical;
+    fx_controls(ui, &mut module.fx);
+    ui.space();
+    tuning_controls(ui, &mut module.tuning);
+}
 
-    ui.label("Reverb");
+fn fx_controls(ui: &mut UI, fx: &mut GlobalFX) {
+    ui.label("REVERB");
+
     ui.shared_slider("reverb_level",
         "Level", &fx.settings.reverb_amount.0, 0.0..=1.0, None);
 
@@ -20,5 +26,36 @@ pub fn draw(ui: &mut UI, fx: &mut GlobalFX) {
     if ui.slider("decay_time",
         "Decay time", &mut fx.settings.reverb_time, 0.0..=5.0, Some("s")) {
         fx.commit_reverb();
+    }
+}
+
+fn tuning_controls(ui: &mut UI, tuning: &mut Tuning) {
+    ui.label("TUNING");
+    if let Some(s) = ui.edit_box("Equave", 8, tuning.equave().to_string()) {
+        match s.parse() {
+            Ok(ratio) => match Tuning::divide(ratio, tuning.size(), tuning.arrow_steps) {
+                Ok(t) => *tuning = t,
+                Err(e) => ui.report(e),
+            }
+            Err(e) => ui.report(e),
+        }
+    }
+    if let Some(s) = ui.edit_box("Steps to equave", 4, tuning.scale.len().to_string()) {
+        match s.parse() {
+            Ok(steps) => match Tuning::divide(tuning.equave(), steps, tuning.arrow_steps) {
+                Ok(t) => *tuning = t,
+                Err(e) => ui.report(e),
+            },
+            Err(e) => ui.report(e),
+        }
+    }
+    if let Some(s) = ui.edit_box("Steps to arrow", 4, tuning.arrow_steps.to_string()) {
+        match s.parse() {
+            Ok(steps) => match Tuning::divide(tuning.equave(), tuning.size(), steps) {
+                Ok(t) => *tuning = t,
+                Err(e) => ui.report(e),
+            },
+            Err(e) => ui.report(e),
+        }
     }
 }

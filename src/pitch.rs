@@ -9,6 +9,10 @@ fn cents(ratio: f32) -> f32 {
     1200.0 * ratio.log2() / 2.0_f32.log2()
 }
 
+fn find_ratio(cents: f32) -> f32 {
+    2.0_f32.powf(2.0_f32.log2() * cents / 1200.0)
+}
+
 #[derive(Clone, Copy)]
 pub enum Nominal {
     A, B, C, D, E, F, G
@@ -43,8 +47,8 @@ impl Nominal {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tuning {
-    scale: Vec<f32>,
-    arrow_steps: u8,
+    pub scale: Vec<f32>,
+    pub arrow_steps: u8,
 }
 
 impl Tuning {
@@ -86,6 +90,14 @@ impl Tuning {
         REFERENCE_MIDI_PITCH +
             equave * (note.equave as i32 - 4 + step_equaves) as f32
             + self.scale[scale_index] / 100.0
+    }
+
+    pub fn equave(&self) -> f32 {
+        find_ratio(*self.scale.last().unwrap())
+    }
+
+    pub fn size(&self) -> u16 {
+        self.scale.len() as u16
     }
 }
 

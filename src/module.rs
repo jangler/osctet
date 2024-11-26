@@ -1,10 +1,11 @@
 use std::error::Error;
 
-use crate::{fx::GlobalFX, pattern::Pattern, pitch::Note, synth::Patch};
+use crate::{fx::GlobalFX, pattern::Pattern, pitch::{Note, Tuning}, synth::Patch};
 
 pub struct Module {
     pub title: String,
     pub author: String,
+    pub tuning: Tuning,
     pub fx: GlobalFX,
     pub kit: Vec<KitEntry>,
     pub patches: Vec<Patch>,
@@ -16,6 +17,7 @@ impl Module {
         Self {
             title: "".to_owned(),
             author: "".to_owned(),
+            tuning: Tuning::divide(2.0, 12, 1).unwrap(),
             fx,
             kit: Vec::new(),
             patches: vec![Patch::new()],

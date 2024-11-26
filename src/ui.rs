@@ -104,7 +104,7 @@ struct ComboBoxState {
     list_rect: Rect,
 }
 
-struct SliderState {
+struct TextEditState {
     id: String,
     text: String,
 }
@@ -150,7 +150,7 @@ pub struct UI {
     open_combo_box: Option<ComboBoxState>,
     tabs: HashMap<String, usize>,
     grabbed_slider: Option<String>,
-    focused_slider: Option<SliderState>,
+    focused_text: Option<TextEditState>,
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
@@ -174,7 +174,7 @@ impl UI {
             open_combo_box: None,
             tabs: HashMap::new(),
             grabbed_slider: None,
-            focused_slider: None,
+            focused_text: None,
             bounds: Default::default(),
             cursor_x: 0.0,
             cursor_y: 0.0,
@@ -574,10 +574,10 @@ impl UI {
         range: RangeInclusive<f32>, unit: Option<&str>
     ) -> bool {
         // are we in text entry mode?
-        if self.focused_slider.as_ref().is_some_and(|x| x.id == id) {
+        if self.focused_text.as_ref().is_some_and(|x| x.id == id) {
             if is_key_pressed(KeyCode::Escape)
                 || is_mouse_button_released(MouseButton::Left) {
-                self.focused_slider = None;
+                self.focused_text = None;
             } else {
                 return self.slider_text_entry(label, val, range);
             }
@@ -606,7 +606,7 @@ impl UI {
                 self.grabbed_slider = Some(id.to_string());
             }
             if is_mouse_button_pressed(MouseButton::Right) {
-                self.focused_slider = Some(SliderState {
+                self.focused_text = Some(TextEditState {
                     id: id.to_string(),
                     text: val.to_string(),
                 });
@@ -663,9 +663,9 @@ impl UI {
         range: RangeInclusive<f32>
     ) -> bool {
         // another silly little dance for the borrow checker
-        let mut text = self.focused_slider.as_ref().unwrap().text.clone();
+        let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
-        if self.text_box(label, MARGIN, SLIDER_WIDTH, &mut text) {
+        if self.text_box(label, label, MARGIN, SLIDER_WIDTH, &mut text) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = f.max(*range.start()).min(*range.end());
@@ -673,17 +673,39 @@ impl UI {
                 },
                 Err(e) => self.report(e),
             }
-            self.focused_slider = None;
+            self.focused_text = None;
         }
-        if let Some(focus) = self.focused_slider.as_mut() {
+        if let Some(focus) = self.focused_text.as_mut() {
             focus.text = text;
         }
         changed
     }
 
+    pub fn edit_box(&mut self, label: &str, chars_wide: usize,
+        text: String
+    ) -> Option<String> {
+        // check whether to unfocus
+        if self.focused_text.as_ref().is_some_and(|x| x.id == label)
+            && (is_key_pressed(KeyCode::Escape)
+                || is_mouse_button_pressed(MouseButton::Left)) {
+            self.focused_text = None;
+        }
+
+        let w = chars_wide as f32 * text_width("x", &self.style.text_params())
+            + MARGIN * 2.0;
+
+        if self.text_box(label, label, 0.0, w, &text) {
+            let s = self.focused_text.as_ref().map(|x| x.text.clone());
+            self.focused_text = None;
+            s
+        } else {
+            None
+        }
+    }
+
     /// Returns true if the text was submitted (i.e. Enter was pressed).
-    fn text_box(&mut self, label: &str, offset_x: f32, width: f32,
-        text: &mut String
+    fn text_box(&mut self, id: &str, label: &str, offset_x: f32, width: f32,
+        text: &str
     ) -> bool {
         let box_rect = Rect {
             x: self.cursor_x + MARGIN + offset_x,
@@ -693,30 +715,44 @@ impl UI {
         };
         self.push_rect(box_rect, self.style.theme.bg, Some(self.style.theme.fg));
 
-        // handle text editing
-        while let Some(c) = get_char_pressed() {
-            if !c.is_ascii_control() {
-                text.push(c);
+        let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
+        let text = if focused {
+            let text = &mut self.focused_text.as_mut().unwrap().text;
+            // handle text editing
+            while let Some(c) = get_char_pressed() {
+                if !c.is_ascii_control() {
+                    text.push(c);
+                }
             }
-        }
-        if is_key_pressed(KeyCode::Backspace) {
-            text.pop();
-        }
+            if is_key_pressed(KeyCode::Backspace) {
+                text.pop();
+            }
+            text.clone()
+        } else {
+            if is_mouse_button_pressed(MouseButton::Left) && self.mouse_hits(box_rect) {
+                self.focused_text = Some(TextEditState {
+                    id: id.to_owned(),
+                    text: text.to_string(),
+                });
+            }
+            text.to_string()
+        };
 
-        let text_rect = self.push_text(box_rect.x, box_rect.y,
-            text.clone(), self.style.theme.fg);
+        let text_rect = self.push_text(box_rect.x, box_rect.y, text, self.style.theme.fg);
         
-        let line_x = text_rect.x + text_rect.w - MARGIN + 0.5;
-        self.push_line(line_x, text_rect.y + MARGIN - 1.0,
-            line_x, text_rect.y + text_rect.h - MARGIN + 1.0,
-            self.style.theme.fg);
+        if focused {
+            let line_x = text_rect.x + text_rect.w - MARGIN + 0.5;
+            self.push_line(line_x, text_rect.y + MARGIN - 1.0,
+                line_x, text_rect.y + text_rect.h - MARGIN + 1.0,
+                self.style.theme.fg);
+        }
 
         let label_rect = self.push_text(box_rect.x + box_rect.w + MARGIN,
             self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
         
         self.update_cursor(width + label_rect.w + MARGIN, box_rect.h + MARGIN);
         
-        is_key_pressed(KeyCode::Enter)
+        focused && is_key_pressed(KeyCode::Enter)
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
@@ -737,7 +773,7 @@ impl UI {
     }
 
     pub fn accepting_keyboard_input(&self) -> bool {
-        self.focused_slider.is_some()
+        self.focused_text.is_some()
     }
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
