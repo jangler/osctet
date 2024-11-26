@@ -166,6 +166,7 @@ pub struct UI {
     group_rect: Option<Rect>,
     focused_note: Option<String>,
     pub note_queue: Vec<Note>,
+    instrument_edit_index: Option<usize>,
 }
 
 impl UI {
@@ -193,6 +194,7 @@ impl UI {
             group_rect: None,
             focused_note: None,
             note_queue: Vec::new(),
+            instrument_edit_index: None,
         }
     }
 
@@ -800,7 +802,10 @@ impl UI {
         focused && is_key_pressed(KeyCode::Enter)
     }
 
-    pub fn list_box(&mut self, options: &[String], index: &mut usize, min_chars: usize) {
+    /// List box with editable values. Returns a string when an edit is submitted.
+    pub fn instrument_list(&mut self, options: &[String], index: &mut usize,
+        min_chars: usize,
+    ) -> Option<String> {
         let params = self.style.text_params();
         let line_height = cap_height(&params) + MARGIN * 2.0;
         let list_rect = Rect {
@@ -812,9 +817,8 @@ impl UI {
             h: line_height * options.len() as f32 + 2.0,
         };
 
-        let mut gfx = vec![
-            Graphic::Rect(list_rect, self.style.theme.bg, Some(self.style.theme.fg))
-        ];
+        self.push_graphic(Graphic::Rect(
+            list_rect, self.style.theme.bg, Some(self.style.theme.fg)));
 
         // draw options
         let mut hit_rect = Rect {
@@ -823,25 +827,73 @@ impl UI {
             w: list_rect.w - 2.0,
             h: line_height,
         };
-        let mouse_pos = mouse_position_vec2();
         let lmb = is_mouse_button_released(MouseButton::Left);
+        let mut return_val = None;
+        let id = "patch name";
         for (i, option) in options.iter().enumerate() {
             if i == *index {
-                gfx.push(Graphic::Rect(hit_rect, self.style.theme.click, None));
-            } else if hit_rect.contains(mouse_pos) {
-                gfx.push(Graphic::Rect(hit_rect, self.style.theme.hover, None));
+                self.push_graphic(Graphic::Rect(hit_rect, self.style.theme.click, None));
+            } else if self.mouse_hits(hit_rect) {
+                self.push_graphic(Graphic::Rect(hit_rect, self.style.theme.hover, None));
                 if lmb {
                     *index = i;
                 }
             }
-            gfx.push(Graphic::Text(hit_rect.x - 1.0, hit_rect.y,
-                option.to_owned(), self.style.theme.fg));
+            if Some(i) == self.instrument_edit_index {
+                if self.editable_text(hit_rect.x - 1.0, hit_rect.y) {
+                    if let Some(state) = self.focused_text.take() {
+                        return_val = Some(state.text);
+                        self.instrument_edit_index = None;
+                    }
+                }
+            } else {
+                if self.mouse_hits(hit_rect) && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
+                    self.focused_text = Some(TextEditState {
+                        id: id.to_owned(),
+                        text: option.clone(),
+                    });
+                    self.instrument_edit_index = Some(i);
+                    *index = i;
+                }
+                self.push_graphic(Graphic::Text(hit_rect.x - 1.0, hit_rect.y,
+                    option.to_owned(), self.style.theme.fg));
+            }
             hit_rect.y += hit_rect.h;
+        }
+
+        self.update_cursor(list_rect.w + MARGIN * 2.0, list_rect.h + MARGIN);
+
+        return_val
+    }
+
+    /// Primitive that draws the currently focused text and handles edit input.
+    fn editable_text(&mut self, x: f32, y: f32) -> bool {
+        let mut gfx = Vec::new();
+        let params = self.style.text_params();
+
+        if let Some(state) = self.focused_text.as_mut() {
+            let text_width = text_width(&state.text, &params);
+            let text_height = cap_height(&params);
+            gfx.push(Graphic::Text(x, y, state.text.clone(), self.style.theme.fg));
+            let line_x = x + text_width + MARGIN + 0.5;
+            gfx.push(Graphic::Line(line_x, y + MARGIN - 2.0,
+                line_x, y + MARGIN + text_height + 2.0,
+                self.style.theme.fg));
+            
+            while let Some(c) = get_char_pressed() {
+                if c.is_ascii_graphic() || c == ' ' {
+                    state.text.push(c);
+                }
+            }
+
+            if is_key_pressed(KeyCode::Backspace) {
+                state.text.pop();
+            }
         }
 
         self.push_graphics(gfx);
 
-        self.update_cursor(list_rect.w + MARGIN * 2.0, list_rect.h + MARGIN);
+        is_key_pressed(KeyCode::Enter)
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,

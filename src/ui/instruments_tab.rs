@@ -75,7 +75,13 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
         Some(i) => *i + 1,
         None => 0,
     };
-    ui.list_box(&names, &mut list_index, 10);
+    if let Some(s) = ui.instrument_list(&names, &mut list_index, 10) {
+        if list_index > 0 {
+            if let Some(patch) = patches.get_mut(list_index - 1) {
+                patch.name = s;
+            }
+        }
+    }
     *patch_index = match list_index {
         0 => None,
         i => Some(i - 1),
@@ -133,9 +139,11 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
     for (i, entry) in module.kit.iter_mut().enumerate() {
         ui.note_input(&format!("kit_{}_input", i), &mut entry.input_note);
         ui.next_cell();
-        ui.combo_box(&format!("kit_{}_patch", i), "",
+        if let Some(j) = ui.combo_box(&format!("kit_{}_patch", i), "",
             module.patches.get(entry.patch_index).map(|x| x.name.as_ref()).unwrap_or(""),
-            || module.patches.iter().map(|x| x.name.clone()).collect());
+            || module.patches.iter().map(|x| x.name.clone()).collect()) {
+            entry.patch_index = j;
+        }
         ui.next_cell();
         ui.note_input(&format!("kit_{}_output", i), &mut entry.patch_note);
         ui.next_cell();
