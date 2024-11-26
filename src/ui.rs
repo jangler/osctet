@@ -8,6 +8,8 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
+use crate::pitch::Note;
+
 pub mod general_tab;
 pub mod pattern_tab;
 pub mod instruments_tab;
@@ -863,6 +865,12 @@ impl UI {
         self.cursor_z = 3;
         self.text_rect(text, x, y);
         self.cursor_z = old_z;
+    }
+
+    pub fn note_input(&mut self, note: &mut Note) {
+        let (rect, _) = self.text_rect(&note.to_string(),
+            self.cursor_x + MARGIN, self.cursor_y + MARGIN);
+        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
     }
 }
 

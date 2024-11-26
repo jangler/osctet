@@ -1,6 +1,6 @@
 use rfd::FileDialog;
 
-use crate::synth::*;
+use crate::{module::Module, synth::*};
 
 use super::{UI, Layout};
 
@@ -12,6 +12,11 @@ const NUM_COLUMN_WIDTH: f32 = 20.0;
 const SLIDER_COLUMN_WIDTH: f32 = 120.0;
 const X_COLUMN_WIDTH: f32 = 20.0;
 const WAVE_COLUMN_WIDTH: f32 = 80.0;
+const NOTE_COLUMN_WIDTH: f32 = 70.0;
+
+const KIT_COLUMN_NAMES: [&str; 4] = ["Note in", "Patch", "Note out", ""];
+const KIT_COLUMN_WIDTHS: [f32; 4] =
+    [NOTE_COLUMN_WIDTH, 100.0, NOTE_COLUMN_WIDTH, X_COLUMN_WIDTH];
 
 const OSC_COLUMN_NAMES: [&str; 8] =
     ["#", "Level", "Tone", "Freq. ratio", "Finetune", "Waveform", "Output", ""];
@@ -45,38 +50,59 @@ const MOD_COLUMN_WIDTHS: [f32; 5] = [
     NUM_COLUMN_WIDTH, 100.0, 100.0, SLIDER_COLUMN_WIDTH, X_COLUMN_WIDTH,
 ];
 
-pub fn draw(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
+pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
     ui.start_group();
-    patch_list(ui, patches, patch_index);
+    patch_list(ui, module, patch_index);
     ui.layout = Layout::Horizontal;
     ui.end_group();
-    if let Some(patch) = patches.get_mut(*patch_index) {
-        patch_controls(ui, patch);
+    if let Some(index) = patch_index {
+        if let Some(patch) = module.patches.get_mut(*index) {
+            patch_controls(ui, patch);
+        }
+    } else {
+        kit_controls(ui, module);
     }
 }
 
-fn patch_list(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
+fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
+    let patches = &mut module.patches;
     ui.layout = Layout::Vertical;
 
-    // don't understand how to do this without cloning
-    let names: Vec<String> = patches.iter().map(|x| x.name.clone()).collect();
-    ui.list_box(&names, patch_index, 10);
+    let mut names = vec![String::from("Kit")];
+    names.extend(patches.iter().map(|x| x.name.clone()));
+
+    let mut list_index = match patch_index {
+        Some(i) => *i + 1,
+        None => 0,
+    };
+    ui.list_box(&names, &mut list_index, 10);
+    *patch_index = match list_index {
+        0 => None,
+        i => Some(i - 1),
+    };
 
     ui.layout = Layout::Horizontal;
     if ui.button("Add") {
         patches.push(Patch::new());
-        *patch_index = patches.len() - 1;
+        *patch_index = Some(patches.len() - 1);
     }
     if ui.button("Remove") {
-        if *patch_index < patches.len() {
-            patches.remove(*patch_index);
-            if *patch_index > 0 && *patch_index >= patches.len() {
-                *patch_index -= 1;
+        if let Some(index) = patch_index {
+            module.kit.retain(|x| x.patch_index != *index);
+            if *index < patches.len() {
+                patches.remove(*index);
+                if *index >= patches.len() {
+                    if *index == 0 {
+                        *patch_index = None;
+                    } else {
+                        *index -= 1;
+                    }
+                }
             }
         }
     }
     if ui.button("Save") {
-        if let Some(patch) = patches.get(*patch_index) {
+        if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
             if let Some(path) = FileDialog::new()
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
                 .save_file() {
@@ -93,11 +119,37 @@ fn patch_list(ui: &mut UI, patches: &mut Vec<Patch>, patch_index: &mut usize) {
             match Patch::load(&path) {
                 Ok(p) => {
                     patches.push(p); 
-                    *patch_index = patches.len() - 1;
+                    *patch_index = Some(patches.len() - 1);
                 },
                 Err(e) => ui.report(e),
             }
         }
+    }
+}
+
+fn kit_controls(ui: &mut UI, module: &mut Module) {
+    ui.start_grid(&KIT_COLUMN_WIDTHS, &KIT_COLUMN_NAMES);
+    let mut removed_index = None;
+    for (i, entry) in module.kit.iter_mut().enumerate() {
+        ui.note_input(&mut entry.input_note);
+        ui.next_cell();
+        ui.combo_box(&format!("kit_{}_patch", i), "",
+            module.patches.get(entry.patch_index).map(|x| x.name.as_ref()).unwrap_or(""),
+            || module.patches.iter().map(|x| x.name.clone()).collect());
+        ui.next_cell();
+        ui.note_input(&mut entry.input_note);
+        ui.next_cell();
+        if ui.button("X") {
+            removed_index = Some(i);
+        }
+        ui.next_cell();
+    }
+    ui.end_grid();
+    if let Some(i) = removed_index {
+        module.kit.remove(i);
+    }
+    if !module.patches.is_empty() && ui.button("+") {
+        module.kit.push(Default::default());
     }
 }
 
