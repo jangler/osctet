@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::{fx::GlobalFX, pattern::Pattern, pitch::{Note, Tuning}, synth::Patch};
+use crate::{fx::GlobalFX, pattern::{Track, TrackTarget}, pitch::{Note, Tuning}, synth::Patch};
 
 pub struct Module {
     pub title: String,
@@ -9,7 +9,7 @@ pub struct Module {
     pub fx: GlobalFX,
     pub kit: Vec<KitEntry>,
     pub patches: Vec<Patch>,
-    pub pattern: Pattern,
+    pub pattern: Vec<Track>,
 }
 
 impl Module {
@@ -21,7 +21,11 @@ impl Module {
             fx,
             kit: Vec::new(),
             patches: vec![Patch::new()],
-            pattern: Pattern::new(),
+            pattern: vec![
+                Track::new(TrackTarget::Global),
+                Track::new(TrackTarget::Kit),
+                Track::new(TrackTarget::Patch(0)),
+            ],
         }
     }
 

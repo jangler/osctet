@@ -352,7 +352,7 @@ impl App {
 
         match self.ui.tab_menu("main", &TABS) {
             0 => ui::general_tab::draw(&mut self.ui, &mut self.module),
-            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module.pattern),
+            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module),
             2 => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index),
             _ => panic!("bad tab value"),
