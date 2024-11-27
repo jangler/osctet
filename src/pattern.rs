@@ -4,6 +4,7 @@ const TICKS_PER_BEAT: u32 = 120;
 
 pub struct Position {
     pub tick: u32,
+    pub track: u8,
     pub channel: u8,
     pub column: u8,
     pub char: u8,

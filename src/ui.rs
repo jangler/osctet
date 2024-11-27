@@ -163,7 +163,7 @@ pub struct UI {
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
     dialog: Option<Dialog>,
-    group_rect: Option<Rect>,
+    group_rects: Vec<Rect>,
     focused_note: Option<String>,
     pub note_queue: Vec<Note>,
     instrument_edit_index: Option<usize>,
@@ -191,7 +191,7 @@ impl UI {
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
             dialog: None,
-            group_rect: None,
+            group_rects: Vec::new(),
             focused_note: None,
             note_queue: Vec::new(),
             instrument_edit_index: None,
@@ -218,7 +218,7 @@ impl UI {
     }
 
     pub fn start_group(&mut self) {
-        self.group_rect = Some(Rect {
+        self.group_rects.push(Rect {
             x: self.cursor_x,
             y: self.cursor_y,
             w: 0.0,
@@ -227,7 +227,7 @@ impl UI {
     }
 
     pub fn end_group(&mut self) {
-        if let Some(rect) = self.group_rect {
+        if let Some(rect) = self.group_rects.pop() {
             match self.layout {
                 Layout::Horizontal => {
                     self.cursor_x = rect.x + rect.w;
@@ -239,7 +239,6 @@ impl UI {
                 },
             }
         }
-        self.group_rect = None;
     }
 
     pub fn end_frame(&mut self) {
@@ -310,9 +309,9 @@ impl UI {
         }
     }
 
-    fn expand_group_rect(&mut self, x: f32, y: f32) {
+    fn expand_groups(&mut self, x: f32, y: f32) {
         if self.cursor_z == 0 {
-            if let Some(rect) = &mut self.group_rect {
+            for rect in self.group_rects.iter_mut() {
                 rect.w = rect.w.max(x - rect.x);
                 rect.h = rect.h.max(y - rect.y);
             }
@@ -321,12 +320,12 @@ impl UI {
 
     fn push_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
         self.push_graphic(Graphic::Line(x1, y1, x2, y2, color));
-        self.expand_group_rect(x1.max(x2), y1.max(y2));
+        self.expand_groups(x1.max(x2), y1.max(y2));
     }
 
     fn push_rect(&mut self, rect: Rect, fill: Color, stroke: Option<Color>) {
         self.push_graphic(Graphic::Rect(rect, fill, stroke));
-        self.expand_group_rect(rect.x + rect.w, rect.y + rect.h);
+        self.expand_groups(rect.x + rect.w, rect.y + rect.h);
     }
 
     fn push_text(&mut self, x: f32, y: f32, text: String, color: Color) -> Rect {
@@ -338,7 +337,7 @@ impl UI {
             h: cap_height(&params) + MARGIN * 2.0,
         };
         self.push_graphic(Graphic::Text(x, y, text, color));
-        self.expand_group_rect(rect.x + rect.w, rect.y + rect.h);
+        self.expand_groups(rect.x + rect.w, rect.y + rect.h);
         rect
     }
 
