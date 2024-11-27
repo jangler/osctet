@@ -9,7 +9,7 @@ pub struct Module {
     pub fx: GlobalFX,
     pub kit: Vec<KitEntry>,
     pub patches: Vec<Patch>,
-    pub pattern: Vec<Track>,
+    pub tracks: Vec<Track>,
 }
 
 impl Module {
@@ -21,7 +21,7 @@ impl Module {
             fx,
             kit: Vec::new(),
             patches: vec![Patch::new()],
-            pattern: vec![
+            tracks: vec![
                 Track::new(TrackTarget::Global),
                 Track::new(TrackTarget::Kit),
                 Track::new(TrackTarget::Patch(0)),
@@ -63,7 +63,7 @@ impl Module {
             }
         }
 
-        for track in self.pattern.iter_mut() {
+        for track in self.tracks.iter_mut() {
             match track.target {
                 TrackTarget::Patch(i) if i == index =>
                     track.target = TrackTarget::None,

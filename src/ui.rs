@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
-use crate::{input, pitch::Note};
+use crate::{pattern::Position, pitch::Note};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -168,10 +168,19 @@ pub struct UI {
     pub note_queue: Vec<Note>,
     instrument_edit_index: Option<usize>,
     mouse_consumed: bool,
+    edit_start: Position,
+    edit_end: Position,
+    beat_division: u32,
 }
 
 impl UI {
     pub fn new() -> Self {
+        let edit_cursor = Position {
+            tick: 0,
+            track: 0,
+            channel: 0,
+            column: 0,
+        };
         Self {
             style: Style {
                 font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
@@ -197,6 +206,9 @@ impl UI {
             note_queue: Vec::new(),
             instrument_edit_index: None,
             mouse_consumed: false,
+            edit_start: edit_cursor,
+            edit_end: edit_cursor,
+            beat_division: 4,
         }
     }
 

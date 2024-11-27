@@ -1,13 +1,24 @@
 use crate::pitch::Note;
 
-const TICKS_PER_BEAT: u32 = 120;
+pub const TICKS_PER_BEAT: u32 = 120;
 
+pub const GLOBAL_COLUMN: u8 = 0;
+pub const NOTE_COLUMN: u8 = 0;
+pub const VEL_COLUMN: u8 = 1;
+pub const MOD_COLUMN: u8 = 2;
+
+#[derive(Clone, Copy)]
 pub struct Position {
     pub tick: u32,
-    pub track: u8,
-    pub channel: u8,
+    pub track: usize,
+    pub channel: usize,
     pub column: u8,
-    pub char: u8,
+}
+
+impl Position {
+    pub fn beat(&self) -> f32 {
+        self.tick as f32 / TICKS_PER_BEAT as f32
+    }
 }
 
 #[derive(Clone, Copy)]
