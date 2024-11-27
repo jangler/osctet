@@ -9,6 +9,7 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
 use module::Module;
+use pattern::EventData;
 use synth::{Key, KeyOrigin, Synth};
 use macroquad::prelude::*;
 
@@ -174,7 +175,7 @@ impl App {
 
         for key in pressed {
             if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
-                self.ui.note_queue.push(note);
+                self.ui.note_queue.push(EventData::Pitch(note));
                 if !self.ui.accepting_note_input() {
                     if let Some((patch, note)) =
                         self.module.map_input(self.patch_index, note) {
@@ -232,9 +233,11 @@ impl App {
         if let Some(rx) = &self.midi.rx {
             while let Ok(v) = rx.try_recv() {
                 if let Some(evt) = MidiEvent::parse(&v) {
-                    if let MidiEvent::NoteOn { key, .. } = evt {
-                        self.ui.note_queue.push(
-                            input::note_from_midi(key, &self.module.tuning));
+                    if let MidiEvent::NoteOn { key, velocity, .. } = evt {
+                        self.ui.note_queue.push(EventData::Pitch(
+                            input::note_from_midi(key, &self.module.tuning)));
+                        let v = (velocity as f32 * 9.0 / 127.0).round() as u8;
+                        self.ui.note_queue.push(EventData::Pressure(v));
                     }
                     if !self.ui.accepting_note_input() {
                         match evt {

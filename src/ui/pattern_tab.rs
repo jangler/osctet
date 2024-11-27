@@ -36,12 +36,12 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
     }
 
     if !ui.accepting_note_input() {
-        if let Some(note) = ui.note_queue.pop() {
+        while let Some(data) = ui.note_queue.pop() {
             let chan = &mut module.tracks[ui.edit_start.track]
                 .channels[ui.edit_start.channel];
             let evt = Event {
                 tick: ui.edit_start.tick,
-                data: EventData::Pitch(note)
+                data,
             };
             insert_event(chan, evt);
         }

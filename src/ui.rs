@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
-use crate::{pattern::Position, pitch::Note};
+use crate::{pattern::{EventData, Position}, pitch::Note};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -165,7 +165,7 @@ pub struct UI {
     dialog: Option<Dialog>,
     group_rects: Vec<Rect>,
     focused_note: Option<String>,
-    pub note_queue: Vec<Note>,
+    pub note_queue: Vec<EventData>,
     instrument_edit_index: Option<usize>,
     mouse_consumed: bool,
     edit_start: Position,
@@ -973,9 +973,11 @@ impl UI {
         };
 
         if focused {
-            if let Some(input_note) = self.note_queue.pop() {
-                *note = input_note;
-                self.focused_note = None;
+            for evt in self.note_queue.iter() {
+                if let EventData::Pitch(input_note) = evt {
+                    *note = *input_note;
+                    self.focused_note = None;
+                }
             }
         }
 
