@@ -112,9 +112,52 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
 fn draw_channel(ui: &mut UI, channel: &Vec<Event>, track_index: usize, channel_index: usize) {
     ui.layout = Layout::Vertical;
     ui.label("Channel");
+
+    let params = ui.style.text_params();
+    let char_width = text_width("x", &params);
+    let cell_height = cap_height(&params) + MARGIN * 2.0;
+    let channel_rect = Rect {
+        x: ui.cursor_x,
+        y: ui.cursor_y,
+        w: char_width * 5.0 + MARGIN * 4.0,
+        h: ui.bounds.x + ui.bounds.h - ui.cursor_y,
+    };
+    if is_mouse_button_pressed(MouseButton::Left) && ui.mouse_hits(channel_rect) {
+        let (x, y) = mouse_position();
+        let (x, y) = (x - channel_rect.x, y - channel_rect.y);
+        ui.edit_start = Position {
+            tick: ((y - cell_height * 0.5) as f32
+                / BEAT_HEIGHT * ui.beat_division as f32).round() as u32
+                * TICKS_PER_BEAT / ui.beat_division,
+            track: track_index,
+            channel: channel_index,
+            column: if track_index == 0 || x < char_width * 3.0 + MARGIN * 1.5 {
+                0
+            } else if x < char_width * 4.0 + MARGIN * 2.5 {
+                1
+            } else {
+                2
+            },
+        };
+        ui.edit_end = ui.edit_start;
+    }
+
     if ui.edit_start.track == track_index && ui.edit_start.channel == channel_index {
-        ui.push_text(ui.cursor_x, ui.cursor_y + ui.edit_start.beat() * BEAT_HEIGHT,
-            format!("{}", ui.edit_start.column), ui.style.theme.fg);
+        let cursor_rect = Rect {
+            x: ui.cursor_x + MARGIN + match ui.edit_start.column {
+                0 => 0.0,
+                1 => char_width * 3.0 + MARGIN,
+                2 => char_width * 4.0 + MARGIN * 2.0,
+                _ => panic!("invalid cursor column"),
+            },
+            y: ui.cursor_y + ui.edit_start.beat() * BEAT_HEIGHT,
+            w: char_width * if ui.edit_start.column == 0 { 3.0 } else { 1.0 },
+            h: cell_height,
+        };
+        ui.push_rect(cursor_rect, ui.style.theme.click, None);
+        ui.push_text(ui.cursor_x, ui.cursor_y, String::from("C#4"), ui.style.theme.fg);
+        ui.push_text(ui.cursor_x + char_width * 3.0 + MARGIN, ui.cursor_y, String::from("9"), ui.style.theme.fg);
+        ui.push_text(ui.cursor_x + char_width * 4.0 + MARGIN * 2.0, ui.cursor_y, String::from("0"), ui.style.theme.fg);
     }
 }
 
