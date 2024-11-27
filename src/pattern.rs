@@ -50,10 +50,19 @@ pub struct Event {
 
 pub enum EventData {
     Pitch(Note),
-    Instrument(u8),
     Pressure(u8),
     Modulation(u8),
     Tempo(f32),
     LoopStart,
     LoopEnd,
+}
+
+impl EventData {
+    pub fn column(&self) -> u8 {
+        match *self {
+            Self::Pressure(_) => VEL_COLUMN,
+            Self::Modulation(_) => MOD_COLUMN,
+            _ => NOTE_COLUMN,
+        }
+    }
 }

@@ -174,9 +174,8 @@ impl App {
 
         for key in pressed {
             if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
-                if self.ui.accepting_note_input() {
-                    self.ui.note_queue.push(note);
-                } else {
+                self.ui.note_queue.push(note);
+                if !self.ui.accepting_note_input() {
                     if let Some((patch, note)) =
                         self.module.map_input(self.patch_index, note) {
                         self.synth.note_on(Key {
@@ -233,12 +232,11 @@ impl App {
         if let Some(rx) = &self.midi.rx {
             while let Ok(v) = rx.try_recv() {
                 if let Some(evt) = MidiEvent::parse(&v) {
-                    if self.ui.accepting_note_input() {
-                        if let MidiEvent::NoteOn { key, .. } = evt {
-                            self.ui.note_queue.push(
-                                input::note_from_midi(key, &self.module.tuning));
-                        }
-                    } else {
+                    if let MidiEvent::NoteOn { key, .. } = evt {
+                        self.ui.note_queue.push(
+                            input::note_from_midi(key, &self.module.tuning));
+                    }
+                    if !self.ui.accepting_note_input() {
                         match evt {
                             MidiEvent::NoteOff { channel, key, .. } => {
                                 self.synth.note_off(Key{

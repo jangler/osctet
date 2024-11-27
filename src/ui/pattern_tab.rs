@@ -1,4 +1,4 @@
-use crate::{module::Module, pattern::{Event, Track, TrackTarget, GLOBAL_COLUMN, MOD_COLUMN, TICKS_PER_BEAT}, synth::Patch};
+use crate::{module::Module, pattern::{Event, EventData, Track, TrackTarget, GLOBAL_COLUMN, MOD_COLUMN, NOTE_COLUMN, TICKS_PER_BEAT, VEL_COLUMN}, synth::Patch};
 
 use super::*;
 
@@ -32,6 +32,18 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
             } else {
                 shift_channel_right(ui, &module.tracks);
             }
+        }
+    }
+
+    if !ui.accepting_note_input() {
+        if let Some(note) = ui.note_queue.pop() {
+            let chan = &mut module.tracks[ui.edit_start.track]
+                .channels[ui.edit_start.channel];
+            let evt = Event {
+                tick: ui.edit_start.tick,
+                data: EventData::Pitch(note)
+            };
+            insert_event(chan, evt);
         }
     }
 
@@ -92,6 +104,11 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
     }
 }
 
+fn insert_event(chan: &mut Vec<Event>, evt: Event) {
+    chan.retain(|x| x.tick != evt.tick || x.data.column() != evt.data.column());
+    chan.push(evt);
+}
+
 fn track_name(target: TrackTarget, patches: &[Patch]) -> &str {
     match target {
         TrackTarget::None => "(none)",
@@ -132,11 +149,11 @@ fn draw_channel(ui: &mut UI, channel: &Vec<Event>, track_index: usize, channel_i
             track: track_index,
             channel: channel_index,
             column: if track_index == 0 || x < char_width * 3.0 + MARGIN * 1.5 {
-                0
+                NOTE_COLUMN
             } else if x < char_width * 4.0 + MARGIN * 2.5 {
-                1
+                VEL_COLUMN
             } else {
-                2
+                MOD_COLUMN
             },
         };
         ui.edit_end = ui.edit_start;
@@ -155,10 +172,27 @@ fn draw_channel(ui: &mut UI, channel: &Vec<Event>, track_index: usize, channel_i
             h: cell_height,
         };
         ui.push_rect(cursor_rect, ui.style.theme.click, None);
-        ui.push_text(ui.cursor_x, ui.cursor_y, String::from("C#4"), ui.style.theme.fg);
-        ui.push_text(ui.cursor_x + char_width * 3.0 + MARGIN, ui.cursor_y, String::from("9"), ui.style.theme.fg);
-        ui.push_text(ui.cursor_x + char_width * 4.0 + MARGIN * 2.0, ui.cursor_y, String::from("0"), ui.style.theme.fg);
     }
+
+    for event in channel {
+        draw_event(ui, event, char_width);
+    }
+}
+
+fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
+    let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT;
+    match evt.data {
+        EventData::Pitch(note) => ui.push_text(ui.cursor_x, y,
+            note.to_string(), ui.style.theme.fg),
+        EventData::Pressure(v) => ui.push_text(
+            ui.cursor_x + char_width * 3.0 + MARGIN, y,
+            v.to_string(), ui.style.theme.fg),
+        EventData::Modulation(v) => ui.push_text(
+            ui.cursor_x + char_width * 4.0 + MARGIN * 2.0, y,
+            v.to_string(), ui.style.theme.fg),
+        _ => ui.push_text(ui.cursor_x, y,
+            String::from("(unknown)"), ui.style.theme.fg),
+    };
 }
 
 fn translate_cursor(ui: &mut UI, offset: i64) {
