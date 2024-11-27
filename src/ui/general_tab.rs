@@ -5,7 +5,7 @@ use super::*;
 pub fn draw(ui: &mut UI, module: &mut Module) {
     ui.layout = Layout::Vertical;
     fx_controls(ui, &mut module.fx);
-    ui.space();
+    ui.space(2.0);
     tuning_controls(ui, &mut module.tuning);
 }
 

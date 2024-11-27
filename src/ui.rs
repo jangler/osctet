@@ -167,6 +167,7 @@ pub struct UI {
     focused_note: Option<String>,
     pub note_queue: Vec<Note>,
     instrument_edit_index: Option<usize>,
+    mouse_consumed: bool,
 }
 
 impl UI {
@@ -195,6 +196,7 @@ impl UI {
             focused_note: None,
             note_queue: Vec::new(),
             instrument_edit_index: None,
+            mouse_consumed: false,
         }
     }
 
@@ -209,6 +211,7 @@ impl UI {
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
         self.cursor_z = 0;
+        self.mouse_consumed = false;
 
         if self.focused_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
             self.focused_slider = None;
@@ -292,8 +295,8 @@ impl UI {
             + self.column_widths[..self.column_index].iter().sum::<f32>();
     }
 
-    pub fn space(&mut self) {
-        self.update_cursor(MARGIN * 4.0, MARGIN * 4.0);
+    pub fn space(&mut self, scale: f32) {
+        self.update_cursor(MARGIN * scale, MARGIN * scale);
     }
 
     fn push_graphic(&mut self, graphic: Graphic) {
@@ -379,12 +382,11 @@ impl UI {
 
     /// Check whether the mouse is within the rect and unoccluded.
     fn mouse_hits(&self, rect: Rect) -> bool {
-        let pt = mouse_position_vec2();
-
-        // dialog open
-        if self.dialog.is_some() {
+        if self.mouse_consumed || self.dialog.is_some() {
             return false
         }
+
+        let pt = mouse_position_vec2();
 
         // occlusion by combo box
         if let Some(state) = &self.open_combo_box {
@@ -472,8 +474,12 @@ impl UI {
     ) -> Option<usize> {
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text, self.cursor_x + MARGIN, self.cursor_y + MARGIN);
-        let label_dim = self.push_text(self.cursor_x + button_rect.w + MARGIN,
-            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
+        let label_dim = if !label.is_empty() {
+            self.push_text(self.cursor_x + button_rect.w + MARGIN,
+                self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg)
+        } else {
+            Rect::default()
+        };
         let params = self.style.text_params();
 
         // check to open list
@@ -535,7 +541,8 @@ impl UI {
             if hit_rect.contains(mouse_pos) {
                 gfx.push(Graphic::Rect(hit_rect, self.style.theme.hover, None));
                 if lmb {
-                    return_val = Some(i)
+                    return_val = Some(i);
+                    self.mouse_consumed = true;
                 }
             }
             gfx.push(Graphic::Text(hit_rect.x - 1.0, hit_rect.y - 1.0,

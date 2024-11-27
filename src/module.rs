@@ -52,6 +52,27 @@ impl Module {
             .find(|x| x.input_note == note)
             .map(|x| (self.patches.get(x.patch_index).unwrap(), x.patch_note))
     }
+
+    pub fn remove_patch(&mut self, index: usize) {
+        self.patches.remove(index);
+        self.kit.retain(|x| x.patch_index != index);
+
+        for entry in self.kit.iter_mut() {
+            if entry.patch_index > index {
+                entry.patch_index -= 1;
+            }
+        }
+
+        for track in self.pattern.iter_mut() {
+            match track.target {
+                TrackTarget::Patch(i) if i == index =>
+                    track.target = TrackTarget::None,
+                TrackTarget::Patch(i) if i > index =>
+                    track.target = TrackTarget::Patch(i - 1),
+                _ => (),
+            }
+        }
+    }
 }
 
 #[derive(Default)]

@@ -65,69 +65,71 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
 }
 
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
-    let patches = &mut module.patches;
-    ui.layout = Layout::Vertical;
-
-    let mut names = vec![String::from("Kit")];
-    names.extend(patches.iter().map(|x| x.name.clone()));
-
-    let mut list_index = match patch_index {
-        Some(i) => *i + 1,
-        None => 0,
-    };
-    if let Some(s) = ui.instrument_list(&names, &mut list_index, 10) {
-        if list_index > 0 {
-            if let Some(patch) = patches.get_mut(list_index - 1) {
-                patch.name = s;
+    {
+        let patches = &mut module.patches;
+        ui.layout = Layout::Vertical;
+    
+        let mut names = vec![String::from("Kit")];
+        names.extend(patches.iter().map(|x| x.name.clone()));
+    
+        let mut list_index = match patch_index {
+            Some(i) => *i + 1,
+            None => 0,
+        };
+        if let Some(s) = ui.instrument_list(&names, &mut list_index, 10) {
+            if list_index > 0 {
+                if let Some(patch) = patches.get_mut(list_index - 1) {
+                    patch.name = s;
+                }
             }
         }
-    }
-    *patch_index = match list_index {
-        0 => None,
-        i => Some(i - 1),
-    };
-
-    ui.layout = Layout::Horizontal;
-    if ui.button("Add") {
-        patches.push(Patch::new());
-        *patch_index = Some(patches.len() - 1);
+        *patch_index = match list_index {
+            0 => None,
+            i => Some(i - 1),
+        };
+    
+        ui.layout = Layout::Horizontal;
+        if ui.button("Add") {
+            patches.push(Patch::new());
+            *patch_index = Some(patches.len() - 1);
+        }
     }
     if ui.button("Remove") {
         if let Some(index) = patch_index {
-            module.kit.retain(|x| x.patch_index != *index);
-            if *index < patches.len() {
-                patches.remove(*index);
-                if *index >= patches.len() {
-                    if *index == 0 {
-                        *patch_index = None;
-                    } else {
-                        *index -= 1;
+            module.remove_patch(*index);
+            if *index >= module.patches.len() {
+                if *index == 0 {
+                    *patch_index = None;
+                } else {
+                    *index -= 1;
+                }
+            }
+        }
+    }
+    {
+        let patches = &mut module.patches;
+        if ui.button("Save") {
+            if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
+                if let Some(path) = FileDialog::new()
+                    .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                    .save_file() {
+                    if let Err(e) = patch.save(&path) {
+                        ui.report(e);
                     }
                 }
             }
         }
-    }
-    if ui.button("Save") {
-        if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
+        if ui.button("Load") {
             if let Some(path) = FileDialog::new()
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
-                .save_file() {
-                if let Err(e) = patch.save(&path) {
-                    ui.report(e);
+                .pick_file() {
+                match Patch::load(&path) {
+                    Ok(p) => {
+                        patches.push(p); 
+                        *patch_index = Some(patches.len() - 1);
+                    },
+                    Err(e) => ui.report(e),
                 }
-            }
-        }
-    }
-    if ui.button("Load") {
-        if let Some(path) = FileDialog::new()
-            .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
-            .pick_file() {
-            match Patch::load(&path) {
-                Ok(p) => {
-                    patches.push(p); 
-                    *patch_index = Some(patches.len() - 1);
-                },
-                Err(e) => ui.report(e),
             }
         }
     }
@@ -174,17 +176,17 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch) {
         patch.play_mode = PlayMode::VARIANTS[i];
     }
 
-    ui.space();
+    ui.space(2.0);
     oscillator_controls(ui, patch);
-    ui.space();
+    ui.space(2.0);
     filter_controls(ui, patch);
-    ui.space();
+    ui.space(2.0);
     envelope_controls(ui, patch);
-    ui.space();
+    ui.space(2.0);
     lfo_controls(ui, patch);
-    ui.space();
+    ui.space(2.0);
     modulation_controls(ui, patch);
-    ui.space();
+    ui.space(2.0);
 }
 
 fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {

@@ -12,6 +12,7 @@ pub struct Position {
 
 #[derive(Clone, Copy)]
 pub enum TrackTarget {
+    None,
     Global,
     Kit,
     Patch(usize),
