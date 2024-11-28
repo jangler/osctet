@@ -986,6 +986,28 @@ impl UI {
 
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
     }
+
+    /// Returns the top-left and bottom-right corners of the pattern selection.
+    fn selection_corners(&self) -> (Position, Position) {
+        let mut start_x = self.edit_start.x_tuple();
+        let mut end_x = self.edit_end.x_tuple();
+        if start_x > end_x {
+            (start_x, end_x) = (end_x, start_x)
+        }
+        let tl = Position {
+            track: start_x.0,
+            channel: start_x.1,
+            column: start_x.2,
+            tick: self.edit_start.tick.min(self.edit_end.tick),
+        };
+        let br = Position {
+            track: end_x.0,
+            channel: end_x.1,
+            column: end_x.2,
+            tick: self.edit_start.tick.max(self.edit_end.tick),
+        };
+        (tl, br)
+    }
 }
 
 fn interpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {

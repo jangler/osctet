@@ -1,5 +1,3 @@
-use std::sync::mpsc::channel;
-
 use crate::{module::*, synth::Patch};
 
 use super::*;
@@ -36,10 +34,14 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
     ui.end_group();
     ui.cursor_x = track_xs[0];
 
-    if is_mouse_button_pressed(MouseButton::Left)
-        && mouse_position_vec2().y >= ui.cursor_y {
-        ui.edit_start = position_from_mouse(ui, &track_xs, &module.tracks);
-        ui.edit_end = ui.edit_start;
+    if mouse_position_vec2().y >= ui.cursor_y {
+        if is_mouse_button_pressed(MouseButton::Left) {
+            ui.edit_start = position_from_mouse(ui, &track_xs, &module.tracks);
+            ui.edit_end = ui.edit_start;
+        } else if is_mouse_button_down(MouseButton::Left) {
+            ui.edit_end = position_from_mouse(ui, &track_xs, &module.tracks);
+            fix_cursors(ui, &module.tracks);
+        }
     }
 
     draw_cursor(ui, &track_xs);
@@ -124,12 +126,12 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module) -> Vec<f32> {
 
     if let Some(i) = removed_channel_track {
         module.tracks[i].channels.pop();
-        check_cursor(ui, &module.tracks);
+        fix_cursors(ui, &module.tracks);
     }
 
     if let Some(i) = removed_track {
         module.tracks.remove(i);
-        check_cursor(ui, &module.tracks);
+        fix_cursors(ui, &module.tracks);
     }
 
     if !module.patches.is_empty() && ui.button("+") {
@@ -152,7 +154,10 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
         } else {
             shift_channel_right(ui, &module.tracks);
         },
-        KeyCode::Delete => module.delete_events(ui.edit_start, ui.edit_end),
+        KeyCode::Delete => {
+            let (start, end) = ui.selection_corners();
+            module.delete_events(start, end);
+        },
         _ => (),
     }
 }
@@ -181,40 +186,36 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
 
 fn draw_cursor(ui: &mut UI, track_xs: &[f32]) {
     let params = &ui.style.text_params();
-    let start = position_coords(ui.edit_start, &params, track_xs, false);
-    let end = position_coords(ui.edit_end, &params, track_xs, true);
-    let cursor_rect = Rect {
+    let (tl, br) = ui.selection_corners();
+    let start = position_coords(tl, &params, track_xs, false);
+    let end = position_coords(br, &params, track_xs, true);
+
+    let selection_rect = Rect {
         x: ui.cursor_x + MARGIN + start.x,
         y: ui.cursor_y + start.y,
         w: end.x - start.x,
         h: end.y - start.y,
     };
-    ui.push_rect(cursor_rect, ui.style.theme.click, None);
+    ui.push_rect(selection_rect, ui.style.theme.click, None);
 }
 
 fn draw_channel(ui: &mut UI, channel: &Vec<Event>) {
     let char_width = text_width("x", &ui.style.text_params());
-
-    // draw events
     for event in channel {
         draw_event(ui, event, char_width);
     }
 }
 
 fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
+    let x = ui.cursor_x + column_x(evt.data.column(), char_width);
     let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT;
-    match evt.data {
-        EventData::Pitch(note) => ui.push_text(ui.cursor_x, y,
-            note.to_string(), ui.style.theme.fg),
-        EventData::Pressure(v) => ui.push_text(
-            ui.cursor_x + char_width * 3.0 + MARGIN, y,
-            v.to_string(), ui.style.theme.fg),
-        EventData::Modulation(v) => ui.push_text(
-            ui.cursor_x + char_width * 4.0 + MARGIN * 2.0, y,
-            v.to_string(), ui.style.theme.fg),
-        _ => ui.push_text(ui.cursor_x, y,
-            String::from("(unknown)"), ui.style.theme.fg),
+    let text = match evt.data {
+        EventData::Pitch(note) => note.to_string(),
+        EventData::Pressure(v) => v.to_string(),
+        EventData::Modulation(v) => v.to_string(),
+        _ => String::from("unknown"),
     };
+    ui.push_text(x, y, text, ui.style.theme.fg);
 }
 
 fn translate_cursor(ui: &mut UI, offset: i64) {
@@ -290,8 +291,8 @@ fn shift_channel_right(ui: &mut UI, tracks: &[Track]) {
     ui.edit_end = ui.edit_start; // TODO
 }
 
-/// Reposition the pattern cursor if it's in an invalid position.
-fn check_cursor(ui: &mut UI, tracks: &[Track]) {
+/// Reposition the pattern cursors if in an invalid position.
+fn fix_cursors(ui: &mut UI, tracks: &[Track]) {
     for cursor in [&mut ui.edit_start, &mut ui.edit_end] {
         if cursor.track >= tracks.len() {
             cursor.track -= 1;
