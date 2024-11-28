@@ -29,6 +29,7 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
     }
 
     ui.start_group();
+    let left_x = ui.cursor_x;
     let track_xs = draw_track_headers(ui, module);
     ui.layout = Layout::Vertical;
     ui.end_group();
@@ -44,6 +45,7 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
         }
     }
 
+    draw_beats(ui, left_x);
     draw_cursor(ui, &track_xs);
 
     // draw channel data
@@ -57,10 +59,24 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
     }
 }
 
+fn draw_beats(ui: &mut UI, x: f32) {
+    let mut beat = 1;
+    let mut y = ui.cursor_y;
+
+    while y < ui.bounds.y + ui.bounds.h {
+        ui.push_text(x, y, beat.to_string(), ui.style.theme.fg);
+        beat += 1;
+        y += BEAT_HEIGHT;
+    }
+}
+
 /// Returns x positions of each track, plus one extra position.
 fn draw_track_headers(ui: &mut UI, module: &mut Module) -> Vec<f32> {
     let mut removed_track = None;
     let mut removed_channel_track = None;
+
+    // offset for beat width
+    ui.cursor_x += text_width("x", &ui.style.text_params()) * 3.0 + MARGIN * 2.0;
 
     let mut xs = vec![ui.cursor_x];
     xs.extend(module.tracks.iter_mut().enumerate().map(|(i, track)| {
@@ -217,7 +233,7 @@ fn draw_cursor(ui: &mut UI, track_xs: &[f32]) {
     let end = position_coords(br, &params, track_xs, true);
 
     let selection_rect = Rect {
-        x: ui.cursor_x + MARGIN + start.x,
+        x: MARGIN + start.x,
         y: ui.cursor_y + start.y,
         w: end.x - start.x,
         h: end.y - start.y,
