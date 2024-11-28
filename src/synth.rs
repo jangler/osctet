@@ -31,7 +31,7 @@ impl Into<f32> for Parameter {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyOrigin {
     Keyboard,
     Midi,
@@ -189,6 +189,19 @@ impl Synth {
     pub fn note_on(&mut self, key: Key, pitch: f32, pressure: f32,
         patch: &Patch, seq: &mut Sequencer
     ) {
+        // turn off prev note(s) in channel
+        if key.origin == KeyOrigin::Pattern {
+            let removed_keys: Vec<Key> = self.voices.keys()
+                .filter(|k| k.origin == key.origin && k.channel == key.channel)
+                .cloned()
+                .collect();
+            for key in removed_keys {
+                if let Some(voice) = self.voices.remove(&key) {
+                    voice.off(seq);
+                }
+            }
+        }
+
         let bend = if key.origin == KeyOrigin::Midi {
             self.bend_memory[key.channel as usize]
         } else {
@@ -227,19 +240,10 @@ impl Synth {
         }
     }
 
-    /// Turns off all notes entered via the computer keyboard.
-    pub fn clear_keyboard_notes(&mut self, seq: &mut Sequencer) {
+    /// Turns off all notes from a specific origin.
+    pub fn clear_notes_with_origin(&mut self, seq: &mut Sequencer, origin: KeyOrigin) {
         for (key, voice) in &self.voices {
-            if key.origin == KeyOrigin::Keyboard {
-                voice.off(seq);
-            }
-        }
-    }
-
-    /// Turns off all notes entered via MIDI.
-    pub fn clear_midi_notes(&mut self, seq: &mut Sequencer) {
-        for (key, voice) in &self.voices {
-            if key.origin == KeyOrigin::Midi {
+            if key.origin == origin {
                 voice.off(seq);
             }
         }

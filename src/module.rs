@@ -97,6 +97,16 @@ impl Module {
             }
         }
     }
+
+    pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
+        self.tracks.get(track).map(|track| {
+            match track.target {
+                TrackTarget::None | TrackTarget::Global => None,
+                TrackTarget::Kit => self.get_kit_patch(note),
+                TrackTarget::Patch(i) => self.patches.get(i).map(|x| (x, note)),
+            }
+        }).flatten()
+    }
 }
 
 #[derive(Default)]

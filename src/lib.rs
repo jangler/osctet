@@ -142,12 +142,13 @@ impl App {
         };
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
+        let module = Module::new(global_fx);
         let mut app = App {
-            player: Player::new(seq, 0), // TODO: actual num_tracks
+            player: Player::new(seq, module.tracks.len()),
             octave: 4,
             midi,
             config,
-            module: Module::new(global_fx),
+            module,
             patch_index: Some(0),
             ui: ui::UI::new(),
             fullscreen: false,
@@ -184,8 +185,7 @@ impl App {
                             key: input::u8_from_key(key),
                         };
                         let pitch = self.module.tuning.midi_pitch(&note);
-                        let pressure = 100.0 / 127.0;
-                        self.player.note_on(None, key, pitch, pressure, patch);
+                        self.player.note_on(None, key, pitch, None, patch);
                     }
                 }
             } else {
@@ -262,7 +262,8 @@ impl App {
                                         };
                                         let pitch = self.module.tuning.midi_pitch(&note);
                                         let pressure = velocity as f32 / 127.0;
-                                        self.player.note_on(None, key, pitch, pressure, patch);
+                                        self.player.note_on(None, key, pitch,
+                                            Some(pressure), patch);
                                     }
                                 } else {
                                     let key = Key {
@@ -341,16 +342,17 @@ impl App {
 
     fn frame(&mut self) {
         if self.ui.accepting_keyboard_input() {
-            self.player.clear_keyboard_notes();
+            self.player.clear_notes_with_origin(KeyOrigin::Keyboard);
         } else {
             self.handle_keys();
         }
         if self.ui.accepting_note_input() {
-            self.player.clear_midi_notes();
+            self.player.clear_notes_with_origin(KeyOrigin::Midi);
         }
         self.handle_midi();
         self.check_midi_reconnect();
         self.process_ui();
+        self.player.frame(&self.module, get_frame_time());
     }
     
     fn process_ui(&mut self) {

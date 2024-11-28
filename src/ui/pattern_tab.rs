@@ -12,7 +12,7 @@ fn is_shift_down() -> bool {
 pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
-            handle_key(key, ui, module);
+            handle_key(key, ui, module, player);
         }
     }
 
@@ -30,7 +30,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
 
     ui.start_group();
     let left_x = ui.cursor_x;
-    let track_xs = draw_track_headers(ui, module);
+    let track_xs = draw_track_headers(ui, module, player);
     ui.layout = Layout::Vertical;
     ui.end_group();
     ui.cursor_x = track_xs[0];
@@ -45,6 +45,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
         }
     }
 
+    draw_playhead(ui, player.tick, left_x);
     draw_beats(ui, left_x);
     draw_cursor(ui, &track_xs);
 
@@ -71,7 +72,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
 }
 
 /// Returns x positions of each track, plus one extra position.
-fn draw_track_headers(ui: &mut UI, module: &mut Module) -> Vec<f32> {
+fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> Vec<f32> {
     let mut removed_track = None;
     let mut removed_channel_track = None;
 
@@ -147,17 +148,19 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module) -> Vec<f32> {
 
     if let Some(i) = removed_track {
         module.tracks.remove(i);
+        player.track_removed(i);
         fix_cursors(ui, &module.tracks);
     }
 
     if !module.patches.is_empty() && ui.button("+") {
         module.tracks.push(Track::new(TrackTarget::Patch(0)));
+        player.track_added();
     }
 
     xs
 }
 
-fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
+fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module, player: &mut Player) {
     match key {
         KeyCode::Up => {
             translate_cursor(ui, (TICKS_PER_BEAT / ui.beat_division) as i64 * -1);
@@ -184,6 +187,12 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
         KeyCode::Key7 => input_digit(ui, module, 7),
         KeyCode::Key8 => input_digit(ui, module, 8),
         KeyCode::Key9 => input_digit(ui, module, 9),
+        KeyCode::F5 => {
+            player.tick = 0;
+            player.playing = true;
+        },
+        KeyCode::F7 => player.playing = true,
+        KeyCode::F8 => player.stop(),
         _ => (),
     }
 }
@@ -224,6 +233,16 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
     let mut v = vec![track_name(TrackTarget::None, patches).to_owned()];
     v.extend(patches.iter().map(|x| x.name.to_owned()));
     v
+}
+
+fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
+    let rect = Rect {
+        x,
+        y: ui.cursor_y + tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT,
+        w: ui.bounds.w,
+        h: cap_height(&ui.style.text_params()) + MARGIN * 2.0,
+    };
+    ui.push_rect(rect, ui.style.theme.hover, None);
 }
 
 fn draw_cursor(ui: &mut UI, track_xs: &[f32]) {
