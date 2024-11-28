@@ -193,6 +193,12 @@ impl App {
                     KeyCode::F1 => self.ui.set_tab("main", 0),
                     KeyCode::F2 => self.ui.set_tab("main", 1),
                     KeyCode::F3 => self.ui.set_tab("main", 2),
+                    KeyCode::F5 => {
+                        self.player.tick = 0;
+                        self.player.playing = true;
+                    },
+                    KeyCode::F7 => self.player.playing = true,
+                    KeyCode::F8 => self.player.stop(),
                     KeyCode::F11 => {
                         self.fullscreen = !self.fullscreen;
                         set_fullscreen(self.fullscreen);

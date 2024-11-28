@@ -12,7 +12,7 @@ fn is_shift_down() -> bool {
 pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
-            handle_key(key, ui, module, player);
+            handle_key(key, ui, module);
         }
     }
 
@@ -160,7 +160,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     xs
 }
 
-fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module, player: &mut Player) {
+fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
     match key {
         KeyCode::Up => {
             translate_cursor(ui, (TICKS_PER_BEAT / ui.beat_division) as i64 * -1);
@@ -187,12 +187,6 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module, player: &mut Playe
         KeyCode::Key7 => input_digit(ui, module, 7),
         KeyCode::Key8 => input_digit(ui, module, 8),
         KeyCode::Key9 => input_digit(ui, module, 9),
-        KeyCode::F5 => {
-            player.tick = 0;
-            player.playing = true;
-        },
-        KeyCode::F7 => player.playing = true,
-        KeyCode::F8 => player.stop(),
         _ => (),
     }
 }
