@@ -1,4 +1,4 @@
-use crate::{module::*, synth::Patch};
+use crate::{module::*, playback::Player, synth::Patch};
 
 use super::*;
 
@@ -9,7 +9,7 @@ fn is_shift_down() -> bool {
     is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
 
-pub fn draw(ui: &mut UI, module: &mut Module) {
+pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
             handle_key(key, ui, module);

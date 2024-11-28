@@ -9,7 +9,8 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
 use module::{Module, EventData};
-use synth::{Key, KeyOrigin, Synth};
+use playback::Player;
+use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
 
 pub mod pitch;
@@ -20,6 +21,7 @@ mod adsr;
 mod fx;
 pub mod ui;
 mod module;
+mod playback;
 
 use input::MidiEvent;
 
@@ -118,8 +120,7 @@ impl Midi {
 }
 
 struct App {
-    synth: Synth,
-    seq: Sequencer,
+    player: Player,
     octave: i8,
     midi: Midi,
     config: Config,
@@ -142,8 +143,7 @@ impl App {
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
         let mut app = App {
-            synth: Synth::new(),
-            seq,
+            player: Player::new(seq, 0), // TODO: actual num_tracks
             octave: 4,
             midi,
             config,
@@ -163,11 +163,12 @@ impl App {
 
         for key in released {
             if let Some(_) = input::note_from_key(key, &self.module.tuning, self.octave) {
-                self.synth.note_off(Key {
+                let key = Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
                     key: input::u8_from_key(key),
-                }, &mut self.seq);
+                };
+                self.player.note_off(None, key);
             }
         }
 
@@ -177,12 +178,14 @@ impl App {
                 if !self.ui.accepting_note_input() {
                     if let Some((patch, note)) =
                         self.module.map_input(self.patch_index, note) {
-                        self.synth.note_on(Key {
+                        let key = Key {
                             origin: KeyOrigin::Keyboard,
                             channel: 0,
                             key: input::u8_from_key(key),
-                        }, self.module.tuning.midi_pitch(&note), 100.0 / 127.0, patch,
-                        &mut self.seq);
+                        };
+                        let pitch = self.module.tuning.midi_pitch(&note);
+                        let pressure = 100.0 / 127.0;
+                        self.player.note_on(None, key, pitch, pressure, patch);
                     }
                 }
             } else {
@@ -213,8 +216,8 @@ impl App {
                             &port,
                             APP_NAME,
                             move |_, message, tx| {
-                                // ignore the error here, it probably just means that the user
-                                // changed ports
+                                // ignore the error here, it probably just means that the
+                                // user changed ports
                                 let _ = tx.send(message.to_vec());
                             },
                             tx,
@@ -240,35 +243,39 @@ impl App {
                     if !self.ui.accepting_note_input() {
                         match evt {
                             MidiEvent::NoteOff { channel, key, .. } => {
-                                self.synth.note_off(Key{
+                                let key = Key {
                                     origin: KeyOrigin::Midi,
                                     channel,
                                     key,
-                                }, &mut self.seq);
+                                };
+                                self.player.note_off(None, key);
                             },
                             MidiEvent::NoteOn { channel, key, velocity } => {
                                 if velocity != 0 {
                                     let note = input::note_from_midi(key, &self.module.tuning);
                                     if let Some((patch, note)) =
                                         self.module.map_input(self.patch_index, note) {
-                                        self.synth.note_on(Key {
+                                        let key = Key {
                                             origin: KeyOrigin::Midi,
                                             channel,
                                             key,
-                                        }, self.module.tuning.midi_pitch(&note),
-                                            velocity as f32 / 127.0, patch, &mut self.seq);
+                                        };
+                                        let pitch = self.module.tuning.midi_pitch(&note);
+                                        let pressure = velocity as f32 / 127.0;
+                                        self.player.note_on(None, key, pitch, pressure, patch);
                                     }
                                 } else {
-                                    self.synth.note_off(Key {
+                                    let key = Key {
                                         origin: KeyOrigin::Midi,
                                         channel,
                                         key,
-                                    }, &mut self.seq);
+                                    };
+                                    self.player.note_off(None, key);
                                 }
                             },
                             MidiEvent::PolyPressure { channel, key, pressure } => {
                                 if self.config.midi_send_pressure == Some(true) {
-                                    self.synth.poly_pressure(Key {
+                                    self.player.poly_pressure(None, Key {
                                         origin: KeyOrigin::Midi,
                                         channel,
                                         key,
@@ -278,7 +285,7 @@ impl App {
                             MidiEvent::Controller { controller, value, .. } => {
                                 match controller {
                                     input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                                        self.synth.modulate(value as f32 / 127.0);
+                                        self.player.modulate(None, value as f32 / 127.0);
                                     },
                                     input::CC_RPN_MSB => self.midi.rpn.0 = value,
                                     input::CC_RPN_LSB => self.midi.rpn.1 = value,
@@ -295,11 +302,13 @@ impl App {
                             },
                             MidiEvent::ChannelPressure { channel, pressure } => {
                                 if self.config.midi_send_pressure == Some(true) {
-                                    self.synth.channel_pressure(channel, pressure as f32 / 127.0);
+                                    self.player.channel_pressure(None, channel,
+                                        pressure as f32 / 127.0);
                                 }
                             },
                             MidiEvent::Pitch { channel, bend } => {
-                                self.synth.pitch_bend(channel, bend * self.midi.bend_range);
+                                self.player.pitch_bend(None, channel,
+                                    bend * self.midi.bend_range);
                             },
                         }
                     }
@@ -332,12 +341,12 @@ impl App {
 
     fn frame(&mut self) {
         if self.ui.accepting_keyboard_input() {
-            self.synth.clear_keyboard_notes(&mut self.seq);
+            self.player.clear_keyboard_notes();
         } else {
             self.handle_keys();
         }
         if self.ui.accepting_note_input() {
-            self.synth.clear_midi_notes(&mut self.seq);
+            self.player.clear_midi_notes();
         }
         self.handle_midi();
         self.check_midi_reconnect();
@@ -351,7 +360,7 @@ impl App {
 
         match self.ui.tab_menu("main", &TABS) {
             0 => ui::general_tab::draw(&mut self.ui, &mut self.module),
-            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module),
+            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module, &mut self.player),
             2 => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index),
             _ => panic!("bad tab value"),
