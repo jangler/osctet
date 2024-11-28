@@ -16,12 +16,12 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
         }
     }
 
-    if !ui.accepting_note_input() {
+    let cursor = ui.edit_start;
+    if !ui.accepting_note_input() && cursor.column == NOTE_COLUMN {
         while let Some(data) = ui.note_queue.pop() {
-            let chan = &mut module.tracks[ui.edit_start.track]
-                .channels[ui.edit_start.channel];
+            let chan = &mut module.tracks[cursor.track].channels[cursor.channel];
             let evt = Event {
-                tick: ui.edit_start.tick,
+                tick: cursor.tick,
                 data,
             };
             insert_event(chan, evt);
@@ -158,6 +158,32 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
             let (start, end) = ui.selection_corners();
             module.delete_events(start, end);
         },
+        KeyCode::Key0 => input_digit(ui, module, 0),
+        KeyCode::Key1 => input_digit(ui, module, 1),
+        KeyCode::Key2 => input_digit(ui, module, 2),
+        KeyCode::Key3 => input_digit(ui, module, 3),
+        KeyCode::Key4 => input_digit(ui, module, 4),
+        KeyCode::Key5 => input_digit(ui, module, 5),
+        KeyCode::Key6 => input_digit(ui, module, 6),
+        KeyCode::Key7 => input_digit(ui, module, 7),
+        KeyCode::Key8 => input_digit(ui, module, 8),
+        KeyCode::Key9 => input_digit(ui, module, 9),
+        _ => (),
+    }
+}
+
+fn input_digit(ui: &UI, module: &mut Module, value: u8) {
+    let cursor = ui.edit_start;
+    let channel = &mut module.tracks[cursor.track].channels[cursor.channel];
+    match cursor.column {
+        VEL_COLUMN => insert_event(channel, Event {
+            tick: cursor.tick,
+            data: EventData::Pressure(value),
+        }),
+        MOD_COLUMN => insert_event(channel, Event {
+            tick: cursor.tick,
+            data: EventData::Modulation(value),
+        }),
         _ => (),
     }
 }
