@@ -8,8 +8,7 @@ use fx::GlobalFX;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
-use module::Module;
-use pattern::EventData;
+use module::{Module, EventData};
 use synth::{Key, KeyOrigin, Synth};
 use macroquad::prelude::*;
 
@@ -17,7 +16,6 @@ pub mod pitch;
 mod input;
 mod config;
 pub mod synth;
-mod pattern;
 mod adsr;
 mod fx;
 pub mod ui;

@@ -1,4 +1,6 @@
-use crate::{module::Module, pattern::{Event, EventData, Track, TrackTarget, GLOBAL_COLUMN, MOD_COLUMN, NOTE_COLUMN, TICKS_PER_BEAT, VEL_COLUMN}, synth::Patch};
+use std::sync::mpsc::channel;
+
+use crate::{module::*, synth::Patch};
 
 use super::*;
 
@@ -10,28 +12,9 @@ fn is_shift_down() -> bool {
 }
 
 pub fn draw(ui: &mut UI, module: &mut Module) {
-    let mut removed_track = None;
-    let mut removed_channel_track = None;
-
     if !ui.accepting_keyboard_input() {
-        if is_key_pressed(KeyCode::Up) {
-            translate_cursor(ui, (TICKS_PER_BEAT / ui.beat_division) as i64 * -1);
-        }
-        if is_key_pressed(KeyCode::Down) {
-            translate_cursor(ui, (TICKS_PER_BEAT / ui.beat_division) as i64);
-        }
-        if is_key_pressed(KeyCode::Left) {
-            shift_column_left(ui, &module.tracks);
-        }
-        if is_key_pressed(KeyCode::Right) {
-            shift_column_right(ui, &module.tracks);
-        }
-        if is_key_pressed(KeyCode::Tab) {
-            if is_shift_down() {
-                shift_channel_left(ui);
-            } else {
-                shift_channel_right(ui, &module.tracks);
-            }
+        for key in get_keys_pressed() {
+            handle_key(key, ui, module);
         }
     }
 
@@ -47,9 +30,42 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
         }
     }
 
-    for (i, track) in module.tracks.iter_mut().enumerate() {
+    ui.start_group();
+    let track_xs = draw_track_headers(ui, module);
+    ui.layout = Layout::Vertical;
+    ui.end_group();
+    ui.cursor_x = track_xs[0];
+
+    if is_mouse_button_pressed(MouseButton::Left)
+        && mouse_position_vec2().y >= ui.cursor_y {
+        ui.edit_start = position_from_mouse(ui, &track_xs, &module.tracks);
+        ui.edit_end = ui.edit_start;
+    }
+
+    draw_cursor(ui, &track_xs);
+
+    // draw channel data
+    let char_width = text_width("x", &ui.style.text_params());
+    for (track_i, track) in module.tracks.iter().enumerate() {
+        let chan_width = channel_width(track_i, char_width);
+        for (channel_i, channel) in track.channels.iter().enumerate() {
+            ui.cursor_x = track_xs[track_i] + chan_width * channel_i as f32;
+            draw_channel(ui, channel);
+        }
+    }
+}
+
+/// Returns x positions of each track, plus one extra position.
+fn draw_track_headers(ui: &mut UI, module: &mut Module) -> Vec<f32> {
+    let mut removed_track = None;
+    let mut removed_channel_track = None;
+
+    let mut xs = vec![ui.cursor_x];
+    xs.extend(module.tracks.iter_mut().enumerate().map(|(i, track)| {
         ui.start_group();
         ui.layout = Layout::Vertical;
+
+        // track name & delete button
         let name = track_name(track.target, &module.patches);
         if let TrackTarget::Patch(_) | TrackTarget::None = track.target {
             ui.start_group();
@@ -70,8 +86,10 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
             ui.offset_label(name);
             ui.space(1.0);
         }
-        ui.layout = Layout::Horizontal;
+
+        // chanel add/remove buttons
         ui.start_group();
+        ui.layout = Layout::Horizontal;
         if ui.button("-") && track.channels.len() > 1 {
             removed_channel_track = Some(i);
         }
@@ -80,17 +98,37 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
         }
         ui.layout = Layout::Vertical;
         ui.end_group();
-        for (j, channel) in track.channels.iter().enumerate() {
-            ui.start_group();
-            draw_channel(ui, channel, i, j);
-            ui.layout = Layout::Horizontal;
-            ui.end_group();
+
+        // column labels
+        ui.start_group();
+        ui.layout = Layout::Horizontal;
+        for _ in 0..track.channels.len() {
+            if i == 0 {
+                ui.label("XXX")
+            } else {
+                ui.label("NNN");
+                ui.cursor_x -= MARGIN;
+                ui.label("V");
+                ui.cursor_x -= MARGIN;
+                ui.label("M");
+            }
         }
+        ui.layout = Layout::Vertical;
         ui.end_group();
-    }
+
+        ui.layout = Layout::Horizontal;
+        ui.end_group();
+
+        ui.cursor_x
+    }));
 
     if let Some(i) = removed_channel_track {
         module.tracks[i].channels.pop();
+        check_cursor(ui, &module.tracks);
+    }
+
+    if let Some(i) = removed_track {
+        module.tracks.remove(i);
         check_cursor(ui, &module.tracks);
     }
 
@@ -98,9 +136,24 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
         module.tracks.push(Track::new(TrackTarget::Patch(0)));
     }
 
-    if let Some(i) = removed_track {
-        module.tracks.remove(i);
-        check_cursor(ui, &module.tracks);
+    xs
+}
+
+fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
+    match key {
+        KeyCode::Up => {
+            translate_cursor(ui, (TICKS_PER_BEAT / ui.beat_division) as i64 * -1);
+        },
+        KeyCode::Down => translate_cursor(ui, (TICKS_PER_BEAT / ui.beat_division) as i64),
+        KeyCode::Left => shift_column_left(ui, &module.tracks),
+        KeyCode::Right => shift_column_right(ui, &module.tracks),
+        KeyCode::Tab => if is_shift_down() {
+            shift_channel_left(ui);
+        } else {
+            shift_channel_right(ui, &module.tracks);
+        },
+        KeyCode::Delete => module.delete_events(ui.edit_start, ui.edit_end),
+        _ => (),
     }
 }
 
@@ -126,54 +179,23 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
     v
 }
 
-fn draw_channel(ui: &mut UI, channel: &Vec<Event>, track_index: usize, channel_index: usize) {
-    ui.layout = Layout::Vertical;
-    ui.label("Channel");
-
-    let params = ui.style.text_params();
-    let char_width = text_width("x", &params);
-    let cell_height = cap_height(&params) + MARGIN * 2.0;
-    let channel_rect = Rect {
-        x: ui.cursor_x,
-        y: ui.cursor_y,
-        w: char_width * 5.0 + MARGIN * 4.0,
-        h: ui.bounds.x + ui.bounds.h - ui.cursor_y,
+fn draw_cursor(ui: &mut UI, track_xs: &[f32]) {
+    let params = &ui.style.text_params();
+    let start = position_coords(ui.edit_start, &params, track_xs, false);
+    let end = position_coords(ui.edit_end, &params, track_xs, true);
+    let cursor_rect = Rect {
+        x: ui.cursor_x + MARGIN + start.x,
+        y: ui.cursor_y + start.y,
+        w: end.x - start.x,
+        h: end.y - start.y,
     };
-    if is_mouse_button_pressed(MouseButton::Left) && ui.mouse_hits(channel_rect) {
-        let (x, y) = mouse_position();
-        let (x, y) = (x - channel_rect.x, y - channel_rect.y);
-        ui.edit_start = Position {
-            tick: ((y - cell_height * 0.5) as f32
-                / BEAT_HEIGHT * ui.beat_division as f32).round() as u32
-                * TICKS_PER_BEAT / ui.beat_division,
-            track: track_index,
-            channel: channel_index,
-            column: if track_index == 0 || x < char_width * 3.0 + MARGIN * 1.5 {
-                NOTE_COLUMN
-            } else if x < char_width * 4.0 + MARGIN * 2.5 {
-                VEL_COLUMN
-            } else {
-                MOD_COLUMN
-            },
-        };
-        ui.edit_end = ui.edit_start;
-    }
+    ui.push_rect(cursor_rect, ui.style.theme.click, None);
+}
 
-    if ui.edit_start.track == track_index && ui.edit_start.channel == channel_index {
-        let cursor_rect = Rect {
-            x: ui.cursor_x + MARGIN + match ui.edit_start.column {
-                0 => 0.0,
-                1 => char_width * 3.0 + MARGIN,
-                2 => char_width * 4.0 + MARGIN * 2.0,
-                _ => panic!("invalid cursor column"),
-            },
-            y: ui.cursor_y + ui.edit_start.beat() * BEAT_HEIGHT,
-            w: char_width * if ui.edit_start.column == 0 { 3.0 } else { 1.0 },
-            h: cell_height,
-        };
-        ui.push_rect(cursor_rect, ui.style.theme.click, None);
-    }
+fn draw_channel(ui: &mut UI, channel: &Vec<Event>) {
+    let char_width = text_width("x", &ui.style.text_params());
 
+    // draw events
     for event in channel {
         draw_event(ui, event, char_width);
     }
@@ -205,8 +227,7 @@ fn translate_cursor(ui: &mut UI, offset: i64) {
     ui.edit_end.tick = ui.edit_start.tick + dist;
 }
 
-fn shift_column_left(ui: &mut UI, tracks: &Vec<Track>) {
-    // TODO: edit_end
+fn shift_column_left(ui: &mut UI, tracks: &[Track]) {
     let column = ui.edit_start.column as i8 - 1;
     if column >= 0 {
         ui.edit_start.column = column as u8;
@@ -224,10 +245,10 @@ fn shift_column_left(ui: &mut UI, tracks: &Vec<Track>) {
             ui.edit_start.column = MOD_COLUMN;
         }
     }
+    ui.edit_end = ui.edit_start; // TODO
 }
 
-fn shift_column_right(ui: &mut UI, tracks: &Vec<Track>) {
-    // TODO: edit_end
+fn shift_column_right(ui: &mut UI, tracks: &[Track]) {
     let column = ui.edit_start.column + 1;
     let n_columns = if ui.edit_start.track == 0 { 1 } else { 3 };
     if column < n_columns {
@@ -242,10 +263,10 @@ fn shift_column_right(ui: &mut UI, tracks: &Vec<Track>) {
             ui.edit_start.column = 0;
         }
     }
+    ui.edit_end = ui.edit_start; // TODO
 }
 
 fn shift_channel_left(ui: &mut UI) {
-    // TODO: edit_end
     let channel = ui.edit_start.channel as isize - 1;
     if channel >= 0 {
         ui.edit_start.channel = channel as usize;
@@ -255,10 +276,10 @@ fn shift_channel_left(ui: &mut UI) {
             ui.edit_start.column = 0;
         }
     }
+    ui.edit_end = ui.edit_start; // TODO
 }
 
-fn shift_channel_right(ui: &mut UI, tracks: &Vec<Track>) {
-    // TODO: edit_end
+fn shift_channel_right(ui: &mut UI, tracks: &[Track]) {
     let channel = ui.edit_start.channel + 1;
     if channel < tracks[ui.edit_start.track].channels.len() {
         ui.edit_start.channel = channel;
@@ -266,10 +287,11 @@ fn shift_channel_right(ui: &mut UI, tracks: &Vec<Track>) {
         ui.edit_start.channel = 0;
         ui.edit_start.track += 1;
     }
+    ui.edit_end = ui.edit_start; // TODO
 }
 
 /// Reposition the pattern cursor if it's in an invalid position.
-fn check_cursor(ui: &mut UI, tracks: &Vec<Track>) {
+fn check_cursor(ui: &mut UI, tracks: &[Track]) {
     for cursor in [&mut ui.edit_start, &mut ui.edit_end] {
         if cursor.track >= tracks.len() {
             cursor.track -= 1;
@@ -281,4 +303,83 @@ fn check_cursor(ui: &mut UI, tracks: &Vec<Track>) {
             cursor.channel -= 1;
         }
     }
+}
+
+/// Returns the visual coordinates of a Position. Uses the top-left corner of
+/// the cell by default.
+fn position_coords(pos: Position, params: &TextParams, track_xs: &[f32],
+    bottom_left: bool
+) -> Vec2 {
+    let char_width = text_width("x", &params);
+    let x = track_xs[pos.track] + channel_width(pos.track, char_width) * pos.channel as f32
+        + if bottom_left {
+            column_x(pos.column + 1, char_width) - MARGIN
+        } else {
+            column_x(pos.column, char_width)
+        };
+    let y = pos.beat() * BEAT_HEIGHT + if bottom_left {
+        cap_height(&params) + MARGIN * 2.0
+    } else {
+        0.0
+    };
+    Vec2 { x, y }
+}
+
+fn channel_width(track_index: usize, char_width: f32) -> f32 {
+    if track_index == 0 {
+        char_width * 3.0 + MARGIN * 2.0
+    } else {
+        char_width * 5.0 + MARGIN * 4.0
+    }
+}
+
+fn column_x(column: u8, char_width: f32) -> f32 {
+    match column {
+        NOTE_COLUMN => 0.0,
+        VEL_COLUMN => char_width * 3.0 + MARGIN,
+        MOD_COLUMN => char_width * 4.0 + MARGIN * 2.0,
+        // allow this to make some calculations easier
+        3 => char_width * 5.0 + MARGIN * 3.0,
+        _ => panic!("invalid cursor column"),
+    }
+}
+
+/// Convert mouse coordinates to a Position.
+fn position_from_mouse(ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
+    let (x, y) = mouse_position();
+    let y = y - ui.cursor_y;
+    let params = ui.style.text_params();
+    let cell_height = cap_height(&params) + MARGIN * 2.0;
+    let char_width = text_width("x", &params);
+    let mut pos = Position {
+        tick: ((y - cell_height * 0.5) as f32
+            / BEAT_HEIGHT * ui.beat_division as f32).round() as u32
+            * TICKS_PER_BEAT / ui.beat_division,
+        track: 0,
+        channel: 0,
+        column: 0,
+    };
+
+    for (i, tx) in track_xs.split_last().unwrap().1.iter().enumerate() {
+        if x >= *tx {
+            let chan_width = channel_width(i, char_width);
+            pos.track = i;
+            pos.channel = (tracks[i].channels.len() - 1)
+                .min(((x - tx) / chan_width) as usize);
+            pos.column = if i == 0 {
+                0
+            } else {
+                let x = x - tx - pos.channel as f32 * chan_width;
+                if column_x(2, char_width) < x {
+                    2
+                } else if column_x(1, char_width) < x {
+                    1
+                } else {
+                    0
+                }
+            };
+        }
+    }
+
+    pos
 }

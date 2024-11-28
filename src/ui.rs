@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
-use crate::{pattern::{EventData, Position}, pitch::Note};
+use crate::{module::{EventData, Position}, pitch::Note};
 
 pub mod general_tab;
 pub mod pattern_tab;

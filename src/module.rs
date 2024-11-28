@@ -1,6 +1,15 @@
+//! Definitions for all stored module data except patches.
+
 use std::error::Error;
 
-use crate::{fx::GlobalFX, pattern::{Track, TrackTarget}, pitch::{Note, Tuning}, synth::Patch};
+use crate::{fx::GlobalFX, pitch::{Note, Tuning}, synth::Patch};
+
+pub const TICKS_PER_BEAT: u32 = 120;
+
+pub const GLOBAL_COLUMN: u8 = 0;
+pub const NOTE_COLUMN: u8 = 0;
+pub const VEL_COLUMN: u8 = 1;
+pub const MOD_COLUMN: u8 = 2;
 
 pub struct Module {
     pub title: String,
@@ -73,6 +82,21 @@ impl Module {
             }
         }
     }
+
+    /// Delete pattern events between two positions.
+    pub fn delete_events(&mut self, start: Position, end: Position) {
+        let tick_range = start.tick..=end.tick;
+        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+        for (track_i, track) in self.tracks.iter_mut().enumerate() {
+            for (channel_i, channel) in track.channels.iter_mut().enumerate() {
+                channel.retain(|e| {
+                    let tuple = (track_i, channel_i, e.data.column());
+                    !(tick_range.contains(&e.tick)
+                        && tuple >= start_tuple && tuple <= end_tuple)
+                });
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -80,4 +104,69 @@ pub struct KitEntry {
     pub input_note: Note,
     pub patch_index: usize,
     pub patch_note: Note,
+}
+
+pub struct Track {
+    pub target: TrackTarget,
+    pub channels: Vec<Vec<Event>>,
+}
+
+impl Track {
+    pub fn new(target: TrackTarget) -> Self {
+        Self {
+            target,
+            channels: vec![Vec::new()],
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum TrackTarget {
+    None,
+    Global,
+    Kit,
+    Patch(usize),
+}
+
+pub struct Event {
+    pub tick: u32,
+    pub data: EventData,
+}
+
+pub enum EventData {
+    Pitch(Note),
+    Pressure(u8),
+    Modulation(u8),
+    Tempo(f32),
+    LoopStart,
+    LoopEnd,
+}
+
+impl EventData {
+    pub fn column(&self) -> u8 {
+        match *self {
+            Self::Pressure(_) => VEL_COLUMN,
+            Self::Modulation(_) => MOD_COLUMN,
+            _ => NOTE_COLUMN,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Position {
+    pub tick: u32,
+    pub track: usize,
+    pub channel: usize,
+    pub column: u8,
+}
+
+impl Position {
+    pub fn beat(&self) -> f32 {
+        self.tick as f32 / TICKS_PER_BEAT as f32
+    }
+
+    /// Returns a tuple of horizontal indices for comparison.
+    pub fn x_tuple(&self) -> (usize, usize, u8) {
+        (self.track, self.channel, self.column)
+    }
 }
