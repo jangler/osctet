@@ -45,7 +45,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
         }
     }
 
-    draw_playhead(ui, player.tick, left_x);
+    draw_playhead(ui, player.get_tick(), left_x);
     draw_beats(ui, left_x);
     draw_cursor(ui, &track_xs);
 

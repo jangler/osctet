@@ -857,7 +857,7 @@ impl Voice {
         };
         let gain = var(&settings.gain.0) * settings.dsp_component(&vars, ModTarget::Gain, &[]) * VOICE_GAIN;
         let filter_net = settings.make_filter_net(&vars);
-        let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
+        let mut net = ((settings.make_osc(0, &vars) >> filter_net) * gain
             | var(&settings.pan.0) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             >> panner();
         Self {

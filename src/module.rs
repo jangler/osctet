@@ -107,6 +107,16 @@ impl Module {
             }
         }).flatten()
     }
+
+    /// Returns the tick of the last event in the module.
+    /// TODO: Having an End event type would be better, probably.
+    pub fn last_event_tick(&self) -> u32 {
+        self.tracks.iter()
+            .flat_map(|track| track.channels.iter())
+            .flat_map(|channel| channel.iter().map(|x| x.tick))
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 #[derive(Default)]

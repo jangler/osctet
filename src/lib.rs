@@ -10,6 +10,7 @@ use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
 use module::{Module, EventData};
 use playback::Player;
+use rfd::FileDialog;
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
 
@@ -29,41 +30,6 @@ use input::MidiEvent;
 pub const APP_NAME: &str = "Osctet";
 
 const TABS: [&str; 3] = ["General", "Pattern", "Instruments"];
-
-fn init_audio(mut backend: BlockRateAdapter) -> Result<Stream, Box<dyn Error>> {
-    let device = cpal::default_host()
-        .default_output_device()
-        .ok_or("could not open audio output device")?;
-
-    let config: StreamConfig = device.supported_output_configs()?
-        .next()
-        .ok_or("could not find audio output config")?
-        .with_max_sample_rate()
-        .into();
-
-    backend.set_sample_rate(config.sample_rate.0 as f64);
-
-    let stream = device.build_output_stream(
-        &config,move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
-            // there's probably a better way to do this
-            let mut i = 0;
-            let len = data.len();
-            while i < len {
-                let (l, r) = backend.get_stereo();
-                data[i] = l;
-                data[i+1] = r;
-                i += 2;
-            }
-        },
-        move |err| {
-            eprintln!("stream error: {}", err);
-        },
-        None
-    )?;
-    
-    stream.play()?;
-    Ok(stream)
-}
 
 struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll
@@ -173,8 +139,14 @@ impl App {
             }
         }
 
+        let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         for key in pressed {
-            if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
+            if ctrl {
+                match key {
+                    KeyCode::E => self.render_and_save(),
+                    _ => (),
+                }
+            } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.ui.note_queue.push(EventData::Pitch(note));
                 if !self.ui.accepting_note_input() {
                     if let Some((patch, note)) =
@@ -193,16 +165,13 @@ impl App {
                     KeyCode::F1 => self.ui.set_tab("main", 0),
                     KeyCode::F2 => self.ui.set_tab("main", 1),
                     KeyCode::F3 => self.ui.set_tab("main", 2),
-                    KeyCode::F5 => {
-                        self.player.tick = 0;
-                        self.player.playing = true;
-                    },
-                    KeyCode::F7 => self.player.playing = true,
+                    KeyCode::F5 => self.player.play_from(0),
+                    KeyCode::F7 => self.player.play(),
                     KeyCode::F8 => self.player.stop(),
                     KeyCode::F11 => {
                         self.fullscreen = !self.fullscreen;
                         set_fullscreen(self.fullscreen);
-                    }
+                    },
                     _ => (),
                 }
             }
@@ -404,6 +373,18 @@ impl App {
         
         self.ui.end_bottom_panel();
     }
+    
+    fn render_and_save(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .add_filter("WAV file", &["wav"])
+            .save_file() {
+            if let Err(e) = playback::render(&self.module).save_wav16(path) {
+                self.ui.report(e);
+            } else {
+                self.ui.report("Wrote WAV.");
+            }
+        }
+    }
 }
 
 fn input_names(input: &MidiInput) -> Vec<String> {
@@ -414,13 +395,41 @@ fn input_names(input: &MidiInput) -> Vec<String> {
 
 /// Application entry point.
 pub async fn run() -> Result<(), Box<dyn Error>> {
+    let device = cpal::default_host()
+        .default_output_device()
+        .ok_or("could not open audio output device")?;
+
+    let config: StreamConfig = device.supported_output_configs()?
+        .next()
+        .ok_or("could not find audio output config")?
+        .with_max_sample_rate()
+        .into();
+
     let mut seq = Sequencer::new(false, 2);
+    seq.set_sample_rate(config.sample_rate.0 as f64);
 
     let mut global_fx = GlobalFX::new(seq.backend());
-    let backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
-
-    // grab the stream to keep it alive
-    let _stream = init_audio(backend)?;
+    global_fx.net.set_sample_rate(config.sample_rate.0 as f64);
+    let mut backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
+    
+    let stream = device.build_output_stream(
+        &config,move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
+            // there's probably a better way to do this
+            let mut i = 0;
+            let len = data.len();
+            while i < len {
+                let (l, r) = backend.get_stereo();
+                data[i] = l;
+                data[i+1] = r;
+                i += 2;
+            }
+        },
+        move |err| {
+            eprintln!("stream error: {}", err);
+        },
+        None
+    )?;
+    stream.play()?;
 
     let mut app = App::new(seq, global_fx);
 

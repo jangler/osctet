@@ -56,7 +56,10 @@ pub struct GlobalFX {
 
 impl GlobalFX {
     pub fn new(backend: SequencerBackend) -> Self {
-        let settings: FXSettings = Default::default();
+        Self::new_from_settings(backend, Default::default())
+    }
+
+    pub fn new_from_settings(backend: SequencerBackend, settings: FXSettings) -> Self {
         let (predelay, predelay_id) = Net::wrap_id(settings.make_predelay());
         let (reverb, reverb_id) = Net::wrap_id(settings.make_reverb());
 

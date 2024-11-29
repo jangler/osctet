@@ -1,14 +1,16 @@
-use fundsp::hacker::Sequencer;
+use fundsp::{hacker::{AudioUnit, BlockRateAdapter, Sequencer}, wave::Wave};
 
-use crate::{module::{EventData, Module, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{EventData, Module, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 const INITIAL_TEMPO: f32 = 120.0;
 
 pub struct Player {
     seq: Sequencer,
     synths: Vec<Synth>, // one for keyjazz plus one per track
-    pub playing: bool,
-    pub tick: u32,
+    playing: bool,
+    tick: u32,
+    start_tick: u32,
+    playtime: f32,
 }
 
 impl Player {
@@ -23,12 +25,33 @@ impl Player {
             synths,
             playing: false,
             tick: 0,
+            start_tick: 0,
+            playtime: 0.0,
         }
+    }
+
+    pub fn get_tick(&self) -> u32 {
+        self.tick
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.playing
     }
 
     pub fn stop(&mut self) {
         self.playing = false;
         self.clear_notes_with_origin(KeyOrigin::Pattern);
+    }
+
+    pub fn play(&mut self) {
+        self.playing = true;
+        self.start_tick = self.tick;
+        self.playtime = 0.0;
+    }
+
+    pub fn play_from(&mut self, tick: u32) {
+        self.tick = tick;
+        self.play();
     }
 
     pub fn track_removed(&mut self, index: usize) {
@@ -89,7 +112,8 @@ impl Player {
             return
         }
 
-        let next_tick = self.tick + interval_ticks(dt, INITIAL_TEMPO);
+        self.playtime += dt;
+        let next_tick = self.start_tick + interval_ticks(self.playtime, INITIAL_TEMPO);
 
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
@@ -133,4 +157,28 @@ fn track_index(track: Option<usize>) -> usize {
 
 fn interval_ticks(dt: f32, tempo: f32) -> u32 {
     (dt * tempo / 60.0 * TICKS_PER_BEAT as f32).round() as u32
+}
+
+pub fn render(module: &Module) -> Wave {
+    let sample_rate = 44100;
+    let mut wave = Wave::new(2, sample_rate as f64);
+    let mut seq = Sequencer::new(false, 2);
+    seq.set_sample_rate(sample_rate as f64);
+    let mut fx = GlobalFX::new_from_settings(seq.backend(), module.fx.settings.clone());
+    fx.net.set_sample_rate(sample_rate as f64);
+    let mut player = Player::new(seq, module.tracks.len());
+    let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
+    let block_size = 64;
+    let dt = block_size as f32 / sample_rate as f32;
+    let last_event_tick = module.last_event_tick();
+
+    player.play();
+    while player.tick <= last_event_tick {
+        player.frame(module, dt);
+        for _ in 0..block_size {
+            wave.push(backend.get_stereo());
+        }
+    }
+
+    wave
 }
