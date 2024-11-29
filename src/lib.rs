@@ -143,6 +143,10 @@ impl App {
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         for key in pressed {
             if ctrl {
+                // TODO: undo/redo are silent right now, which could be confusing when
+                //       things are being undone/redone offscreen. could either provide
+                //       messages describing what's being done, or move view to location
+                //       of changes
                 match key {
                     KeyCode::E => self.render_and_save(),
                     KeyCode::Y => if self.module.redo() {

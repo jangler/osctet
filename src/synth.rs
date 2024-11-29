@@ -305,7 +305,7 @@ impl Synth {
 /// A Patch is a configuration of synthesis parameters.
 #[derive(Serialize, Deserialize)]
 pub struct Patch {
-    pub name: String, // TODO: should this be serialized?
+    pub name: String,
     pub gain: Parameter,
     pub pan: Parameter, // range -1..1
     pub glide_time: f32,
@@ -511,9 +511,6 @@ impl Patch {
     }
 
     fn make_osc(&self, i: usize, vars: &VoiceVars) -> Net {
-        // FIXME: right now, output can sound different depending on the order oscs are mixed in.
-        //        this is because of pseudorandom phase based on node location in its network.
-        //        this should be fixable in the next published version of the crate.
         let mut mixed_oscs = Net::new(0, 1);
         let mut am_oscs = Net::wrap(Box::new(constant(1.0)));
         let mut fm_oscs = Net::new(0, 1);
