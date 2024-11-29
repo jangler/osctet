@@ -1,6 +1,6 @@
 use rfd::FileDialog;
 
-use crate::{module::Module, synth::*};
+use crate::{module::{Edit, Module}, synth::*};
 
 use super::{UI, Layout};
 
@@ -65,72 +65,78 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
 }
 
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
-    {
-        let patches = &mut module.patches;
-        ui.layout = Layout::Vertical;
-    
-        let mut names = vec![String::from("Kit")];
-        names.extend(patches.iter().map(|x| x.name.clone()));
-    
-        let mut list_index = match patch_index {
-            Some(i) => *i + 1,
-            None => 0,
-        };
-        if let Some(s) = ui.instrument_list(&names, &mut list_index, 10) {
-            if list_index > 0 {
-                if let Some(patch) = patches.get_mut(list_index - 1) {
-                    patch.name = s;
-                }
+    let mut edit = None;
+    let patches = &mut module.patches;
+    ui.layout = Layout::Vertical;
+
+    let mut names = vec![String::from("Kit")];
+    names.extend(patches.iter().map(|x| x.name.clone()));
+
+    let mut list_index = match patch_index {
+        Some(i) => *i + 1,
+        None => 0,
+    };
+    if let Some(s) = ui.instrument_list(&names, &mut list_index, 10) {
+        if list_index > 0 {
+            if let Some(patch) = patches.get_mut(list_index - 1) {
+                patch.name = s;
             }
         }
-        *patch_index = match list_index {
-            0 => None,
-            i => Some(i - 1),
-        };
-    
-        ui.layout = Layout::Horizontal;
-        if ui.button("Add") {
-            patches.push(Patch::new());
-            *patch_index = Some(patches.len() - 1);
-        }
     }
+    *patch_index = match list_index {
+        0 => None,
+        i => Some(i - 1),
+    };
+
+    ui.layout = Layout::Horizontal;
+    if ui.button("Add") {
+        edit = Some(Edit::InsertPatch(patches.len(), Patch::new()));
+        *patch_index = Some(patches.len());
+    }
+
     if ui.button("Remove") {
         if let Some(index) = patch_index {
-            module.remove_patch(*index);
-            if *index >= module.patches.len() {
-                if *index == 0 {
-                    *patch_index = None;
-                } else {
-                    *index -= 1;
+            edit = Some(Edit::RemovePatch(*index));
+        }
+    }
+    let patches = &mut module.patches;
+    if ui.button("Save") {
+        if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
+            if let Some(path) = FileDialog::new()
+                .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                .save_file() {
+                if let Err(e) = patch.save(&path) {
+                    ui.report(e);
                 }
             }
         }
     }
-    {
-        let patches = &mut module.patches;
-        if ui.button("Save") {
-            if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
-                if let Some(path) = FileDialog::new()
-                    .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
-                    .save_file() {
-                    if let Err(e) = patch.save(&path) {
-                        ui.report(e);
-                    }
-                }
+    if ui.button("Load") {
+        if let Some(path) = FileDialog::new()
+            .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+            .pick_file() {
+            match Patch::load(&path) {
+                Ok(p) => {
+                    edit = Some(Edit::InsertPatch(patches.len(), p));
+                    *patch_index = Some(patches.len());
+                },
+                Err(e) => ui.report(e),
             }
         }
-        if ui.button("Load") {
-            if let Some(path) = FileDialog::new()
-                .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
-                .pick_file() {
-                match Patch::load(&path) {
-                    Ok(p) => {
-                        patches.push(p); 
-                        *patch_index = Some(patches.len() - 1);
-                    },
-                    Err(e) => ui.report(e),
-                }
-            }
+    }
+
+    if let Some(edit) = edit {
+        module.push_edit(edit);
+        fix_patch_index(patch_index, module.patches.len());
+    }
+}
+
+pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
+    if len == 0 {
+        *index = None;
+    } else if let Some(index) = index {
+        if *index >= len {
+            *index = len - 1;
         }
     }
 }

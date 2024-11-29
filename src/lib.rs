@@ -25,6 +25,7 @@ mod module;
 mod playback;
 
 use input::MidiEvent;
+use ui::instruments_tab::fix_patch_index;
 
 /// Application name, for window title, etc.
 pub const APP_NAME: &str = "Osctet";
@@ -146,11 +147,13 @@ impl App {
                     KeyCode::E => self.render_and_save(),
                     KeyCode::Y => if self.module.redo() {
                         self.player.update_synths(self.module.drain_track_history());
+                        fix_patch_index(&mut self.patch_index, self.module.patches.len());
                     } else {
                         self.ui.report("Nothing to redo");
                     },
                     KeyCode::Z => if self.module.undo() {
                         self.player.update_synths(self.module.drain_track_history());
+                        fix_patch_index(&mut self.patch_index, self.module.patches.len());
                     } else {
                         self.ui.report("Nothing to undo");
                     },

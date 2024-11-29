@@ -71,8 +71,8 @@ impl Module {
             .map(|x| (self.patches.get(x.patch_index).unwrap(), x.patch_note))
     }
 
-    pub fn remove_patch(&mut self, index: usize) {
-        self.patches.remove(index);
+    fn remove_patch(&mut self, index: usize) -> Patch {
+        let patch = self.patches.remove(index);
         self.kit.retain(|x| x.patch_index != index);
 
         for entry in self.kit.iter_mut() {
@@ -90,6 +90,8 @@ impl Module {
                 _ => (),
             }
         }
+
+        patch
     }
 
     /// Delete pattern events between two positions.
@@ -216,6 +218,14 @@ impl Module {
                 }).collect();
                 Edit::PatternData { remove: flip_remove, add: flip_add }
             }
+            Edit::InsertPatch(index, patch) => {
+                self.patches.insert(index, patch);
+                Edit::RemovePatch(index)
+            }
+            Edit::RemovePatch(index) => {
+                let patch = self.remove_patch(index);
+                Edit::InsertPatch(index, patch)
+            }
         }
     }
 
@@ -330,6 +340,9 @@ pub enum Edit {
         remove: Vec<Position>,
         add: Vec<LocatedEvent>,
     },
+    // TODO: redoing patch removal doesn't revert track/kit mappings
+    InsertPatch(usize, Patch),
+    RemovePatch(usize),
 }
 
 /// Used to track added/removed Tracks for synchronizing Player with Module.
