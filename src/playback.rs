@@ -4,9 +4,11 @@ use crate::{fx::GlobalFX, module::{EventData, Module, TICKS_PER_BEAT}, synth::{K
 
 const INITIAL_TEMPO: f32 = 120.0;
 
+/// Handles module playback. In methods that take a `track` argument, 0 can
+/// safely be used for keyjazz events (since track 0 will never sequence).
 pub struct Player {
     seq: Sequencer,
-    synths: Vec<Synth>, // one for keyjazz plus one per track
+    synths: Vec<Synth>, // one per track
     playing: bool,
     tick: u32,
     start_tick: u32,
@@ -15,14 +17,9 @@ pub struct Player {
 
 impl Player {
     pub fn new(seq: Sequencer, num_tracks: usize) -> Self {
-        let mut synths = vec![Synth::new()];
-        for _ in 0..=num_tracks {
-            synths.push(Synth::new());
-        }
-
         Self {
             seq,
-            synths,
+            synths: (0..=num_tracks).map(|_| Synth::new()).collect(),
             playing: false,
             tick: 0,
             start_tick: 0,
@@ -62,41 +59,41 @@ impl Player {
         self.synths.push(Synth::new());
     }
 
-    pub fn note_on(&mut self, track: Option<usize>, key: Key,
+    pub fn note_on(&mut self, track: usize, key: Key,
         pitch: f32, pressure: Option<f32>, patch: &Patch
     ) {
-        if let Some(synth) = self.synths.get_mut(track_index(track)) {
+        if let Some(synth) = self.synths.get_mut(track) {
             synth.note_on(key, pitch, pressure.unwrap_or(1.0), patch, &mut self.seq);
         }
     }
 
-    pub fn note_off(&mut self, track: Option<usize>, key: Key) {
-        if let Some(synth) = self.synths.get_mut(track_index(track)) {
+    pub fn note_off(&mut self, track: usize, key: Key) {
+        if let Some(synth) = self.synths.get_mut(track) {
             synth.note_off(key, &mut self.seq);
         }
     }
 
-    pub fn poly_pressure(&mut self, track: Option<usize>, key: Key, pressure: f32) {
-        if let Some(synth) = self.synths.get_mut(track_index(track)) {
+    pub fn poly_pressure(&mut self, track: usize, key: Key, pressure: f32) {
+        if let Some(synth) = self.synths.get_mut(track) {
             synth.poly_pressure(key, pressure);
         }
     }
 
-    pub fn modulate(&mut self, track: Option<usize>, depth: f32) {
+    pub fn modulate(&mut self, track: usize, depth: f32) {
         // TODO: shouldn't this take a channel argument?
-        if let Some(synth) = self.synths.get_mut(track_index(track)) {
+        if let Some(synth) = self.synths.get_mut(track) {
             synth.modulate(depth);
         }
     }
 
-    pub fn channel_pressure(&mut self, track: Option<usize>, channel: u8, pressure: f32) {
-        if let Some(synth) = self.synths.get_mut(track_index(track)) {
+    pub fn channel_pressure(&mut self, track: usize, channel: u8, pressure: f32) {
+        if let Some(synth) = self.synths.get_mut(track) {
             synth.channel_pressure(channel, pressure);
         }
     }
 
-    pub fn pitch_bend(&mut self, track: Option<usize>, channel: u8, bend: f32) {
-        if let Some(synth) = self.synths.get_mut(track_index(track)) {
+    pub fn pitch_bend(&mut self, track: usize, channel: u8, bend: f32) {
+        if let Some(synth) = self.synths.get_mut(track) {
             synth.pitch_bend(channel, bend);
         }
     }
@@ -140,18 +137,11 @@ impl Player {
                         key: 0, // TODO
                     };
                     let pitch = module.tuning.midi_pitch(&note);
-                    self.note_on(Some(track), key, pitch, None, patch);
+                    self.note_on(track, key, pitch, None, patch);
                 }
             },
             _ => (), // TODO
         }
-    }
-}
-
-fn track_index(track: Option<usize>) -> usize {
-    match track {
-        Some(i) => i + 1,
-        None => 0,
     }
 }
 
@@ -172,6 +162,8 @@ pub fn render(module: &Module) -> Wave {
     let dt = block_size as f32 / sample_rate as f32;
     let last_event_tick = module.last_event_tick();
 
+    // TODO: render would probably be faster if we called player.frame() only
+    //       when there's a new event
     player.play();
     while player.tick <= last_event_tick {
         player.frame(module, dt);

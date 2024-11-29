@@ -135,7 +135,7 @@ impl App {
                     channel: 0,
                     key: input::u8_from_key(key),
                 };
-                self.player.note_off(None, key);
+                self.player.note_off(0, key);
             }
         }
 
@@ -157,7 +157,7 @@ impl App {
                             key: input::u8_from_key(key),
                         };
                         let pitch = self.module.tuning.midi_pitch(&note);
-                        self.player.note_on(None, key, pitch, None, patch);
+                        self.player.note_on(0, key, pitch, None, patch);
                     }
                 }
             } else {
@@ -223,7 +223,7 @@ impl App {
                                     channel,
                                     key,
                                 };
-                                self.player.note_off(None, key);
+                                self.player.note_off(0, key);
                             },
                             MidiEvent::NoteOn { channel, key, velocity } => {
                                 if velocity != 0 {
@@ -237,7 +237,7 @@ impl App {
                                         };
                                         let pitch = self.module.tuning.midi_pitch(&note);
                                         let pressure = velocity as f32 / 127.0;
-                                        self.player.note_on(None, key, pitch,
+                                        self.player.note_on(0, key, pitch,
                                             Some(pressure), patch);
                                     }
                                 } else {
@@ -246,12 +246,12 @@ impl App {
                                         channel,
                                         key,
                                     };
-                                    self.player.note_off(None, key);
+                                    self.player.note_off(0, key);
                                 }
                             },
                             MidiEvent::PolyPressure { channel, key, pressure } => {
                                 if self.config.midi_send_pressure == Some(true) {
-                                    self.player.poly_pressure(None, Key {
+                                    self.player.poly_pressure(0, Key {
                                         origin: KeyOrigin::Midi,
                                         channel,
                                         key,
@@ -261,7 +261,7 @@ impl App {
                             MidiEvent::Controller { controller, value, .. } => {
                                 match controller {
                                     input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                                        self.player.modulate(None, value as f32 / 127.0);
+                                        self.player.modulate(0, value as f32 / 127.0);
                                     },
                                     input::CC_RPN_MSB => self.midi.rpn.0 = value,
                                     input::CC_RPN_LSB => self.midi.rpn.1 = value,
@@ -278,12 +278,12 @@ impl App {
                             },
                             MidiEvent::ChannelPressure { channel, pressure } => {
                                 if self.config.midi_send_pressure == Some(true) {
-                                    self.player.channel_pressure(None, channel,
+                                    self.player.channel_pressure(0, channel,
                                         pressure as f32 / 127.0);
                                 }
                             },
                             MidiEvent::Pitch { channel, bend } => {
-                                self.player.pitch_bend(None, channel,
+                                self.player.pitch_bend(0, channel,
                                     bend * self.midi.bend_range);
                             },
                         }
