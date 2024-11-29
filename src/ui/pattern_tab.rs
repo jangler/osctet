@@ -68,9 +68,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
 
 /// Returns x positions of each track, plus one extra position.
 fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> Vec<f32> {
-    let mut removed_track = None;
-    let mut removed_channel_track = None;
-    let mut added_channel_track = None;
+    let mut edit = None;
 
     // offset for beat width
     ui.cursor_x += text_width("x", &ui.style.text_params()) * 3.0 + MARGIN * 2.0;
@@ -85,15 +83,15 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
         if let TrackTarget::Patch(_) | TrackTarget::None = track.target {
             ui.start_group();
             ui.layout = Layout::Horizontal;
-            if let Some(i) = ui.combo_box(&format!("track_{}", i), "", name,
+            if let Some(j) = ui.combo_box(&format!("track_{}", i), "", name,
                 || track_targets(&module.patches)) {
-                track.target = match i {
+                edit = Some(Edit::RemapTrack(i, match j {
                     0 => TrackTarget::None,
-                    i => TrackTarget::Patch(i - 1),
-                }
+                    j => TrackTarget::Patch(j - 1),
+                }));
             }
             if ui.button("X") {
-                removed_track = Some(i);
+                edit = Some(Edit::RemoveTrack(i));
             }
             ui.layout = Layout::Vertical;
             ui.end_group();
@@ -106,10 +104,10 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
         ui.start_group();
         ui.layout = Layout::Horizontal;
         if ui.button("-") && track.channels.len() > 1 {
-            removed_channel_track = Some(i);
+            edit = Some(Edit::RemoveChannel(i));
         }
         if ui.button("+") {
-            added_channel_track = Some(i);
+            edit = Some(Edit::AddChannel(i, Vec::new()));
         }
         ui.layout = Layout::Vertical;
         ui.end_group();
@@ -137,19 +135,9 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
         ui.cursor_x
     }));
 
-    if let Some(i) = added_channel_track {
-        module.add_channel(i);
-    }
-
-    if let Some(i) = removed_channel_track {
-        module.remove_channel(i);
-        fix_cursors(ui, &module.tracks);
-    }
-
-    if let Some(i) = removed_track {
-        module.remove_track(i);
+    if let Some(edit) = edit {
+        module.push_edit(edit);
         player.update_synths(module.drain_track_history());
-        fix_cursors(ui, &module.tracks);
     }
 
     if !module.patches.is_empty() && ui.button("+") {

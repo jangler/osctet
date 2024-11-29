@@ -154,19 +154,6 @@ impl Module {
         self.push_edit(Edit::InsertTrack(index, track));
     }
 
-    pub fn remove_track(&mut self, index: usize) {
-        self.push_edit(Edit::RemoveTrack(index));
-    }
-
-    pub fn add_channel(&mut self, track: usize) {
-        self.push_edit(Edit::AddChannel(track, Vec::new()));
-    }
-
-    /// Removed channel is always the last in the track.
-    pub fn remove_channel(&mut self, track: usize) {
-        self.push_edit(Edit::RemoveChannel(track));
-    }
-
     pub fn insert_event(&mut self, track: usize, channel: usize, event: Event) {
         self.push_edit(Edit::PatternData {
             remove: Vec::new(),
@@ -175,7 +162,7 @@ impl Module {
     }
     
     /// Performs an edit operation and handles undo/redo stacks.
-    fn push_edit(&mut self, edit: Edit) {
+    pub fn push_edit(&mut self, edit: Edit) {
         // TODO: merge consecutive pattern data operations
         let edit = self.flip_edit(edit);
         self.undo_stack.push(edit);
@@ -189,22 +176,26 @@ impl Module {
                 self.tracks.insert(index, track);
                 self.track_history.push(TrackEdit::Insert(index));
                 Edit::RemoveTrack(self.tracks.len() - 1)
-            },
+            }
             Edit::RemoveTrack(index) => {
                 let track = self.tracks.remove(index);
                 self.track_history.push(TrackEdit::Remove(index));
                 Edit::InsertTrack(index, track)
-            },
+            }
+            Edit::RemapTrack(index, target) => {
+                let target = std::mem::replace(&mut self.tracks[index].target, target);
+                Edit::RemapTrack(index, target)
+            }
             Edit::AddChannel(index, channel) => {
                 let track = &mut self.tracks[index];
                 track.channels.push(channel);
                 Edit::RemoveChannel(index)
-            },
+            }
             Edit::RemoveChannel(index) => {
                 let track = &mut self.tracks[index];
                 let channel = track.channels.pop().unwrap();
                 Edit::AddChannel(index, channel)
-            },
+            }
             Edit::PatternData { remove, add } => {
                 let flip_add = remove.into_iter().flat_map(|p| {
                     self.delete_event(p).map(|event| LocatedEvent {
@@ -224,7 +215,7 @@ impl Module {
                     pos
                 }).collect();
                 Edit::PatternData { remove: flip_remove, add: flip_add }
-            },
+            }
         }
     }
 
@@ -329,9 +320,10 @@ impl Position {
 }
 
 /// An operation that changes Module data.
-enum Edit {
+pub enum Edit {
     InsertTrack(usize, Track),
     RemoveTrack(usize),
+    RemapTrack(usize, TrackTarget),
     AddChannel(usize, Vec<Event>),
     RemoveChannel(usize),
     PatternData {
@@ -347,7 +339,7 @@ pub enum TrackEdit {
 }
 
 /// Event with global location data, for the undo stack.
-struct LocatedEvent {
+pub struct LocatedEvent {
     track: usize,
     channel: usize,
     event: Event,
