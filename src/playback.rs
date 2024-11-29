@@ -131,24 +131,28 @@ impl Player {
     fn handle_event(&mut self, data: &EventData, module: &Module,
         track: usize, channel: usize
     ) {
+        let key = Key {
+            origin: KeyOrigin::Pattern,
+            channel: channel as u8,
+            key: 0,
+        };
+
         match *data {
             EventData::Pitch(note) => {
                 if let Some((patch, note)) = module.map_note(note, track) {
-                    let key = Key {
-                        origin: KeyOrigin::Pattern,
-                        channel: channel as u8,
-                        key: 0,
-                    };
                     let pitch = module.tuning.midi_pitch(&note);
                     self.note_on(track, key, pitch, None, patch);
                 }
             },
             EventData::Pressure(v) => {
                 self.channel_pressure(track, channel as u8, v as f32 / MAX_PRESSURE as f32);
-            }
+            },
             EventData::Modulation(v) => {
                 self.modulate(track, channel as u8, v as f32 / MAX_MODULATION as f32);
-            }
+            },
+            EventData::NoteOff => {
+                self.note_off(track, key);
+            },
             _ => (), // TODO
         }
     }

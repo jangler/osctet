@@ -187,6 +187,7 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
         KeyCode::Key7 => input_digit(ui, module, 7),
         KeyCode::Key8 => input_digit(ui, module, 8),
         KeyCode::Key9 => input_digit(ui, module, 9),
+        KeyCode::GraveAccent => input_note_off(ui, module),
         _ => (),
     }
 }
@@ -205,6 +206,15 @@ fn input_digit(ui: &UI, module: &mut Module, value: u8) {
         }),
         _ => (),
     }
+}
+
+fn input_note_off(ui: &UI, module: &mut Module) {
+    let cursor = ui.edit_start;
+    let channel = &mut module.tracks[cursor.track].channels[cursor.channel];
+    insert_event(channel, Event {
+        tick: cursor.tick,
+        data: EventData::NoteOff,
+    })
 }
 
 fn insert_event(chan: &mut Vec<Event>, evt: Event) {
@@ -266,6 +276,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
     let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT;
     let text = match evt.data {
         EventData::Pitch(note) => note.to_string(),
+        EventData::NoteOff => String::from("---"),
         EventData::Pressure(v) => v.to_string(),
         EventData::Modulation(v) => v.to_string(),
         _ => String::from("unknown"),

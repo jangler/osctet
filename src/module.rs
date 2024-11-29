@@ -155,6 +155,7 @@ pub struct Event {
 
 pub enum EventData {
     Pitch(Note),
+    NoteOff,
     Pressure(u8),
     Modulation(u8),
     Tempo(f32),

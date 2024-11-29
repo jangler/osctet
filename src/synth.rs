@@ -173,6 +173,7 @@ const MAX_CHANNELS: usize = 16;
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
+    // TODO: reset memory when playing from start
     voices: HashMap<Key, Voice>,
     bend_memory: [f32; MAX_CHANNELS],
     mod_memory: [f32; MAX_CHANNELS],
@@ -186,7 +187,7 @@ impl Synth {
             voices: HashMap::new(),
             bend_memory: [0.0; MAX_CHANNELS],
             mod_memory: [0.0; MAX_CHANNELS],
-            pressure_memory: [0.0; MAX_CHANNELS],
+            pressure_memory: [2.0/3.0; MAX_CHANNELS],
             prev_freq: None,
         }
     }
