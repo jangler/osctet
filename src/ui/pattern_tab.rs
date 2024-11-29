@@ -75,6 +75,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
 fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> Vec<f32> {
     let mut removed_track = None;
     let mut removed_channel_track = None;
+    let mut added_channel_track = None;
 
     // offset for beat width
     ui.cursor_x += text_width("x", &ui.style.text_params()) * 3.0 + MARGIN * 2.0;
@@ -113,7 +114,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
             removed_channel_track = Some(i);
         }
         if ui.button("+") {
-            track.channels.push(Vec::new());
+            added_channel_track = Some(i);
         }
         ui.layout = Layout::Vertical;
         ui.end_group();
@@ -141,8 +142,12 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
         ui.cursor_x
     }));
 
+    if let Some(i) = added_channel_track {
+        module.add_channel(i);
+    }
+
     if let Some(i) = removed_channel_track {
-        module.tracks[i].channels.pop();
+        module.remove_channel(i);
         fix_cursors(ui, &module.tracks);
     }
 

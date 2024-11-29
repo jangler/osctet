@@ -20,6 +20,8 @@ pub struct Module {
     pub patches: Vec<Patch>,
     pub tracks: Vec<Track>,
 
+    // TODO: cap size of undo stack.
+    //       could use https://crates.io/crates/deepsize?
     undo_stack: Vec<Edit>,
     redo_stack: Vec<Edit>,
     track_history: Vec<TrackEdit>,
@@ -134,6 +136,15 @@ impl Module {
     pub fn remove_track(&mut self, index: usize) {
         self.push_edit(Edit::RemoveTrack(index));
     }
+
+    pub fn add_channel(&mut self, track: usize) {
+        self.push_edit(Edit::AddChannel(track, Vec::new()));
+    }
+
+    /// Removed channel is always the last in the track.
+    pub fn remove_channel(&mut self, track: usize) {
+        self.push_edit(Edit::RemoveChannel(track));
+    }
     
     /// Performs an edit operation and handles undo/redo stacks.
     fn push_edit(&mut self, edit: Edit) {
@@ -154,6 +165,16 @@ impl Module {
                 let track = self.tracks.remove(index);
                 self.track_history.push(TrackEdit::Remove(index));
                 Edit::InsertTrack(index, track)
+            },
+            Edit::AddChannel(index, channel) => {
+                let track = &mut self.tracks[index];
+                track.channels.push(channel);
+                Edit::RemoveChannel(index)
+            },
+            Edit::RemoveChannel(index) => {
+                let track = &mut self.tracks[index];
+                let channel = track.channels.pop().unwrap();
+                Edit::AddChannel(index, channel)
             },
         }
     }
@@ -262,6 +283,8 @@ impl Position {
 pub enum Edit {
     InsertTrack(usize, Track),
     RemoveTrack(usize),
+    AddChannel(usize, Vec<Event>),
+    RemoveChannel(usize),
 }
 
 /// Used to track added/removed Tracks for synchronizing Player with Module.
