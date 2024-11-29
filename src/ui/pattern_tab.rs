@@ -19,12 +19,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
     let cursor = ui.edit_start;
     if !ui.accepting_note_input() && cursor.column == NOTE_COLUMN {
         while let Some(data) = ui.note_queue.pop() {
-            let chan = &mut module.tracks[cursor.track].channels[cursor.channel];
-            let evt = Event {
-                tick: cursor.tick,
-                data,
-            };
-            insert_event(chan, evt);
+            insert_event_at_cursor(module, &cursor, data);
         }
     }
 
@@ -199,32 +194,22 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
 
 fn input_digit(ui: &UI, module: &mut Module, value: u8) {
     let cursor = ui.edit_start;
-    let channel = &mut module.tracks[cursor.track].channels[cursor.channel];
     match cursor.column {
-        VEL_COLUMN => insert_event(channel, Event {
-            tick: cursor.tick,
-            data: EventData::Pressure(value),
-        }),
-        MOD_COLUMN => insert_event(channel, Event {
-            tick: cursor.tick,
-            data: EventData::Modulation(value),
-        }),
+        VEL_COLUMN => insert_event_at_cursor(module, &cursor, EventData::Pressure(value)),
+        MOD_COLUMN => insert_event_at_cursor(module, &cursor, EventData::Modulation(value)),
         _ => (),
     }
 }
 
 fn input_note_off(ui: &UI, module: &mut Module) {
-    let cursor = ui.edit_start;
-    let channel = &mut module.tracks[cursor.track].channels[cursor.channel];
-    insert_event(channel, Event {
-        tick: cursor.tick,
-        data: EventData::NoteOff,
-    })
+    insert_event_at_cursor(module, &ui.edit_start, EventData::NoteOff);
 }
 
-fn insert_event(chan: &mut Vec<Event>, evt: Event) {
-    chan.retain(|x| x.tick != evt.tick || x.data.column() != evt.data.column());
-    chan.push(evt);
+fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {
+    module.insert_event(cursor.track, cursor.channel, Event {
+        tick: cursor.tick,
+        data,
+    });
 }
 
 fn track_name(target: TrackTarget, patches: &[Patch]) -> &str {

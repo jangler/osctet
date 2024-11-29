@@ -96,15 +96,36 @@ impl Module {
     pub fn delete_events(&mut self, start: Position, end: Position) {
         let tick_range = start.tick..=end.tick;
         let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+        let mut remove = Vec::new();
+
         for (track_i, track) in self.tracks.iter_mut().enumerate() {
             for (channel_i, channel) in track.channels.iter_mut().enumerate() {
-                channel.retain(|e| {
-                    let tuple = (track_i, channel_i, e.data.column());
-                    !(tick_range.contains(&e.tick)
-                        && tuple >= start_tuple && tuple <= end_tuple)
-                });
+                for evt in channel {
+                    let tuple = (track_i, channel_i, evt.data.column());
+                    if tick_range.contains(&evt.tick)
+                        && tuple >= start_tuple && tuple <= end_tuple {
+                        remove.push(Position {
+                            tick: evt.tick,
+                            track: track_i,
+                            channel: channel_i,
+                            column: evt.data.column(),
+                        });
+                    }
+                }
             }
         }
+
+        self.push_edit(Edit::PatternData {
+            remove,
+            add: Vec::new(),
+        });
+    }
+
+    fn delete_event(&mut self, pos: Position) -> Option<Event> {
+        let channel = &mut self.tracks[pos.track].channels[pos.channel];
+        channel.iter()
+            .position(|e| e.tick == pos.tick && e.data.column() == pos.column)
+            .map(|i| channel.remove(i))
     }
 
     pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
@@ -145,9 +166,17 @@ impl Module {
     pub fn remove_channel(&mut self, track: usize) {
         self.push_edit(Edit::RemoveChannel(track));
     }
+
+    pub fn insert_event(&mut self, track: usize, channel: usize, event: Event) {
+        self.push_edit(Edit::PatternData {
+            remove: Vec::new(),
+            add: vec![LocatedEvent { track, channel, event }]
+        });
+    }
     
     /// Performs an edit operation and handles undo/redo stacks.
     fn push_edit(&mut self, edit: Edit) {
+        // TODO: merge consecutive pattern data operations
         let edit = self.flip_edit(edit);
         self.undo_stack.push(edit);
         self.redo_stack.clear();
@@ -175,6 +204,26 @@ impl Module {
                 let track = &mut self.tracks[index];
                 let channel = track.channels.pop().unwrap();
                 Edit::AddChannel(index, channel)
+            },
+            Edit::PatternData { remove, add } => {
+                let flip_add = remove.into_iter().flat_map(|p| {
+                    self.delete_event(p).map(|event| LocatedEvent {
+                        track: p.track,
+                        channel: p.channel,
+                        event,
+                    })
+                }).collect();
+                let flip_remove = add.into_iter().map(|e| {
+                    let pos = Position {
+                        track: e.track,
+                        channel: e.channel,
+                        tick: e.event.tick,
+                        column: e.event.data.column(),
+                    };
+                    self.tracks[e.track].channels[e.channel].push(e.event);
+                    pos
+                }).collect();
+                Edit::PatternData { remove: flip_remove, add: flip_add }
             },
         }
     }
@@ -280,15 +329,26 @@ impl Position {
 }
 
 /// An operation that changes Module data.
-pub enum Edit {
+enum Edit {
     InsertTrack(usize, Track),
     RemoveTrack(usize),
     AddChannel(usize, Vec<Event>),
     RemoveChannel(usize),
+    PatternData {
+        remove: Vec<Position>,
+        add: Vec<LocatedEvent>,
+    },
 }
 
 /// Used to track added/removed Tracks for synchronizing Player with Module.
 pub enum TrackEdit {
     Insert(usize),
     Remove(usize),
+}
+
+/// Event with global location data, for the undo stack.
+struct LocatedEvent {
+    track: usize,
+    channel: usize,
+    event: Event,
 }
