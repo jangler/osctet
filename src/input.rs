@@ -98,7 +98,7 @@ pub enum MidiEvent {
     NoteOff {
         channel: u8,
         key: u8,
-        velocity: u8,
+        // velocity is unused
     },
     NoteOn {
         channel: u8,
@@ -135,7 +135,7 @@ impl MidiEvent {
         let channel = data[0] & 0xf;
 
         match data[0] & 0xf0 {
-            0x80 => Some(Self::NoteOff { channel, key: data[1], velocity: *data.get(2)? }),
+            0x80 => Some(Self::NoteOff { channel, key: data[1] }),
             0x90 => Some(Self::NoteOn { channel, key: data[1], velocity: *data.get(2)? }),
             0xa0 => Some(Self::PolyPressure { channel, key: data[1], pressure: *data.get(2)? }),
             0xb0 => Some(Self::Controller { channel, controller: data[1], value: *data.get(2)? }),
