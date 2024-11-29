@@ -170,10 +170,10 @@ impl FilterType {
 
 // TODO: this could overflow if someone is using too many channels!
 const MAX_CHANNELS: usize = 16;
+const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to 6 in pattern
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
-    // TODO: reset memory when playing from start
     voices: HashMap<Key, Voice>,
     bend_memory: [f32; MAX_CHANNELS],
     mod_memory: [f32; MAX_CHANNELS],
@@ -187,9 +187,16 @@ impl Synth {
             voices: HashMap::new(),
             bend_memory: [0.0; MAX_CHANNELS],
             mod_memory: [0.0; MAX_CHANNELS],
-            pressure_memory: [2.0/3.0; MAX_CHANNELS],
+            pressure_memory: [DEFAULT_PRESSURE; MAX_CHANNELS],
             prev_freq: None,
         }
+    }
+
+    pub fn reset_memory(&mut self) {
+        self.bend_memory.fill(0.0);
+        self.mod_memory.fill(0.0);
+        self.pressure_memory.fill(DEFAULT_PRESSURE);
+        self.prev_freq = None;
     }
 
     /// If pressure is None, use memory.

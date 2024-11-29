@@ -51,6 +51,10 @@ impl Player {
     }
 
     pub fn play_from(&mut self, tick: u32) {
+        // TODO: calulcate correct memory if tick is nonzero
+        for synth in self.synths.iter_mut() {
+            synth.reset_memory();
+        }
         self.tick = tick;
         self.play();
     }
