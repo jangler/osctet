@@ -4,6 +4,10 @@ use crate::{fx::GlobalFX, module::{EventData, Module, TICKS_PER_BEAT}, synth::{K
 
 const INITIAL_TEMPO: f32 = 120.0;
 
+// maximum values as written to pattern
+const MAX_PRESSURE: u8 = 9;
+const MAX_MODULATION: u8 = 9;
+
 /// Handles module playback. In methods that take a `track` argument, 0 can
 /// safely be used for keyjazz events (since track 0 will never sequence).
 pub struct Player {
@@ -63,7 +67,7 @@ impl Player {
         pitch: f32, pressure: Option<f32>, patch: &Patch
     ) {
         if let Some(synth) = self.synths.get_mut(track) {
-            synth.note_on(key, pitch, pressure.unwrap_or(1.0), patch, &mut self.seq);
+            synth.note_on(key, pitch, pressure, patch, &mut self.seq);
         }
     }
 
@@ -79,10 +83,9 @@ impl Player {
         }
     }
 
-    pub fn modulate(&mut self, track: usize, depth: f32) {
-        // TODO: shouldn't this take a channel argument?
+    pub fn modulate(&mut self, track: usize, channel: u8, depth: f32) {
         if let Some(synth) = self.synths.get_mut(track) {
-            synth.modulate(depth);
+            synth.modulate(channel, depth);
         }
     }
 
@@ -134,12 +137,18 @@ impl Player {
                     let key = Key {
                         origin: KeyOrigin::Pattern,
                         channel: channel as u8,
-                        key: 0, // TODO
+                        key: 0,
                     };
                     let pitch = module.tuning.midi_pitch(&note);
                     self.note_on(track, key, pitch, None, patch);
                 }
             },
+            EventData::Pressure(v) => {
+                self.channel_pressure(track, channel as u8, v as f32 / MAX_PRESSURE as f32);
+            }
+            EventData::Modulation(v) => {
+                self.modulate(track, channel as u8, v as f32 / MAX_MODULATION as f32);
+            }
             _ => (), // TODO
         }
     }

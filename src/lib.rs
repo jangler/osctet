@@ -7,7 +7,7 @@ use config::Config;
 use fx::GlobalFX;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
-use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, Stream, StreamConfig};
+use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use module::{Module, EventData};
 use playback::Player;
 use rfd::FileDialog;
@@ -258,10 +258,10 @@ impl App {
                                     }, pressure as f32 / 127.0);
                                 }
                             },
-                            MidiEvent::Controller { controller, value, .. } => {
+                            MidiEvent::Controller { channel, controller, value } => {
                                 match controller {
                                     input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                                        self.player.modulate(0, value as f32 / 127.0);
+                                        self.player.modulate(0, channel, value as f32 / 127.0);
                                     },
                                     input::CC_RPN_MSB => self.midi.rpn.0 = value,
                                     input::CC_RPN_LSB => self.midi.rpn.1 = value,

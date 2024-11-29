@@ -168,11 +168,15 @@ impl FilterType {
     }
 }
 
+// TODO: this could overflow if someone is using too many channels!
+const MAX_CHANNELS: usize = 16;
+
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
     voices: HashMap<Key, Voice>,
-    bend_memory: [f32; 16],
-    mod_memory: f32,
+    bend_memory: [f32; MAX_CHANNELS],
+    mod_memory: [f32; MAX_CHANNELS],
+    pressure_memory: [f32; MAX_CHANNELS],
     prev_freq: Option<f32>,
 }
 
@@ -180,13 +184,15 @@ impl Synth {
     pub fn new() -> Self {
         Self {
             voices: HashMap::new(),
-            bend_memory: [0.0; 16],
-            mod_memory: 0.0,
+            bend_memory: [0.0; MAX_CHANNELS],
+            mod_memory: [0.0; MAX_CHANNELS],
+            pressure_memory: [0.0; MAX_CHANNELS],
             prev_freq: None,
         }
     }
 
-    pub fn note_on(&mut self, key: Key, pitch: f32, pressure: f32,
+    /// If pressure is None, use memory.
+    pub fn note_on(&mut self, key: Key, pitch: f32, pressure: Option<f32>,
         patch: &Patch, seq: &mut Sequencer
     ) {
         // turn off prev note(s) in channel
@@ -228,8 +234,15 @@ impl Synth {
             },
         };
         if insert_voice {
-            self.voices.insert(key, Voice::new(pitch, bend, pressure, self.mod_memory,
-                self.prev_freq, &patch, seq));
+            let channel = key.channel as usize;
+            let pressure = if let Some(p) = pressure {
+                self.pressure_memory[channel] = p;
+                p
+            } else {
+                self.pressure_memory[channel]
+            };
+            self.voices.insert(key, Voice::new(pitch, bend, pressure,
+                self.mod_memory[channel], self.prev_freq, &patch, seq));
             self.prev_freq = Some(midi_hz(pitch));
         }
     }
@@ -263,17 +276,18 @@ impl Synth {
     }
 
     pub fn channel_pressure(&mut self, channel: u8, pressure: f32) {
+        self.pressure_memory[channel as usize] = pressure;
         for (key, voice) in self.voices.iter_mut() {
-            if key.origin == KeyOrigin::Midi && key.channel == channel {
+            if key.channel == channel {
                 voice.vars.pressure.set(pressure);
             }
         }
     }
 
-    pub fn modulate(&mut self, depth: f32) {
-        self.mod_memory = depth;
+    pub fn modulate(&mut self, channel: u8, depth: f32) {
+        self.mod_memory[channel as usize] = depth;
         for (key, voice) in self.voices.iter_mut() {
-            if key.origin == KeyOrigin::Midi {
+            if key.channel == channel {
                 voice.vars.modulation.set(depth);
             }
         }
@@ -857,7 +871,7 @@ impl Voice {
         };
         let gain = var(&settings.gain.0) * settings.dsp_component(&vars, ModTarget::Gain, &[]) * VOICE_GAIN;
         let filter_net = settings.make_filter_net(&vars);
-        let mut net = ((settings.make_osc(0, &vars) >> filter_net) * gain
+        let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
             | var(&settings.pan.0) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             >> panner();
         Self {
