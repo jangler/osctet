@@ -144,6 +144,16 @@ impl App {
             if ctrl {
                 match key {
                     KeyCode::E => self.render_and_save(),
+                    KeyCode::Y => if self.module.redo() {
+                        self.player.update_synths(self.module.drain_track_history());
+                    } else {
+                        self.ui.report("Nothing to redo");
+                    },
+                    KeyCode::Z => if self.module.undo() {
+                        self.player.update_synths(self.module.drain_track_history());
+                    } else {
+                        self.ui.report("Nothing to undo");
+                    },
                     _ => (),
                 }
             } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {

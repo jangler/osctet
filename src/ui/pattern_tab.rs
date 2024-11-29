@@ -147,14 +147,14 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     }
 
     if let Some(i) = removed_track {
-        module.tracks.remove(i);
-        player.track_removed(i);
+        module.remove_track(i);
+        player.update_synths(module.drain_track_history());
         fix_cursors(ui, &module.tracks);
     }
 
     if !module.patches.is_empty() && ui.button("+") {
-        module.tracks.push(Track::new(TrackTarget::Patch(0)));
-        player.track_added();
+        module.add_track();
+        player.update_synths(module.drain_track_history());
     }
 
     xs

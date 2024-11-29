@@ -1018,6 +1018,8 @@ fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
     (x - range.start()) / (range.end() - range.start())
 }
 
+// TODO: characters with descenders give this too large a bottom margin. make
+//       the rect size independent of the particular characters
 fn alert_dialog(style: &Style, message: &str) {
     let params = style.text_params();
     let mut r = center(fit_strings(params.clone(), &[message.to_owned()]));

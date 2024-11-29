@@ -1,6 +1,6 @@
 use fundsp::{hacker::{AudioUnit, BlockRateAdapter, Sequencer}, wave::Wave};
 
-use crate::{fx::GlobalFX, module::{EventData, Module, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{EventData, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 const INITIAL_TEMPO: f32 = 120.0;
 
@@ -59,12 +59,13 @@ impl Player {
         self.play();
     }
 
-    pub fn track_removed(&mut self, index: usize) {
-        self.synths.remove(index + 1);
-    }
-
-    pub fn track_added(&mut self) {
-        self.synths.push(Synth::new());
+    pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
+        for edit in edits {
+            match edit {
+                TrackEdit::Insert(i) => self.synths.insert(i, Synth::new()),
+                TrackEdit::Remove(i) => { self.synths.remove(i); }
+            }
+        }
     }
 
     pub fn note_on(&mut self, track: usize, key: Key,

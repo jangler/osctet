@@ -19,6 +19,10 @@ pub struct Module {
     pub kit: Vec<KitEntry>,
     pub patches: Vec<Patch>,
     pub tracks: Vec<Track>,
+
+    undo_stack: Vec<Edit>,
+    redo_stack: Vec<Edit>,
+    track_history: Vec<TrackEdit>,
 }
 
 impl Module {
@@ -35,6 +39,9 @@ impl Module {
                 Track::new(TrackTarget::Kit),
                 Track::new(TrackTarget::Patch(0)),
             ],
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            track_history: Vec::new(),
         }
     }
 
@@ -117,6 +124,65 @@ impl Module {
             .max()
             .unwrap_or(0)
     }
+
+    pub fn add_track(&mut self) {
+        let index = self.tracks.len();
+        let track = Track::new(TrackTarget::Patch(0));
+        self.push_edit(Edit::InsertTrack(index, track));
+    }
+
+    pub fn remove_track(&mut self, index: usize) {
+        self.push_edit(Edit::RemoveTrack(index));
+    }
+    
+    /// Performs an edit operation and handles undo/redo stacks.
+    fn push_edit(&mut self, edit: Edit) {
+        let edit = self.flip_edit(edit);
+        self.undo_stack.push(edit);
+        self.redo_stack.clear();
+    }
+
+    /// Performs an edit operation and returns its inverse.
+    fn flip_edit(&mut self, edit: Edit) -> Edit {
+        match edit {
+            Edit::InsertTrack(index, track) => {
+                self.tracks.insert(index, track);
+                self.track_history.push(TrackEdit::Insert(index));
+                Edit::RemoveTrack(self.tracks.len() - 1)
+            },
+            Edit::RemoveTrack(index) => {
+                let track = self.tracks.remove(index);
+                self.track_history.push(TrackEdit::Remove(index));
+                Edit::InsertTrack(index, track)
+            },
+        }
+    }
+
+    /// Returns true if there was something to undo.
+    pub fn undo(&mut self) -> bool {
+        if let Some(edit) = self.undo_stack.pop() {
+            let edit = self.flip_edit(edit);
+            self.redo_stack.push(edit);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns true if there was something to redo.
+    pub fn redo(&mut self) -> bool {
+        if let Some(edit) = self.redo_stack.pop() {
+            let edit = self.flip_edit(edit);
+            self.undo_stack.push(edit);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn drain_track_history(&mut self) -> Vec<TrackEdit> {
+        self.track_history.drain(..).collect()
+    }
 }
 
 #[derive(Default)]
@@ -190,4 +256,16 @@ impl Position {
     pub fn x_tuple(&self) -> (usize, usize, u8) {
         (self.track, self.channel, self.column)
     }
+}
+
+/// An operation that changes Module data.
+pub enum Edit {
+    InsertTrack(usize, Track),
+    RemoveTrack(usize),
+}
+
+/// Used to track added/removed Tracks for synchronizing Player with Module.
+pub enum TrackEdit {
+    Insert(usize),
+    Remove(usize),
 }
