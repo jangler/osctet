@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
-use crate::{module::{EventData, Position}, pitch::Note};
+use crate::{module::{EventData, Position, NOTE_COLUMN}, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -218,6 +218,11 @@ impl UI {
 
     pub fn cursor_track(&self) -> usize {
         self.edit_start.track
+    }
+
+    pub fn in_digit_column(&self) -> bool {
+        self.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
+            && self.edit_start.column != NOTE_COLUMN
     }
 
     pub fn start_frame(&mut self) {

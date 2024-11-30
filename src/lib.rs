@@ -132,6 +132,7 @@ impl App {
     }
 
     // TODO: switching tracks while keyjazzing could result in stuck notes
+    // TODO: entering note input mode while keyjazzing could result in stuck notes
     // TODO: can keyjazzing mess up synth memory in a way that matters?
     fn keyjazz_track(&self) -> usize {
         if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
@@ -149,7 +150,6 @@ impl App {
         }
     }
 
-    // TODO: entering digits in vel/mod columns can trigger keyjazz
     // TODO: use most current vel/mod setting when keyjazzing in pattern
     fn handle_keys(&mut self) {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
@@ -190,7 +190,7 @@ impl App {
                 }
             } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.ui.note_queue.push(EventData::Pitch(note));
-                if !self.ui.accepting_note_input() {
+                if !self.ui.accepting_note_input() && !self.ui.in_digit_column() {
                     if let Some((patch, note)) =
                         self.module.map_input(self.keyjazz_patch_index(), note) {
                         let key = Key {
