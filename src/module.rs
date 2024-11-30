@@ -158,7 +158,12 @@ impl Module {
 
     pub fn insert_event(&mut self, track: usize, channel: usize, event: Event) {
         self.push_edit(Edit::PatternData {
-            remove: Vec::new(),
+            remove: vec![Position {
+                track,
+                channel,
+                tick: event.tick,
+                column: event.data.column()
+            }],
             add: vec![LocatedEvent { track, channel, event }]
         });
     }
