@@ -8,7 +8,7 @@ use fx::GlobalFX;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
-use module::{Module, EventData};
+use module::{EventData, Module, TrackTarget};
 use playback::Player;
 use rfd::FileDialog;
 use synth::{Key, KeyOrigin};
@@ -86,6 +86,11 @@ impl Midi {
     }
 }
 
+const MAIN_TAB_ID: &str = "main";
+const TAB_GENERAL: usize = 0;
+const TAB_PATTERN: usize = 1;
+const TAB_INSTRUMENTS: usize = 2;
+
 struct App {
     player: Player,
     octave: i8,
@@ -126,6 +131,24 @@ impl App {
         app
     }
 
+    // TODO: switching tracks while keyjazzing could result in stuck notes
+    // TODO: can keyjazzing mess up synth memory in a way that matters?
+    fn keyjazz_track(&self) -> usize {
+        if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
+            self.ui.cursor_track()
+        } else {
+            0
+        }
+    }
+
+    fn keyjazz_patch_index(&self) -> Option<usize> {
+        match self.module.tracks[self.keyjazz_track()].target {
+            TrackTarget::Global | TrackTarget::None => self.patch_index,
+            TrackTarget::Kit => None,
+            TrackTarget::Patch(i) => Some(i),
+        }
+    }
+
     fn handle_keys(&mut self) {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
 
@@ -136,7 +159,7 @@ impl App {
                     channel: 0,
                     key: input::u8_from_key(key),
                 };
-                self.player.note_off(0, key);
+                self.player.note_off(self.keyjazz_track(), key);
             }
         }
 
@@ -167,14 +190,14 @@ impl App {
                 self.ui.note_queue.push(EventData::Pitch(note));
                 if !self.ui.accepting_note_input() {
                     if let Some((patch, note)) =
-                        self.module.map_input(self.patch_index, note) {
+                        self.module.map_input(self.keyjazz_patch_index(), note) {
                         let key = Key {
                             origin: KeyOrigin::Keyboard,
                             channel: 0,
                             key: input::u8_from_key(key),
                         };
                         let pitch = self.module.tuning.midi_pitch(&note);
-                        self.player.note_on(0, key, pitch, None, patch);
+                        self.player.note_on(self.keyjazz_track(), key, pitch, None, patch);
                     }
                 }
             } else {
@@ -240,13 +263,13 @@ impl App {
                                     channel,
                                     key,
                                 };
-                                self.player.note_off(0, key);
+                                self.player.note_off(self.keyjazz_track(), key);
                             },
                             MidiEvent::NoteOn { channel, key, velocity } => {
                                 if velocity != 0 {
                                     let note = input::note_from_midi(key, &self.module.tuning);
                                     if let Some((patch, note)) =
-                                        self.module.map_input(self.patch_index, note) {
+                                        self.module.map_input(self.keyjazz_patch_index(), note) {
                                         let key = Key {
                                             origin: KeyOrigin::Midi,
                                             channel,
@@ -254,8 +277,8 @@ impl App {
                                         };
                                         let pitch = self.module.tuning.midi_pitch(&note);
                                         let pressure = velocity as f32 / 127.0;
-                                        self.player.note_on(0, key, pitch,
-                                            Some(pressure), patch);
+                                        self.player.note_on(self.keyjazz_track(),
+                                            key, pitch, Some(pressure), patch);
                                     }
                                 } else {
                                     let key = Key {
@@ -263,12 +286,12 @@ impl App {
                                         channel,
                                         key,
                                     };
-                                    self.player.note_off(0, key);
+                                    self.player.note_off(self.keyjazz_track(), key);
                                 }
                             },
                             MidiEvent::PolyPressure { channel, key, pressure } => {
                                 if self.config.midi_send_pressure == Some(true) {
-                                    self.player.poly_pressure(0, Key {
+                                    self.player.poly_pressure(self.keyjazz_track(), Key {
                                         origin: KeyOrigin::Midi,
                                         channel,
                                         key,
@@ -278,7 +301,8 @@ impl App {
                             MidiEvent::Controller { channel, controller, value } => {
                                 match controller {
                                     input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                                        self.player.modulate(0, channel, value as f32 / 127.0);
+                                        self.player.modulate(self.keyjazz_track(),
+                                            channel, value as f32 / 127.0);
                                     },
                                     input::CC_RPN_MSB => self.midi.rpn.0 = value,
                                     input::CC_RPN_LSB => self.midi.rpn.1 = value,
@@ -295,13 +319,13 @@ impl App {
                             },
                             MidiEvent::ChannelPressure { channel, pressure } => {
                                 if self.config.midi_send_pressure == Some(true) {
-                                    self.player.channel_pressure(0, channel,
-                                        pressure as f32 / 127.0);
+                                    self.player.channel_pressure(self.keyjazz_track(),
+                                        channel, pressure as f32 / 127.0);
                                 }
                             },
                             MidiEvent::Pitch { channel, bend } => {
-                                self.player.pitch_bend(0, channel,
-                                    bend * self.midi.bend_range);
+                                self.player.pitch_bend(self.keyjazz_track(),
+                                    channel, bend * self.midi.bend_range);
                             },
                         }
                     }
@@ -352,10 +376,11 @@ impl App {
 
         self.bottom_panel();
 
-        match self.ui.tab_menu("main", &TABS) {
-            0 => ui::general_tab::draw(&mut self.ui, &mut self.module),
-            1 => ui::pattern_tab::draw(&mut self.ui, &mut self.module, &mut self.player),
-            2 => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
+        match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
+            TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module),
+            TAB_PATTERN => 
+                ui::pattern_tab::draw(&mut self.ui, &mut self.module, &mut self.player),
+            TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index),
             _ => panic!("bad tab value"),
         }

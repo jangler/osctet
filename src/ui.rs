@@ -212,6 +212,14 @@ impl UI {
         }
     }
 
+    pub fn get_tab(&self, key: &str) -> Option<usize> {
+        self.tabs.get(key).copied()
+    }
+
+    pub fn cursor_track(&self) -> usize {
+        self.edit_start.track
+    }
+
     pub fn start_frame(&mut self) {
         self.bounds = Rect {
             x: 0.0,

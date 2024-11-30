@@ -336,6 +336,7 @@ pub enum Edit {
     RemapTrack(usize, TrackTarget),
     AddChannel(usize, Vec<Event>),
     RemoveChannel(usize),
+    // TODO: insertion doesn't overwrite existing data
     PatternData {
         remove: Vec<Position>,
         add: Vec<LocatedEvent>,
