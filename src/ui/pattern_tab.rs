@@ -176,6 +176,8 @@ fn handle_key(key: KeyCode, ui: &mut UI, module: &mut Module) {
         KeyCode::Key8 => input_digit(ui, module, 8),
         KeyCode::Key9 => input_digit(ui, module, 9),
         KeyCode::GraveAccent => input_note_off(ui, module),
+        KeyCode::E => insert_event_at_cursor(module, &ui.edit_start, EventData::End),
+        KeyCode::L => insert_event_at_cursor(module, &ui.edit_start, EventData::Loop),
         _ => (),
     }
 }
@@ -185,6 +187,9 @@ fn input_digit(ui: &UI, module: &mut Module, value: u8) {
     match cursor.column {
         VEL_COLUMN => insert_event_at_cursor(module, &cursor, EventData::Pressure(value)),
         MOD_COLUMN => insert_event_at_cursor(module, &cursor, EventData::Modulation(value)),
+        GLOBAL_COLUMN => if cursor.track == 0 {
+            input_tempo(module, &cursor)
+        }
         _ => (),
     }
 }
@@ -193,7 +198,20 @@ fn input_note_off(ui: &UI, module: &mut Module) {
     insert_event_at_cursor(module, &ui.edit_start, EventData::NoteOff);
 }
 
+fn input_tempo(module: &mut Module, cursor: &Position) {
+    insert_event_at_cursor(module, cursor, EventData::Tempo(100.0)); // TODO
+}
+
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {
+    match data {
+        EventData::End | EventData::Loop | EventData::Tempo(_) => if cursor.track > 0 {
+            return
+        }
+        EventData::Modulation(_) | EventData::NoteOff | EventData::Pitch(_) |
+            EventData::Pressure(_) => if cursor.track == 0 {
+            return
+        }
+    }
     module.insert_event(cursor.track, cursor.channel, Event {
         tick: cursor.tick,
         data,
@@ -257,7 +275,9 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
         EventData::NoteOff => String::from("---"),
         EventData::Pressure(v) => v.to_string(),
         EventData::Modulation(v) => v.to_string(),
-        _ => String::from("unknown"),
+        EventData::End => String::from("END"),
+        EventData::Loop => String::from("LPS"), // TODO: better display string
+        EventData::Tempo(t) => t.round().to_string(),
     };
     ui.push_text(x, y, text, ui.style.theme.fg);
 }

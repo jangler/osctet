@@ -204,9 +204,9 @@ impl App {
                 }
             } else {
                 match key {
-                    KeyCode::F1 => self.ui.set_tab("main", 0),
-                    KeyCode::F2 => self.ui.set_tab("main", 1),
-                    KeyCode::F3 => self.ui.set_tab("main", 2),
+                    KeyCode::F1 => self.ui.set_tab(MAIN_TAB_ID, 0),
+                    KeyCode::F2 => self.ui.set_tab(MAIN_TAB_ID, 1),
+                    KeyCode::F3 => self.ui.set_tab(MAIN_TAB_ID, 2),
                     KeyCode::F5 => self.player.play_from(0),
                     KeyCode::F7 => self.player.play(),
                     KeyCode::F8 => self.player.stop(),
@@ -419,14 +419,17 @@ impl App {
     }
     
     fn render_and_save(&mut self) {
-        if let Some(path) = FileDialog::new()
-            .add_filter("WAV file", &["wav"])
-            .save_file() {
-            if let Err(e) = playback::render(&self.module).save_wav16(path) {
-                self.ui.report(e);
-            } else {
-                self.ui.report("Wrote WAV.");
+        if self.module.ends() {
+            if let Some(path) = FileDialog::new()
+                .add_filter("WAV file", &["wav"])
+                .save_file() {
+                match playback::render(&self.module).save_wav16(path) {
+                    Ok(_) => self.ui.report("Wrote WAV."),
+                    Err(e) => self.ui.report(e),
+                }
             }
+        } else {
+            self.ui.report("Module must have END event to export")
         }
     }
 }

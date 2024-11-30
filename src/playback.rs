@@ -1,8 +1,9 @@
-use fundsp::{hacker::{AudioUnit, BlockRateAdapter, Sequencer}, wave::Wave};
+use fundsp::{hacker::{shared, var, AudioUnit, BlockRateAdapter, Sequencer}, wave::Wave};
 
 use crate::{fx::GlobalFX, module::{EventData, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
-const INITIAL_TEMPO: f32 = 120.0;
+const DEFAULT_TEMPO: f32 = 120.0;
+const LOOP_FADEOUT_TIME: f32 = 10.0;
 
 // maximum values as written to pattern
 const MAX_PRESSURE: u8 = 9;
@@ -15,8 +16,9 @@ pub struct Player {
     synths: Vec<Synth>, // one per track
     playing: bool,
     tick: u32,
-    start_tick: u32,
-    playtime: f32,
+    playtime: f64,
+    tempo: f32,
+    looped: bool,
 }
 
 impl Player {
@@ -26,8 +28,9 @@ impl Player {
             synths: (0..=num_tracks).map(|_| Synth::new()).collect(),
             playing: false,
             tick: 0,
-            start_tick: 0,
-            playtime: 0.0,
+            playtime: 0.0, // not total playtime!
+            tempo: DEFAULT_TEMPO,
+            looped: false,
         }
     }
 
@@ -46,8 +49,8 @@ impl Player {
 
     pub fn play(&mut self) {
         self.playing = true;
-        self.start_tick = self.tick;
         self.playtime = 0.0;
+        self.looped = false;
     }
 
     pub fn play_from(&mut self, tick: u32) {
@@ -55,6 +58,7 @@ impl Player {
         for synth in self.synths.iter_mut() {
             synth.reset_memory();
         }
+        self.tempo = DEFAULT_TEMPO;
         self.tick = tick;
         self.play();
     }
@@ -117,20 +121,20 @@ impl Player {
             return
         }
 
-        self.playtime += dt;
-        let next_tick = self.start_tick + interval_ticks(self.playtime, INITIAL_TEMPO);
+        self.playtime += dt as f64;
+        let prev_tick = self.tick;
+        self.tick += interval_ticks(self.playtime, self.tempo);
+        self.playtime -= tick_interval(self.tick - prev_tick, self.tempo);
 
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
                 for event in channel {
-                    if event.tick >= self.tick && event.tick < next_tick {
+                    if event.tick >= prev_tick && event.tick < self.tick {
                         self.handle_event(&event.data, module, track_i, channel_i);
                     }
                 }
             }
         }
-
-        self.tick = next_tick;
     }
 
     fn handle_event(&mut self, data: &EventData, module: &Module,
@@ -148,45 +152,68 @@ impl Player {
                     let pitch = module.tuning.midi_pitch(&note);
                     self.note_on(track, key, pitch, None, patch);
                 }
-            },
+            }
             EventData::Pressure(v) => {
                 self.channel_pressure(track, channel as u8, v as f32 / MAX_PRESSURE as f32);
-            },
+            }
             EventData::Modulation(v) => {
                 self.modulate(track, channel as u8, v as f32 / MAX_MODULATION as f32);
-            },
+            }
             EventData::NoteOff => {
                 self.note_off(track, key);
+            }
+            EventData::Tempo(t) => self.tempo = t,
+            EventData::End => if let Some(tick) = module.find_loop_start(self.tick) {
+                self.go_to(tick);
+                self.looped = true;
+            } else {
+                self.stop();
             },
-            _ => (), // TODO
+            EventData::Loop => (),
         }
     }
+
+    fn go_to(&mut self, tick: u32) {
+        self.tick = tick;
+    } 
 }
 
-fn interval_ticks(dt: f32, tempo: f32) -> u32 {
-    (dt * tempo / 60.0 * TICKS_PER_BEAT as f32).round() as u32
+fn interval_ticks(dt: f64, tempo: f32) -> u32 {
+    (dt * tempo as f64 / 60.0 * TICKS_PER_BEAT as f64).round() as u32
 }
 
+fn tick_interval(dtick: u32, tempo: f32) -> f64 {
+    dtick as f64 / tempo as f64 * 60.0 / TICKS_PER_BEAT as f64
+}
+
+/// Renders module to PCM. Loops forever if module is missing END!
 pub fn render(module: &Module) -> Wave {
     let sample_rate = 44100;
     let mut wave = Wave::new(2, sample_rate as f64);
     let mut seq = Sequencer::new(false, 2);
     seq.set_sample_rate(sample_rate as f64);
     let mut fx = GlobalFX::new_from_settings(seq.backend(), module.fx.settings.clone());
+    let fadeout_gain = shared(1.0);
+    fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
     fx.net.set_sample_rate(sample_rate as f64);
     let mut player = Player::new(seq, module.tracks.len());
     let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
     let block_size = 64;
     let dt = block_size as f32 / sample_rate as f32;
-    let last_event_tick = module.last_event_tick();
+    let mut time_since_loop = 0.0;
 
     // TODO: render would probably be faster if we called player.frame() only
     //       when there's a new event
+    // TODO: benchmark 32-bit vs 64-bit renders
     player.play();
-    while player.tick <= last_event_tick {
+    while player.playing && time_since_loop < LOOP_FADEOUT_TIME {
         player.frame(module, dt);
         for _ in 0..block_size {
             wave.push(backend.get_stereo());
+        }
+        if player.looped {
+            fadeout_gain.set(1.0 - (time_since_loop / LOOP_FADEOUT_TIME));
+            time_since_loop += dt;
         }
     }
 

@@ -259,6 +259,27 @@ impl Module {
     pub fn drain_track_history(&mut self) -> Vec<TrackEdit> {
         self.track_history.drain(..).collect()
     }
+
+    pub fn find_loop_start(&self, before_tick: u32) -> Option<u32> {
+        self.tracks[0].channels.iter().flat_map(|c| {
+            c.iter()
+                .filter(|e| e.data == EventData::Loop && e.tick < before_tick)
+                .map(|e| e.tick)
+        }).max()
+    }
+
+    pub fn ends(&self) -> bool {
+        for track in &self.tracks {
+            for channel in &track.channels {
+                for event in channel {
+                    if event.data == EventData::End {
+                        return true
+                    }
+                }
+            }
+        }
+        false
+    }
 }
 
 #[derive(Default)]
@@ -295,14 +316,15 @@ pub struct Event {
     pub data: EventData,
 }
 
+#[derive(PartialEq)]
 pub enum EventData {
     Pitch(Note),
     NoteOff,
     Pressure(u8),
     Modulation(u8),
     Tempo(f32),
-    LoopStart,
-    LoopEnd,
+    End,
+    Loop,
 }
 
 impl EventData {
