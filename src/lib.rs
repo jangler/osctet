@@ -19,10 +19,10 @@ mod input;
 mod config;
 pub mod synth;
 mod adsr;
-mod fx;
+pub mod fx;
 pub mod ui;
-mod module;
-mod playback;
+pub mod module;
+pub mod playback;
 
 use input::MidiEvent;
 use ui::instruments_tab::fix_patch_index;

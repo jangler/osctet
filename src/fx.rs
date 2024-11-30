@@ -74,6 +74,11 @@ impl GlobalFX {
         }
     }
 
+    /// Constructs a new instance with a dummy sequencer backend.
+    pub fn new_dummy() -> Self {
+        Self::new(Sequencer::new(false, 2).backend())
+    }
+
     pub fn commit_predelay(&mut self) {
         self.crossfade(self.predelay_id, self.settings.make_predelay());
     }
