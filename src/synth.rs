@@ -168,16 +168,14 @@ impl FilterType {
     }
 }
 
-// TODO: this could overflow if someone is using too many channels!
-const MAX_CHANNELS: usize = 16;
 const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to 6 in pattern
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
     voices: HashMap<Key, Voice>,
-    bend_memory: [f32; MAX_CHANNELS],
-    mod_memory: [f32; MAX_CHANNELS],
-    pressure_memory: [f32; MAX_CHANNELS],
+    bend_memory: Vec<f32>,
+    mod_memory: Vec<f32>,
+    pressure_memory: Vec<f32>,
     prev_freq: Option<f32>,
 }
 
@@ -185,9 +183,9 @@ impl Synth {
     pub fn new() -> Self {
         Self {
             voices: HashMap::new(),
-            bend_memory: [0.0; MAX_CHANNELS],
-            mod_memory: [0.0; MAX_CHANNELS],
-            pressure_memory: [DEFAULT_PRESSURE; MAX_CHANNELS],
+            bend_memory: vec![0.0],
+            mod_memory: vec![0.0],
+            pressure_memory: vec![DEFAULT_PRESSURE],
             prev_freq: None,
         }
     }
@@ -197,6 +195,18 @@ impl Synth {
         self.mod_memory.fill(0.0);
         self.pressure_memory.fill(DEFAULT_PRESSURE);
         self.prev_freq = None;
+    }
+
+    fn expand_memory(&mut self, index: usize) {
+        while self.bend_memory.len() <= index {
+            self.bend_memory.push(0.0);
+        }
+        while self.mod_memory.len() <= index {
+            self.mod_memory.push(0.0);
+        }
+        while self.pressure_memory.len() <= index {
+            self.pressure_memory.push(DEFAULT_PRESSURE);
+        }
     }
 
     /// If pressure is None, use memory.
@@ -217,6 +227,7 @@ impl Synth {
         }
 
         let bend = if key.origin == KeyOrigin::Midi {
+            self.expand_memory(key.channel as usize);
             self.bend_memory[key.channel as usize]
         } else {
             0.0
@@ -243,6 +254,7 @@ impl Synth {
         };
         if insert_voice {
             let channel = key.channel as usize;
+            self.expand_memory(channel);
             let pressure = if let Some(p) = pressure {
                 self.pressure_memory[channel] = p;
                 p
@@ -271,6 +283,7 @@ impl Synth {
     }
 
     pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
+        self.expand_memory(channel as usize);
         self.bend_memory[channel as usize] = bend;
         for (key, voice) in self.voices.iter_mut() {
             if key.origin == KeyOrigin::Midi && key.channel == channel {
@@ -284,6 +297,7 @@ impl Synth {
     }
 
     pub fn channel_pressure(&mut self, channel: u8, pressure: f32) {
+        self.expand_memory(channel as usize);
         self.pressure_memory[channel as usize] = pressure;
         for (key, voice) in self.voices.iter_mut() {
             if key.channel == channel {
@@ -293,6 +307,7 @@ impl Synth {
     }
 
     pub fn modulate(&mut self, channel: u8, depth: f32) {
+        self.expand_memory(channel as usize);
         self.mod_memory[channel as usize] = depth;
         for (key, voice) in self.voices.iter_mut() {
             if key.channel == channel {

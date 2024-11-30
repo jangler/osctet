@@ -150,6 +150,7 @@ impl App {
     }
 
     // TODO: entering digits in vel/mod columns can trigger keyjazz
+    // TODO: use most current vel/mod setting when keyjazzing in pattern
     fn handle_keys(&mut self) {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
 
