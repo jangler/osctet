@@ -276,7 +276,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
         EventData::Pressure(v) => v.to_string(),
         EventData::Modulation(v) => v.to_string(),
         EventData::End => String::from("END"),
-        EventData::Loop => String::from("LPS"), // TODO: better display string
+        EventData::Loop => String::from("LP"),
         EventData::Tempo(t) => t.round().to_string(),
     };
     ui.push_text(x, y, text, ui.style.theme.fg);

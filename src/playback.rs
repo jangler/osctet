@@ -203,8 +203,7 @@ pub fn render(module: &Module) -> Wave {
     let mut time_since_loop = 0.0;
 
     // TODO: render would probably be faster if we called player.frame() only
-    //       when there's a new event
-    // TODO: benchmark 32-bit vs 64-bit renders
+    //       when there's a new event. benchmark this
     player.play();
     while player.playing && time_since_loop < LOOP_FADEOUT_TIME {
         player.frame(module, dt);

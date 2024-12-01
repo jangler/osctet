@@ -141,7 +141,6 @@ impl Module {
     }
 
     /// Returns the tick of the last event in the module.
-    /// TODO: Having an End event type would be better, probably.
     pub fn last_event_tick(&self) -> u32 {
         self.tracks.iter()
             .flat_map(|track| track.channels.iter())
@@ -363,7 +362,6 @@ pub enum Edit {
     RemapTrack(usize, TrackTarget),
     AddChannel(usize, Vec<Event>),
     RemoveChannel(usize),
-    // TODO: insertion doesn't overwrite existing data
     PatternData {
         remove: Vec<Position>,
         add: Vec<LocatedEvent>,
