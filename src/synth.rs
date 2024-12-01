@@ -9,10 +9,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::adsr::adsr_scalable;
 
-const KEY_TRACKING_REF_FREQ: f32 = 261.6;
-const SEMITONE_RATIO: f32 = 1.059463;
+const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
+const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICE_GAIN: f32 = 0.5; // -6 dB
+
 const MAX_ENV_SPEED: f32 = 4.0;
+
+pub const MIN_LFO_RATE: f32 = 0.1;
+pub const MAX_LFO_RATE: f32 = 20.0;
+
+pub const MIN_FILTER_CUTOFF: f32 = 20.0;
+pub const MAX_FILTER_CUTOFF: f32 = 20_000.0;
+
+pub const MIN_FILTER_RESONANCE: f32 = 0.1;
+
+const PITCH_FLOOR: f32 = 20.0;
+const PITCH_CEILING: f32 = 5000.0;
+
+const SMOOTH_TIME: f32 = 0.01;
+
+const FM_DEPTH_MULTIPLIER: f32 = 20.0;
+
+const LFO_DELAY_CURVE: f64 = 3.0; // cubic
 
 // wrap this type so we can serialize it
 #[derive(Clone, Serialize, Deserialize)]
@@ -95,11 +113,13 @@ impl Waveform {
             * var(&osc.freq_ratio.0)
             * var_fn(&osc.fine_pitch.0, |x| pow(SEMITONE_RATIO, x))
             * ((settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
-                + settings.dsp_component(vars, ModTarget::Pitch, &[]) >> shape_fn(|x| pow(4.0, x))))
+                + settings.dsp_component(vars, ModTarget::Pitch, &[])
+                >> shape_fn(|x| pow(16.0, x)))) // 4 octaves
             * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
-                + settings.dsp_component(vars, ModTarget::FinePitch, &[]) >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
-            * (1.0 + fm_oscs * 20.0);
-        let tone = var(&osc.tone.0) >> follow(0.01)
+                + settings.dsp_component(vars, ModTarget::FinePitch, &[])
+                >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
+            * (1.0 + fm_oscs * FM_DEPTH_MULTIPLIER);
+        let tone = var(&osc.tone.0) >> follow(SMOOTH_TIME)
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(|x| clamp01(x));
 
@@ -120,10 +140,11 @@ impl Waveform {
     fn make_lfo_net(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
-            * (settings.dsp_component(vars, ModTarget::LFORate(index), path) >> shape_fn(|x| pow(200.0, x)))
-            >> shape_fn(|x| clamp(0.1, 20.0, x));
+            * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
+            >> shape_fn(|x| pow(MAX_LFO_RATE/MIN_LFO_RATE, x)))
+            >> shape_fn(|x| clamp(MIN_LFO_RATE, MAX_LFO_RATE, x));
         let dt = lfo.delay as f64;
-        let d = envelope(move |t| clamp01(pow(t / dt, 3.0)));
+        let d = envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)));
         let p = vars.lfo_phases[index];
         let au: Box<dyn AudioUnit> = match self {
             Self::Sawtooth => Box::new(f >> saw().phase(p) * d >> follow(0.01)),
@@ -168,7 +189,7 @@ impl FilterType {
     }
 }
 
-const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to 6 in pattern
+const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to a 6 in pattern
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
@@ -646,8 +667,8 @@ pub struct Filter {
 impl Filter {
     pub fn new() -> Self {
         Self {
-            cutoff: Parameter(shared(20_000.0)),
-            resonance: Parameter(shared(0.1)),
+            cutoff: Parameter(shared(MAX_FILTER_CUTOFF)),
+            resonance: Parameter(shared(MIN_FILTER_RESONANCE)),
             key_tracking: KeyTracking::None,
             filter_type: FilterType::Ladder,
         }
@@ -670,7 +691,8 @@ impl Filter {
             FilterType::Notch => Net::wrap(Box::new(notch())),
         };
         (pass()
-            | var(&self.cutoff.0) * kt * cutoff_mod >> shape_fn(|x| clamp(0.0, 22_000.0, x))
+            | var(&self.cutoff.0) * kt * cutoff_mod
+                >> shape_fn(|x| clamp(MIN_FILTER_CUTOFF, MAX_FILTER_CUTOFF, x))
             | var(&self.resonance.0) + reso_mod) >> f
     }
 }
@@ -756,9 +778,9 @@ impl Modulation {
         let mut path = path.to_vec();
         path.push(self.source);
         let net = match self.source {
-            ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(20.0, 5000.0, f)))),
-            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(0.01))),
-            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(0.01))),
+            ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(PITCH_FLOOR, PITCH_CEILING, f)))),
+            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(SMOOTH_TIME))),
+            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(SMOOTH_TIME))),
             ModSource::Random => Net::wrap(Box::new(constant(vars.random_values[index]))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
                 Some(env) => Net::wrap(Box::new(env.make_node(settings, vars, i, &path))),
@@ -769,7 +791,7 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             }
         };
-        let d = var(&self.depth.0) >> follow(0.01) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
+        let d = var(&self.depth.0) >> follow(SMOOTH_TIME) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
         if self.target.is_additive() {
             net * d
         } else if self.source.is_bipolar() {
@@ -892,7 +914,8 @@ impl Voice {
         let gain = var(&settings.gain.0) * settings.dsp_component(&vars, ModTarget::Gain, &[]) * VOICE_GAIN;
         let filter_net = settings.make_filter_net(&vars);
         let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
-            | var(&settings.pan.0) >> follow(0.01) + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
+            | var(&settings.pan.0) >> follow(SMOOTH_TIME)
+                + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             >> panner();
         Self {
             vars,
@@ -906,7 +929,7 @@ impl Voice {
 
     fn off(&self, seq: &mut Sequencer) {
         self.vars.gate.set(0.0);
-        seq.edit_relative(self.event_id, self.release_time as f64, 0.01);
+        seq.edit_relative(self.event_id, self.release_time as f64, SMOOTH_TIME as f64);
     }
 }
 

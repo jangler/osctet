@@ -255,10 +255,10 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         }
         ui.next_cell();
         ui.shared_slider(&format!("filter_{}_cutoff", i), "",
-            &filter.cutoff.0, 20.0..=20_000.0, Some("Hz"));
+            &filter.cutoff.0, MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"));
         ui.next_cell();
         ui.shared_slider(&format!("filter_{}_q", i), "",
-            &filter.resonance.0, 0.0..=1.0, None);
+            &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None);
         ui.next_cell();
         if let Some(i) = ui.combo_box(&format!("filter_{}_keytrack", i),
             "", filter.key_tracking.name(),
@@ -327,8 +327,8 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
             lfo.waveform = Waveform::VARIANTS[i];
         }
         ui.next_cell();
-        ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0, 0.1..=20.0,
-            Some("Hz"));
+        ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
+            MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"));
         ui.next_cell();
         ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay, 0.0..=10.0, Some("s"));
         ui.next_cell();
