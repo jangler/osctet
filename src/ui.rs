@@ -412,7 +412,21 @@ impl UI {
         let (_, y_scroll) = mouse_wheel();
         let actual_increment = MARGIN * 6.0 + cap_height(&self.style.text_params()) * 3.0;
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
-        *current_y = (*current_y + dy).min(max_y - viewport_h).max(0.0);
+        *current_y += dy;
+
+        if !self.accepting_keyboard_input() {
+            if is_key_pressed(KeyCode::Home) {
+                *current_y = 0.0;
+            } else if is_key_pressed(KeyCode::End) {
+                *current_y = max_y - viewport_h;
+            } else if is_key_pressed(KeyCode::PageUp) {
+                *current_y -= viewport_h;
+            } else if is_key_pressed(KeyCode::PageDown) {
+                *current_y += viewport_h;
+            }
+        }
+
+        *current_y = (*current_y).min(max_y - viewport_h).max(0.0);
 
         let w = MARGIN * 2.0;
         let trough = Rect {

@@ -2,7 +2,7 @@ use rfd::FileDialog;
 
 use crate::{module::{Edit, Module}, synth::*};
 
-use super::{Layout, MARGIN, UI};
+use super::{Layout, UI};
 
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
