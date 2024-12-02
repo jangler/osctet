@@ -2,7 +2,7 @@ use rfd::FileDialog;
 
 use crate::{module::{Edit, Module}, synth::*};
 
-use super::{UI, Layout};
+use super::{Layout, MARGIN, UI};
 
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
@@ -50,11 +50,18 @@ const MOD_COLUMN_WIDTHS: [f32; 5] = [
     NUM_COLUMN_WIDTH, 100.0, 100.0, SLIDER_COLUMN_WIDTH, X_COLUMN_WIDTH,
 ];
 
-pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
+pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
+    scroll: &mut f32
+) {
     ui.start_group();
     patch_list(ui, module, patch_index);
     ui.layout = Layout::Horizontal;
     ui.end_group();
+    let old_y = ui.cursor_y;
+
+    ui.cursor_y -= *scroll;
+    ui.cursor_z -= 1;
+    ui.start_group();
     if let Some(index) = patch_index {
         if let Some(patch) = module.patches.get_mut(*index) {
             patch_controls(ui, patch);
@@ -62,6 +69,11 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
     } else {
         kit_controls(ui, module);
     }
+    ui.cursor_z += 1;
+    ui.cursor_y += *scroll;
+    let scroll_h = ui.end_group().unwrap().h;
+    ui.cursor_y = old_y + 1.0;
+    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y);
 }
 
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {

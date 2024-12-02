@@ -17,6 +17,11 @@ pub mod instruments_tab;
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
 const SLIDER_WIDTH: f32 = 100.0;
+const MOUSE_WHEEL_INCREMENT: f32 = 120.0;
+
+const PANEL_Z_OFFSET: i8 = 10;
+const COMBO_Z_OFFSET: i8 = 20;
+const TOOLTIP_Z_OFFSET: i8 = 30;
 
 enum Dialog {
     Alert(String),
@@ -171,6 +176,7 @@ pub struct UI {
     edit_start: Position,
     edit_end: Position,
     beat_division: u32,
+    scrollbar_grabbed: bool,
 }
 
 impl UI {
@@ -209,6 +215,7 @@ impl UI {
             edit_start: edit_cursor,
             edit_end: edit_cursor,
             beat_division: 4,
+            scrollbar_grabbed: false,
         }
     }
 
@@ -254,8 +261,9 @@ impl UI {
         });
     }
 
-    pub fn end_group(&mut self) {
-        if let Some(rect) = self.group_rects.pop() {
+    pub fn end_group(&mut self) -> Option<Rect> {
+        let rect = self.group_rects.pop();
+        if let Some(rect) = rect {
             match self.layout {
                 Layout::Horizontal => {
                     self.cursor_x = rect.x + rect.w;
@@ -267,6 +275,7 @@ impl UI {
                 },
             }
         }
+        rect
     }
 
     pub fn end_frame(&mut self) {
@@ -338,7 +347,7 @@ impl UI {
     }
 
     fn expand_groups(&mut self, x: f32, y: f32) {
-        if self.cursor_z == 0 {
+        if self.cursor_z < 10 {
             for rect in self.group_rects.iter_mut() {
                 rect.w = rect.w.max(x - rect.x);
                 rect.h = rect.h.max(y - rect.y);
@@ -375,7 +384,7 @@ impl UI {
 
     pub fn start_bottom_panel(&mut self) {
         let h = self.bottom_panel_height();
-        self.cursor_z = 1;
+        self.cursor_z += PANEL_Z_OFFSET;
         self.push_rect(Rect {
             y: self.bounds.h - h,
             h, 
@@ -390,12 +399,54 @@ impl UI {
     }
 
     pub fn end_bottom_panel(&mut self) {
-        let params = self.style.text_params();
-        let h = params.font_size as f32 + MARGIN * 4.0;
-        self.bounds.h -= h;
+        self.bounds.h -= self.bottom_panel_height();
         self.cursor_x = self.bounds.x;
         self.cursor_y = self.bounds.y;
-        self.cursor_z = 0;
+        self.cursor_z -= PANEL_Z_OFFSET;
+    }
+
+    /// Draws a scrollbar on the right edge of the current bounds.
+    pub fn vertical_scrollbar(&mut self,
+        current_y: &mut f32, max_y: f32, viewport_h: f32
+    ) {
+        let (_, y_scroll) = mouse_wheel();
+        let actual_increment = MARGIN * 6.0 + cap_height(&self.style.text_params()) * 3.0;
+        let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
+        *current_y = (*current_y + dy).min(max_y - viewport_h).max(0.0);
+
+        let w = MARGIN * 2.0;
+        let trough = Rect {
+            x: self.bounds.x + self.bounds.w - w,
+            y: self.cursor_y,
+            w,
+            h: viewport_h,
+        };
+        self.push_rect(trough, self.style.theme.hover, None);
+
+        let h = clamp(viewport_h / max_y, 0.0, 1.0) * trough.h;
+        let handle = Rect {
+            y: trough.y + (trough.h - h) * *current_y / (max_y - viewport_h),
+            h,
+            ..trough
+        };
+        self.push_rect(handle, self.style.theme.click, None);
+
+        if is_mouse_button_pressed(MouseButton::Left) && self.mouse_hits(trough) {
+            self.scrollbar_grabbed = true;
+        }
+
+        if is_mouse_button_down(MouseButton::Left) &&
+            (self.scrollbar_grabbed || self.mouse_hits(trough)) {
+            let (_, y) = mouse_position();
+            let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
+                .min(1.0).max(0.0);
+            dbg!(offset);
+            *current_y = (max_y - viewport_h) * offset;
+        } else {
+            self.scrollbar_grabbed = false;
+        }
+
+        self.bounds.w -= w;
     }
 
     fn update_cursor(&mut self, w: f32, h: f32) {
@@ -545,8 +596,7 @@ impl UI {
 
     /// Draw the list of the active combo box.
     fn combo_box_list(&mut self, already_open: bool) -> Option<usize> {
-        let old_z = self.cursor_z;
-        self.cursor_z = 2;
+        self.cursor_z += COMBO_Z_OFFSET;
         let state = self.open_combo_box.as_ref().unwrap();
         let mut gfx = vec![
             Graphic::Rect(state.list_rect, self.style.theme.bg, Some(self.style.theme.fg))
@@ -583,7 +633,7 @@ impl UI {
         }
 
         self.push_graphics(gfx);
-        self.cursor_z = old_z;
+        self.cursor_z -= COMBO_Z_OFFSET;
 
         return_val
     }
@@ -953,10 +1003,9 @@ impl UI {
     }
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
-        let old_z = self.cursor_z;
-        self.cursor_z = 3;
+        self.cursor_z += TOOLTIP_Z_OFFSET;
         self.text_rect(text, x, y);
-        self.cursor_z = old_z;
+        self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
     pub fn note_input(&mut self, id: &str, note: &mut Note) {

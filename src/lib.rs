@@ -100,6 +100,8 @@ struct App {
     patch_index: Option<usize>, // if None, kit is selected
     ui: ui::UI,
     fullscreen: bool,
+    pattern_scroll: f32,
+    instruments_scroll: f32,
 }
 
 impl App {
@@ -124,6 +126,8 @@ impl App {
             patch_index: Some(0),
             ui: ui::UI::new(),
             fullscreen: false,
+            pattern_scroll: 0.0,
+            instruments_scroll: 0.0,
         };
         if let Some(err) = err {
             app.ui.report(err);
@@ -380,10 +384,10 @@ impl App {
 
         match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
             TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module),
-            TAB_PATTERN => 
-                ui::pattern_tab::draw(&mut self.ui, &mut self.module, &mut self.player),
+            TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut self.module,
+                &mut self.player, &mut self.pattern_scroll),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
-                &mut self.patch_index),
+                &mut self.patch_index, &mut self.instruments_scroll),
             _ => panic!("bad tab value"),
         }
 

@@ -9,7 +9,7 @@ fn is_shift_down() -> bool {
     is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
 
-pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
+pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, scroll: &mut f32) {
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
             handle_key(key, ui, module);
@@ -27,8 +27,17 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
     let left_x = ui.cursor_x;
     let track_xs = draw_track_headers(ui, module, player);
     ui.layout = Layout::Vertical;
-    ui.end_group();
+    let rect = Rect {
+        w: ui.bounds.w,
+        ..ui.end_group().unwrap()
+    };
+    ui.cursor_z -= 1;
+    ui.push_rect(rect, ui.style.theme.bg, None);
     ui.cursor_x = track_xs[0];
+
+    ui.vertical_scrollbar(scroll, 10_000.0, ui.bounds.y + ui.bounds.h - ui.cursor_y);
+    ui.cursor_z -= 1;
+    ui.cursor_y -= *scroll;
 
     if mouse_position_vec2().y >= ui.cursor_y {
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -58,9 +67,10 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player) {
 fn draw_beats(ui: &mut UI, x: f32) {
     let mut beat = 1;
     let mut y = ui.cursor_y;
-
     while y < ui.bounds.y + ui.bounds.h {
-        ui.push_text(x, y, beat.to_string(), ui.style.theme.fg);
+        if y >= 0.0 {
+            ui.push_text(x, y, beat.to_string(), ui.style.theme.fg);
+        }
         beat += 1;
         y += BEAT_HEIGHT;
     }
