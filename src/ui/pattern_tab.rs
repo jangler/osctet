@@ -278,8 +278,14 @@ fn draw_channel(ui: &mut UI, channel: &Vec<Event>) {
 }
 
 fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
-    let x = ui.cursor_x + column_x(evt.data.column(), char_width);
     let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT;
+    if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
+        return
+    }
+    let x = ui.cursor_x + column_x(evt.data.column(), char_width);
+    if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
+        return
+    }
     let text = match evt.data {
         EventData::Pitch(note) => note.to_string(),
         EventData::NoteOff => String::from("---"),
