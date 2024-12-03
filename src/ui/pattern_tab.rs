@@ -15,6 +15,8 @@ pub struct PatternEditor {
     edit_end: Position,
     beat_division: u32,
     scroll: f32,
+    tap_tempo_intervals: Vec<f32>,
+    pending_interval: Option<f32>,
 }
 
 impl PatternEditor {
@@ -30,6 +32,8 @@ impl PatternEditor {
             edit_end: edit_cursor,
             beat_division: 4,
             scroll: 0.0,
+            tap_tempo_intervals: Vec::new(),
+            pending_interval: None,
         }
     }
 
@@ -118,12 +122,68 @@ impl PatternEditor {
         };
         ui.push_rect(selection_rect, ui.style.theme.click, None);
     }
+    
+    fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
+        match key {
+            KeyCode::Up => {
+                translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64 * -1);
+            },
+            KeyCode::Down =>
+                translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64),
+            KeyCode::Left => shift_column_left(self, &module.tracks),
+            KeyCode::Right => shift_column_right(self, &module.tracks),
+            KeyCode::Tab => if is_shift_down() {
+                shift_channel_left(self);
+            } else {
+                shift_channel_right(self, &module.tracks);
+            },
+            KeyCode::Delete => {
+                let (start, end) = self.selection_corners();
+                module.delete_events(start, end);
+            },
+            KeyCode::Key0 => input_digit(module, &self.edit_start, 0),
+            KeyCode::Key1 => input_digit(module, &self.edit_start, 1),
+            KeyCode::Key2 => input_digit(module, &self.edit_start, 2),
+            KeyCode::Key3 => input_digit(module, &self.edit_start, 3),
+            KeyCode::Key4 => input_digit(module, &self.edit_start, 4),
+            KeyCode::Key5 => input_digit(module, &self.edit_start, 5),
+            KeyCode::Key6 => input_digit(module, &self.edit_start, 6),
+            KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
+            KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
+            KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
+            KeyCode::GraveAccent => input_note_off(&self.edit_start, module),
+            KeyCode::E => insert_event_at_cursor(module, &self.edit_start, EventData::End),
+            KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
+            KeyCode::T => self.tap_tempo(module),
+            _ => (),
+        }
+
+        if key != KeyCode::T {
+            self.tap_tempo_intervals.clear();
+            self.pending_interval = None;
+        }
+    }
+
+    fn tap_tempo(&mut self, module: &mut Module) {
+        if let Some(interval) = self.pending_interval {
+            self.tap_tempo_intervals.push(interval);
+            let n = self.tap_tempo_intervals.len();
+            let mean = self.tap_tempo_intervals.iter().sum::<f32>() / n as f32;
+            let t = 60.0 / mean;
+            insert_event_at_cursor(module, &self.edit_start, EventData::Tempo(t));
+        }
+        self.pending_interval = Some(0.0);
+    }
 }
 
 pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut PatternEditor) {
+    if let Some(interval) = pe.pending_interval.as_mut() {
+        *interval += get_frame_time();
+    }
+
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
-            handle_key(key, module, pe);
+            pe.handle_key(key, module);
         }
     }
 
@@ -267,40 +327,6 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     }
 
     xs
-}
-
-fn handle_key(key: KeyCode, module: &mut Module, pe: &mut PatternEditor) {
-    match key {
-        KeyCode::Up => {
-            translate_cursor(pe, (TICKS_PER_BEAT / pe.beat_division) as i64 * -1);
-        },
-        KeyCode::Down => translate_cursor(pe, (TICKS_PER_BEAT / pe.beat_division) as i64),
-        KeyCode::Left => shift_column_left(pe, &module.tracks),
-        KeyCode::Right => shift_column_right(pe, &module.tracks),
-        KeyCode::Tab => if is_shift_down() {
-            shift_channel_left(pe);
-        } else {
-            shift_channel_right(pe, &module.tracks);
-        },
-        KeyCode::Delete => {
-            let (start, end) = pe.selection_corners();
-            module.delete_events(start, end);
-        },
-        KeyCode::Key0 => input_digit(module, &pe.edit_start, 0),
-        KeyCode::Key1 => input_digit(module, &pe.edit_start, 1),
-        KeyCode::Key2 => input_digit(module, &pe.edit_start, 2),
-        KeyCode::Key3 => input_digit(module, &pe.edit_start, 3),
-        KeyCode::Key4 => input_digit(module, &pe.edit_start, 4),
-        KeyCode::Key5 => input_digit(module, &pe.edit_start, 5),
-        KeyCode::Key6 => input_digit(module, &pe.edit_start, 6),
-        KeyCode::Key7 => input_digit(module, &pe.edit_start, 7),
-        KeyCode::Key8 => input_digit(module, &pe.edit_start, 8),
-        KeyCode::Key9 => input_digit(module, &pe.edit_start, 9),
-        KeyCode::GraveAccent => input_note_off(&pe.edit_start, module),
-        KeyCode::E => insert_event_at_cursor(module, &pe.edit_start, EventData::End),
-        KeyCode::L => insert_event_at_cursor(module, &pe.edit_start, EventData::Loop),
-        _ => (),
-    }
 }
 
 fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
