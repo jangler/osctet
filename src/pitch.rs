@@ -13,7 +13,7 @@ fn find_ratio(cents: f32) -> f32 {
     2.0_f32.powf(2.0_f32.log2() * cents / 1200.0)
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Nominal {
     A, B, C, D, E, F, G
 }
@@ -101,7 +101,7 @@ impl Tuning {
     }
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub struct Note {
     pub arrows: i8,
     pub nominal: Nominal,

@@ -9,6 +9,10 @@ fn is_shift_down() -> bool {
     is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
 
+fn is_ctrl_down() -> bool {
+    is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
+}
+
 /// Tracks state specific to the pattern editor.
 pub struct PatternEditor {
     edit_start: Position,
@@ -17,6 +21,19 @@ pub struct PatternEditor {
     scroll: f32,
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
+    clipboard: Option<PatternClip>,
+}
+
+struct PatternClip {
+    start: Position,
+    end: Position,
+    events: Vec<ClipEvent>,
+}
+
+#[derive(Debug)]
+struct ClipEvent {
+    channel_offset: usize,
+    event: Event,
 }
 
 impl PatternEditor {
@@ -34,6 +51,7 @@ impl PatternEditor {
             scroll: 0.0,
             tap_tempo_intervals: Vec::new(),
             pending_interval: None,
+            clipboard: None,
         }
     }
 
@@ -124,38 +142,47 @@ impl PatternEditor {
     }
     
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
-        match key {
-            KeyCode::Up => {
-                translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64 * -1);
-            },
-            KeyCode::Down =>
-                translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64),
-            KeyCode::Left => shift_column_left(self, &module.tracks),
-            KeyCode::Right => shift_column_right(self, &module.tracks),
-            KeyCode::Tab => if is_shift_down() {
-                shift_channel_left(self);
-            } else {
-                shift_channel_right(self, &module.tracks);
-            },
-            KeyCode::Delete => {
-                let (start, end) = self.selection_corners();
-                module.delete_events(start, end);
-            },
-            KeyCode::Key0 => input_digit(module, &self.edit_start, 0),
-            KeyCode::Key1 => input_digit(module, &self.edit_start, 1),
-            KeyCode::Key2 => input_digit(module, &self.edit_start, 2),
-            KeyCode::Key3 => input_digit(module, &self.edit_start, 3),
-            KeyCode::Key4 => input_digit(module, &self.edit_start, 4),
-            KeyCode::Key5 => input_digit(module, &self.edit_start, 5),
-            KeyCode::Key6 => input_digit(module, &self.edit_start, 6),
-            KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
-            KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
-            KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
-            KeyCode::GraveAccent => input_note_off(&self.edit_start, module),
-            KeyCode::E => insert_event_at_cursor(module, &self.edit_start, EventData::End),
-            KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
-            KeyCode::T => self.tap_tempo(module),
-            _ => (),
+        if is_ctrl_down() {
+            match key {
+                KeyCode::X => self.cut(module),
+                KeyCode::C => self.copy(module),
+                KeyCode::V => self.paste(module),
+                _ => (),
+            }
+        } else {
+            match key {
+                KeyCode::Up => {
+                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64 * -1);
+                },
+                KeyCode::Down =>
+                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64),
+                KeyCode::Left => shift_column_left(self, &module.tracks),
+                KeyCode::Right => shift_column_right(self, &module.tracks),
+                KeyCode::Tab => if is_shift_down() {
+                    shift_channel_left(self);
+                } else {
+                    shift_channel_right(self, &module.tracks);
+                },
+                KeyCode::Delete => {
+                    let (start, end) = self.selection_corners();
+                    module.delete_events(start, end);
+                },
+                KeyCode::Key0 => input_digit(module, &self.edit_start, 0),
+                KeyCode::Key1 => input_digit(module, &self.edit_start, 1),
+                KeyCode::Key2 => input_digit(module, &self.edit_start, 2),
+                KeyCode::Key3 => input_digit(module, &self.edit_start, 3),
+                KeyCode::Key4 => input_digit(module, &self.edit_start, 4),
+                KeyCode::Key5 => input_digit(module, &self.edit_start, 5),
+                KeyCode::Key6 => input_digit(module, &self.edit_start, 6),
+                KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
+                KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
+                KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
+                KeyCode::GraveAccent => input_note_off(&self.edit_start, module),
+                KeyCode::E => insert_event_at_cursor(module, &self.edit_start, EventData::End),
+                KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
+                KeyCode::T => self.tap_tempo(module),
+                _ => (),
+            }
         }
 
         if key != KeyCode::T {
@@ -173,6 +200,55 @@ impl PatternEditor {
             insert_event_at_cursor(module, &self.edit_start, EventData::Tempo(t));
         }
         self.pending_interval = Some(0.0);
+    }
+
+    fn cut(&mut self, module: &mut Module) {
+        self.copy(module);
+        let (start, end) = self.selection_corners();
+        module.delete_events(start, end);
+    }
+
+    fn copy(&mut self, module: &Module) {
+        let (start, end) = self.selection_corners();
+        let events = module.scan_events(start, end).iter().map(|x| ClipEvent {
+            channel_offset: module.channels_between(start, x.position()),
+            event: x.event.clone(),
+        }).collect();
+        self.clipboard = Some(PatternClip {
+            start,
+            end,
+            events,
+        });
+    }
+
+    fn paste(&self, module: &mut Module) {
+        if let Some(clip) = &self.clipboard {
+            let tick_offset = self.edit_start.tick as i32 - clip.start.tick as i32;
+            let events: Vec<_> = clip.events.iter().filter_map(|x| {
+                self.edit_start.add_channels(x.channel_offset, &module.tracks)
+                    .map(|pos| {
+                        if x.event.data.is_ctrl() == (pos.track == 0) {
+                            Some(LocatedEvent {
+                                track: pos.track,
+                                channel: pos.channel,
+                                event: Event {
+                                    tick: (x.event.tick as i32 + tick_offset) as u32,
+                                    data: x.event.data.clone(),
+                                },
+                            })
+                        } else {
+                            None
+                        }
+                    }).flatten()
+            }).collect();
+            if !events.is_empty() {
+                module.push_edit(Edit::PatternData {
+                    remove: events.iter().map(|x| x.position()).collect(),
+                    add: events,
+                });
+            }
+        }
+        // TODO: report error?
     }
 }
 

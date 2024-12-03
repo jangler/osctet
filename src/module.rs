@@ -94,29 +94,34 @@ impl Module {
         patch
     }
 
-    /// Delete pattern events between two positions.
-    pub fn delete_events(&mut self, start: Position, end: Position) {
+    /// Return pattern events between two positions.
+    pub fn scan_events(&self, start: Position, end: Position) -> Vec<LocatedEvent> {
         let tick_range = start.tick..=end.tick;
         let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
-        let mut remove = Vec::new();
+        let mut events = Vec::new();
 
-        for (track_i, track) in self.tracks.iter_mut().enumerate() {
-            for (channel_i, channel) in track.channels.iter_mut().enumerate() {
+        for (track_i, track) in self.tracks.iter().enumerate() {
+            for (channel_i, channel) in track.channels.iter().enumerate() {
                 for evt in channel {
                     let tuple = (track_i, channel_i, evt.data.column());
                     if tick_range.contains(&evt.tick)
                         && tuple >= start_tuple && tuple <= end_tuple {
-                        remove.push(Position {
-                            tick: evt.tick,
+                        events.push(LocatedEvent {
                             track: track_i,
                             channel: channel_i,
-                            column: evt.data.column(),
+                            event: evt.clone(),
                         });
                     }
                 }
             }
         }
 
+        events
+    }
+
+    /// Delete pattern events between two positions.
+    pub fn delete_events(&mut self, start: Position, end: Position) {
+        let remove = self.scan_events(start, end).iter().map(|x| x.position()).collect();
         self.push_edit(Edit::PatternData {
             remove,
             add: Vec::new(),
@@ -211,12 +216,7 @@ impl Module {
                     })
                 }).collect();
                 let flip_remove = add.into_iter().map(|e| {
-                    let pos = Position {
-                        track: e.track,
-                        channel: e.channel,
-                        tick: e.event.tick,
-                        column: e.event.data.column(),
-                    };
+                    let pos = e.position();
                     self.tracks[e.track].channels[e.channel].push(e.event);
                     pos
                 }).collect();
@@ -279,6 +279,21 @@ impl Module {
         }
         false
     }
+
+    pub fn channels_between(&self, start: Position, end: Position) -> usize {
+        let mut n = 0;
+        let mut t = start.track;
+        let mut c = start.channel;
+        while t < end.track || c < end.channel {
+            n += 1;
+            c += 1;
+            if c >= self.tracks[t].channels.len() {
+                t += 1;
+                c = 0;
+            }
+        }
+        n
+    }
 }
 
 #[derive(Default)]
@@ -310,12 +325,13 @@ pub enum TrackTarget {
     Patch(usize),
 }
 
+#[derive(Clone, Debug)]
 pub struct Event {
     pub tick: u32,
     pub data: EventData,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum EventData {
     Pitch(Note),
     NoteOff,
@@ -332,6 +348,13 @@ impl EventData {
             Self::Pressure(_) => VEL_COLUMN,
             Self::Modulation(_) => MOD_COLUMN,
             _ => NOTE_COLUMN,
+        }
+    }
+
+    pub fn is_ctrl(&self) -> bool {
+        match *self {
+            Self::Pitch(_) | Self::Pressure(_) | Self::Modulation(_) => false,
+            _ => true,
         }
     }
 }
@@ -352,6 +375,27 @@ impl Position {
     /// Returns a tuple of horizontal indices for comparison.
     pub fn x_tuple(&self) -> (usize, usize, u8) {
         (self.track, self.channel, self.column)
+    }
+
+    /// Returns None if the position is out of range.
+    pub fn add_channels(&self, channels: usize, tracks: &Vec<Track>) -> Option<Self> {
+        let mut track = self.track;
+        let mut channel = self.channel;
+        for _ in 0..channels {
+            channel += 1;
+            if channel >= tracks[track].channels.len() {
+                track += 1;
+                channel = 0;
+            }
+            if track >= tracks.len() {
+                return None
+            }
+        }
+        Some(Self {
+            track,
+            channel,
+            ..*self
+        })
     }
 }
 
@@ -378,8 +422,21 @@ pub enum TrackEdit {
 }
 
 /// Event with global location data, for the undo stack.
+#[derive(Debug)]
 pub struct LocatedEvent {
-    track: usize,
-    channel: usize,
-    event: Event,
+    pub track: usize,
+    pub channel: usize,
+    pub event: Event,
+}
+
+impl LocatedEvent {
+    /// Returns the position of the event.
+    pub fn position(&self) -> Position {
+        Position {
+            tick: self.event.tick,
+            track: self.track,
+            channel: self.channel,
+            column: self.event.data.column(),
+        }
+    }
 }
