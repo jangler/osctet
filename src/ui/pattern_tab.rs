@@ -309,8 +309,10 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     if mouse_position_vec2().y >= ui.cursor_y {
         if is_mouse_button_pressed(MouseButton::Left) {
-            pe.edit_start = pe.position_from_mouse(ui, &track_xs, &module.tracks);
-            pe.edit_end = pe.edit_start;
+            pe.edit_end = pe.position_from_mouse(ui, &track_xs, &module.tracks);
+            if !is_shift_down() {
+                pe.edit_start = pe.edit_end;
+            }
         } else if is_mouse_button_down(MouseButton::Left) {
             pe.edit_end = pe.position_from_mouse(ui, &track_xs, &module.tracks);
             fix_cursors(pe, &module.tracks);
@@ -430,9 +432,6 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
     match cursor.column {
         VEL_COLUMN => insert_event_at_cursor(module, cursor, EventData::Pressure(value)),
         MOD_COLUMN => insert_event_at_cursor(module, cursor, EventData::Modulation(value)),
-        GLOBAL_COLUMN => if cursor.track == 0 {
-            input_tempo(module, cursor)
-        }
         _ => (),
     }
 }
@@ -441,19 +440,10 @@ fn input_note_off(cursor: &Position, module: &mut Module) {
     insert_event_at_cursor(module, cursor, EventData::NoteOff);
 }
 
-fn input_tempo(module: &mut Module, cursor: &Position) {
-    insert_event_at_cursor(module, cursor, EventData::Tempo(100.0)); // TODO
-}
-
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {
-    match data {
-        EventData::End | EventData::Loop | EventData::Tempo(_) => if cursor.track > 0 {
-            return
-        }
-        EventData::Modulation(_) | EventData::NoteOff | EventData::Pitch(_) |
-            EventData::Pressure(_) => if cursor.track == 0 {
-            return
-        }
+    // TODO: insert events at all valid selected positions
+    if data.is_ctrl() != (cursor.track == 0) || data.column() != cursor.column {
+        return
     }
     module.insert_event(cursor.track, cursor.channel, Event {
         tick: cursor.tick,
@@ -517,76 +507,87 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
 }
 
 fn translate_cursor(pe: &mut PatternEditor, offset: i64) {
-    let dist = pe.edit_end.tick - pe.edit_start.tick;
-    if -offset > pe.edit_start.tick as i64 {
-        pe.edit_start.tick = 0;
+    if -offset > pe.edit_end.tick as i64 {
+        pe.edit_end.tick = 0;
     } else {
-        pe.edit_start.tick = (pe.edit_start.tick as i64 + offset) as u32;
+        pe.edit_end.tick = (pe.edit_end.tick as i64 + offset) as u32;
     }
-    pe.edit_end.tick = pe.edit_start.tick + dist;
+    if !is_shift_down() {
+        pe.edit_start.tick = pe.edit_end.tick;
+    }
 }
 
 fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
-    let column = pe.edit_start.column as i8 - 1;
+    let column = pe.edit_end.column as i8 - 1;
     if column >= 0 {
-        pe.edit_start.column = column as u8;
+        pe.edit_end.column = column as u8;
     } else {
-        if pe.edit_start.channel > 0 {
-            pe.edit_start.channel -= 1;
-        } else if pe.edit_start.track > 0 {
-            pe.edit_start.track -= 1;
-            pe.edit_start.channel = tracks[pe.edit_start.track].channels.len() - 1;
+        if pe.edit_end.channel > 0 {
+            pe.edit_end.channel -= 1;
+        } else if pe.edit_end.track > 0 {
+            pe.edit_end.track -= 1;
+            pe.edit_end.channel = tracks[pe.edit_end.track].channels.len() - 1;
         }
 
-        if pe.edit_start.track == 0 {
-            pe.edit_start.column = GLOBAL_COLUMN;
+        if pe.edit_end.track == 0 {
+            pe.edit_end.column = GLOBAL_COLUMN;
         } else {
-            pe.edit_start.column = MOD_COLUMN;
+            pe.edit_end.column = MOD_COLUMN;
         }
     }
-    pe.edit_end = pe.edit_start; // TODO
+    if !is_shift_down() {
+        pe.edit_start.track = pe.edit_end.track;
+        pe.edit_start.channel = pe.edit_end.channel;
+        pe.edit_start.column = pe.edit_end.column;
+    }
 }
 
 fn shift_column_right(pe: &mut PatternEditor, tracks: &[Track]) {
-    let column = pe.edit_start.column + 1;
-    let n_columns = if pe.edit_start.track == 0 { 1 } else { 3 };
+    let column = pe.edit_end.column + 1;
+    let n_columns = if pe.edit_end.track == 0 { 1 } else { 3 };
     if column < n_columns {
-        pe.edit_start.column = column;
+        pe.edit_end.column = column;
     } else {
-        if pe.edit_start.channel + 1 < tracks[pe.edit_start.track].channels.len() {
-            pe.edit_start.channel += 1;
-            pe.edit_start.column = 0;
-        } else if pe.edit_start.track + 1 < tracks.len() {
-            pe.edit_start.track += 1;
-            pe.edit_start.channel = 0;
-            pe.edit_start.column = 0;
+        if pe.edit_end.channel + 1 < tracks[pe.edit_end.track].channels.len() {
+            pe.edit_end.channel += 1;
+            pe.edit_end.column = 0;
+        } else if pe.edit_end.track + 1 < tracks.len() {
+            pe.edit_end.track += 1;
+            pe.edit_end.channel = 0;
+            pe.edit_end.column = 0;
         }
     }
-    pe.edit_end = pe.edit_start; // TODO
+    if !is_shift_down() {
+        pe.edit_start.track = pe.edit_end.track;
+        pe.edit_start.channel = pe.edit_end.channel;
+        pe.edit_start.column = pe.edit_end.column;
+    }
 }
 
 fn shift_channel_left(pe: &mut PatternEditor) {
-    let channel = pe.edit_start.channel as isize - 1;
+    let channel = pe.edit_end.channel as isize - 1;
     if channel >= 0 {
-        pe.edit_start.channel = channel as usize;
-    } else if pe.edit_start.track > 0 {
-        pe.edit_start.track -= 1;
-        if pe.edit_start.track == 0 {
-            pe.edit_start.column = 0;
+        pe.edit_end.channel = channel as usize;
+    } else if pe.edit_end.track > 0 {
+        pe.edit_end.track -= 1;
+        if pe.edit_end.track == 0 {
+            pe.edit_end.column = 0;
         }
     }
-    pe.edit_end = pe.edit_start; // TODO
+    pe.edit_start.track = pe.edit_end.track;
+    pe.edit_start.channel = pe.edit_end.channel;
 }
 
 fn shift_channel_right(pe: &mut PatternEditor, tracks: &[Track]) {
-    let channel = pe.edit_start.channel + 1;
-    if channel < tracks[pe.edit_start.track].channels.len() {
-        pe.edit_start.channel = channel;
-    } else if pe.edit_start.track + 1 < tracks.len() {
-        pe.edit_start.channel = 0;
-        pe.edit_start.track += 1;
+    let channel = pe.edit_end.channel + 1;
+    if channel < tracks[pe.edit_end.track].channels.len() {
+        pe.edit_end.channel = channel;
+    } else if pe.edit_end.track + 1 < tracks.len() {
+        pe.edit_end.channel = 0;
+        pe.edit_end.track += 1;
     }
-    pe.edit_end = pe.edit_start; // TODO
+    pe.edit_start.track = pe.edit_end.track;
+    pe.edit_start.channel = pe.edit_end.channel;
 }
 
 /// Reposition the pattern cursors if in an invalid position.

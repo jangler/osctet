@@ -353,7 +353,8 @@ impl EventData {
 
     pub fn is_ctrl(&self) -> bool {
         match *self {
-            Self::Pitch(_) | Self::Pressure(_) | Self::Modulation(_) => false,
+            Self::Pitch(_) | Self::NoteOff
+                | Self::Pressure(_) | Self::Modulation(_) => false,
             _ => true,
         }
     }
