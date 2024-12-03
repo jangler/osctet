@@ -146,7 +146,7 @@ impl PatternEditor {
             match key {
                 KeyCode::X => self.cut(module),
                 KeyCode::C => self.copy(module),
-                KeyCode::V => self.paste(module),
+                KeyCode::V => self.paste(module, is_shift_down()),
                 _ => (),
             }
         } else {
@@ -221,10 +221,11 @@ impl PatternEditor {
         });
     }
 
-    fn paste(&self, module: &mut Module) {
+    fn paste(&self, module: &mut Module, mix: bool) {
         if let Some(clip) = &self.clipboard {
             let tick_offset = self.edit_start.tick as i32 - clip.start.tick as i32;
-            let events: Vec<_> = clip.events.iter().filter_map(|x| {
+
+            let add: Vec<_> = clip.events.iter().filter_map(|x| {
                 self.edit_start.add_channels(x.channel_offset, &module.tracks)
                     .map(|pos| {
                         if x.event.data.is_ctrl() == (pos.track == 0) {
@@ -241,10 +242,30 @@ impl PatternEditor {
                         }
                     }).flatten()
             }).collect();
-            if !events.is_empty() {
+
+            let remove = if mix {
+                add.iter().map(|x| x.position()).collect()
+            } else {
+                let channel_offset = module.channels_between(clip.start, clip.end);
+                let end = Position {
+                    tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
+                    column: clip.end.column,
+                    ..self.edit_start.add_channels(channel_offset, &module.tracks)
+                        .unwrap_or(Position {
+                            track: module.tracks.len(),
+                            channel: module.tracks.last().unwrap().channels.len() - 1,
+                            tick: 0,
+                            column: 0,
+                        })
+                };
+                module.scan_events(self.edit_start, end)
+                    .iter().map(|x| x.position()).collect()
+            };
+
+            if !add.is_empty() {
                 module.push_edit(Edit::PatternData {
-                    remove: events.iter().map(|x| x.position()).collect(),
-                    add: events,
+                    remove,
+                    add,
                 });
             }
         }
