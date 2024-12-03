@@ -26,6 +26,7 @@ pub mod playback;
 
 use input::MidiEvent;
 use ui::instruments_tab::fix_patch_index;
+use ui::pattern_tab::PatternEditor;
 
 /// Application name, for window title, etc.
 pub const APP_NAME: &str = "Osctet";
@@ -100,7 +101,7 @@ struct App {
     patch_index: Option<usize>, // if None, kit is selected
     ui: ui::UI,
     fullscreen: bool,
-    pattern_scroll: f32,
+    pattern_editor: PatternEditor,
     instruments_scroll: f32,
 }
 
@@ -126,7 +127,7 @@ impl App {
             patch_index: Some(0),
             ui: ui::UI::new(),
             fullscreen: false,
-            pattern_scroll: 0.0,
+            pattern_editor: PatternEditor::new(),
             instruments_scroll: 0.0,
         };
         if let Some(err) = err {
@@ -140,7 +141,7 @@ impl App {
     // TODO: can keyjazzing mess up synth memory in a way that matters?
     fn keyjazz_track(&self) -> usize {
         if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
-            self.ui.cursor_track()
+            self.pattern_editor.cursor_track()
         } else {
             0
         }
@@ -194,7 +195,8 @@ impl App {
                 }
             } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.ui.note_queue.push(EventData::Pitch(note));
-                if !self.ui.accepting_note_input() && !self.ui.in_digit_column() {
+                if !self.ui.accepting_note_input()
+                    && !self.pattern_editor.in_digit_column(&self.ui) {
                     if let Some((patch, note)) =
                         self.module.map_input(self.keyjazz_patch_index(), note) {
                         let key = Key {
@@ -385,7 +387,7 @@ impl App {
         match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
             TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module),
             TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut self.module,
-                &mut self.player, &mut self.pattern_scroll),
+                &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index, &mut self.instruments_scroll),
             _ => panic!("bad tab value"),

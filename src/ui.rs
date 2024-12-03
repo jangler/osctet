@@ -8,7 +8,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 
-use crate::{module::{EventData, Position, NOTE_COLUMN}, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{module::EventData, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -173,20 +173,11 @@ pub struct UI {
     pub note_queue: Vec<EventData>,
     instrument_edit_index: Option<usize>,
     mouse_consumed: bool,
-    edit_start: Position,
-    edit_end: Position,
-    beat_division: u32,
     scrollbar_grabbed: bool,
 }
 
 impl UI {
     pub fn new() -> Self {
-        let edit_cursor = Position {
-            tick: 0,
-            track: 0,
-            channel: 0,
-            column: 0,
-        };
         Self {
             style: Style {
                 font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
@@ -212,24 +203,12 @@ impl UI {
             note_queue: Vec::new(),
             instrument_edit_index: None,
             mouse_consumed: false,
-            edit_start: edit_cursor,
-            edit_end: edit_cursor,
-            beat_division: 4,
             scrollbar_grabbed: false,
         }
     }
 
     pub fn get_tab(&self, key: &str) -> Option<usize> {
         self.tabs.get(key).copied()
-    }
-
-    pub fn cursor_track(&self) -> usize {
-        self.edit_start.track
-    }
-
-    pub fn in_digit_column(&self) -> bool {
-        self.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
-            && self.edit_start.column != NOTE_COLUMN
     }
 
     pub fn start_frame(&mut self) {
@@ -1061,28 +1040,6 @@ impl UI {
         self.push_text(rect.x, rect.y, label, self.style.theme.fg);
 
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
-    }
-
-    /// Returns the top-left and bottom-right corners of the pattern selection.
-    fn selection_corners(&self) -> (Position, Position) {
-        let mut start_x = self.edit_start.x_tuple();
-        let mut end_x = self.edit_end.x_tuple();
-        if start_x > end_x {
-            (start_x, end_x) = (end_x, start_x)
-        }
-        let tl = Position {
-            track: start_x.0,
-            channel: start_x.1,
-            column: start_x.2,
-            tick: self.edit_start.tick.min(self.edit_end.tick),
-        };
-        let br = Position {
-            track: end_x.0,
-            channel: end_x.1,
-            column: end_x.2,
-            tick: self.edit_start.tick.max(self.edit_end.tick),
-        };
-        (tl, br)
     }
 }
 
