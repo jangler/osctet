@@ -338,6 +338,7 @@ pub enum EventData {
     Pressure(u8),
     Modulation(u8),
     Tempo(f32),
+    RationalTempo(u8, u8),
     End,
     Loop,
 }

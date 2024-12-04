@@ -163,6 +163,7 @@ impl Player {
                 self.note_off(track, key);
             }
             EventData::Tempo(t) => self.tempo = t,
+            EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
             EventData::End => if let Some(tick) = module.find_loop_start(self.tick) {
                 self.go_to(tick);
                 self.looped = true;

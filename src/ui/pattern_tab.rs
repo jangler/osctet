@@ -1,3 +1,5 @@
+use gcd::Gcd;
+
 use crate::{module::*, playback::Player, synth::Patch};
 
 use super::*;
@@ -187,6 +189,7 @@ impl PatternEditor {
                 KeyCode::E => insert_event_at_cursor(module, &self.edit_start, EventData::End),
                 KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
                 KeyCode::T => self.tap_tempo(module),
+                KeyCode::R => self.rational_tempo(module),
                 _ => (),
             }
         }
@@ -206,6 +209,17 @@ impl PatternEditor {
             insert_event_at_cursor(module, &self.edit_start, EventData::Tempo(t));
         }
         self.pending_interval = Some(0.0);
+    }
+
+    fn rational_tempo(&self, module: &mut Module) {
+        let (start, end) = self.selection_corners();
+        let n = ((end.beat() - start.beat()) * self.beat_division as f32).round() as u8;
+        let d = self.beat_division;
+        if n > 0 && n != d {
+            let lcm = n.gcd(d);
+            insert_event_at_cursor(module, &self.edit_start,
+                EventData::RationalTempo(n / lcm, d / lcm));
+        }
     }
 
     fn cut(&mut self, module: &mut Module) {
@@ -508,6 +522,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
         EventData::End => String::from("END"),
         EventData::Loop => String::from("LP"),
         EventData::Tempo(t) => t.round().to_string(),
+        EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
     };
     ui.push_text(x, y, text, ui.style.theme.fg);
 }
