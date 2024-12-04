@@ -448,7 +448,7 @@ fn input_note_off(cursor: &Position, module: &mut Module) {
 
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {
     // TODO: insert events at all valid selected positions
-    if data.is_ctrl() != (cursor.track == 0) || data.column() != cursor.column {
+    if data.is_ctrl() != (cursor.track == 0) {
         return
     }
     module.insert_event(cursor.track, cursor.channel, Event {
