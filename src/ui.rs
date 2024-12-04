@@ -700,7 +700,7 @@ impl UI {
                 || is_mouse_button_released(MouseButton::Left) {
                 self.focused_text = None;
             } else {
-                return self.slider_text_entry(label, val, range);
+                return self.slider_text_entry(id, label, val, range);
             }
         }
 
@@ -780,13 +780,13 @@ impl UI {
         changed
     }
 
-    fn slider_text_entry(&mut self, label: &str, val: &mut f32,
+    fn slider_text_entry(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>
     ) -> bool {
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
-        if self.text_box(label, label, MARGIN, SLIDER_WIDTH, &mut text) {
+        if self.text_box(id, label, MARGIN, SLIDER_WIDTH, &mut text) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = f.max(*range.start()).min(*range.end());
@@ -795,9 +795,6 @@ impl UI {
                 Err(e) => self.report(e),
             }
             self.focused_text = None;
-        }
-        if let Some(focus) = self.focused_text.as_mut() {
-            focus.text = text;
         }
         changed
     }
