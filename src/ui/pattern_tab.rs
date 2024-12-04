@@ -58,6 +58,10 @@ impl PatternEditor {
     pub fn cursor_track(&self) -> usize {
         self.edit_start.track
     }
+    
+    pub fn cursor_tick(&self) -> u32 {
+        self.edit_start.tick
+    }
 
     pub fn in_digit_column(&self, ui: &UI) -> bool {
         ui.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)

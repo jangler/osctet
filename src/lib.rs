@@ -214,7 +214,7 @@ impl App {
                     KeyCode::F2 => self.ui.set_tab(MAIN_TAB_ID, 1),
                     KeyCode::F3 => self.ui.set_tab(MAIN_TAB_ID, 2),
                     KeyCode::F5 => self.player.play_from(0),
-                    KeyCode::F7 => self.player.play(),
+                    KeyCode::F7 => self.player.play_from(self.pattern_editor.cursor_tick()),
                     KeyCode::F8 => self.player.stop(),
                     KeyCode::F11 => {
                         self.fullscreen = !self.fullscreen;
