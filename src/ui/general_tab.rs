@@ -10,6 +10,9 @@ pub fn draw(ui: &mut UI, module: &mut Module) {
 }
 
 fn fx_controls(ui: &mut UI, fx: &mut GlobalFX) {
+    ui.shared_slider("gain",
+        "Global volume", &fx.settings.gain.0, 0.0..=1.0, None);
+
     ui.label("REVERB");
 
     ui.shared_slider("reverb_level",

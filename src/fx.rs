@@ -8,6 +8,7 @@ use crate::synth::Parameter;
 // serializable global FX settings
 #[derive(Clone)]
 pub struct FXSettings {
+    pub gain: Parameter,
     pub reverb_amount: Parameter,
     pub predelay_time: f32,
     pub reverb_room_size: f32,
@@ -35,6 +36,7 @@ impl FXSettings {
 impl Default for FXSettings {
     fn default() -> Self {
         Self {
+            gain: Parameter(shared(1.0)),
             reverb_amount: Parameter(shared(0.1)),
             predelay_time: 0.01,
             reverb_room_size: 20.0,
@@ -65,6 +67,7 @@ impl GlobalFX {
 
         Self {
             net: Net::wrap(Box::new(backend))
+                * (var(&settings.gain.0) | var(&settings.gain.0))
                 >> (highpass_hz(1.0, 0.1) | highpass_hz(1.0, 0.1))
                 >> (shape(Tanh(1.0)) | shape(Tanh(1.0)))
                 >> (multipass::<U2>() & (var(&settings.reverb_amount.0) >> split::<U2>()) * (predelay >> reverb)),
