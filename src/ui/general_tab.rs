@@ -1,3 +1,5 @@
+use rfd::FileDialog;
+
 use crate::{fx::GlobalFX, module::Module, pitch::Tuning};
 
 use super::*;
@@ -54,11 +56,21 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning) {
     }
     if let Some(s) = ui.edit_box("Steps to arrow", 4, tuning.arrow_steps.to_string()) {
         match s.parse() {
-            Ok(steps) => match Tuning::divide(tuning.equave(), tuning.size(), steps) {
-                Ok(t) => *tuning = t,
-                Err(e) => ui.report(e),
-            },
+            Ok(steps) => tuning.arrow_steps = steps,
             Err(e) => ui.report(e),
         }
     }
+    ui.layout = Layout::Horizontal;
+    if ui.button("Load scale") {
+        if let Some(path) = FileDialog::new()
+            .add_filter("Scala scale file", &["scl"])
+            .pick_file() {
+            match Tuning::load(path, tuning.root) {
+                Ok(t) => *tuning = t,
+                Err(e) => ui.report(e),
+            }
+        }
+    }
+    ui.note_input("root", &mut tuning.root);
+    ui.offset_label("Scale root");
 }

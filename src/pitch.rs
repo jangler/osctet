@@ -1,9 +1,17 @@
 //! Tuning and notation utilities.
 
-use std::fmt;
+use std::error::Error;
+use std::{fmt, fs};
 use std::cmp::max;
+use std::path::PathBuf;
 
 const REFERENCE_MIDI_PITCH: f32 = 69.0; // A4
+const DEFAULT_ROOT: Note = Note {
+    arrows: 0,
+    nominal: Nominal::C,
+    demisharps: 0,
+    equave: 4,
+};
 
 fn cents(ratio: f32) -> f32 {
     1200.0 * ratio.log2() / 2.0_f32.log2()
@@ -47,6 +55,7 @@ impl Nominal {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tuning {
+    pub root: Note,
     pub scale: Vec<f32>,
     pub arrow_steps: u8,
 }
@@ -61,8 +70,33 @@ impl Tuning {
         }
         let step = cents(ratio) / steps as f32;
         Ok(Tuning {
+            root: DEFAULT_ROOT,
             scale: (1..=steps).map(|i| i as f32 * step).collect(),
             arrow_steps,
+        })
+    }
+
+    /// Load a tuning from a Scala scale file.
+    pub fn load(path: PathBuf, root: Note) -> Result<Tuning, Box<dyn Error>> {
+        let s = fs::read_to_string(path)?;
+        let mut lines = s.lines()
+            .filter(|s| !s.starts_with("!")) // ignore comments
+            .skip(1); // skip description
+
+        let note_count: usize = if let Some(s) = lines.next() {
+            s.parse()?
+        } else {
+            return Err("invalid scale file".into())
+        };
+
+        let scale: Result<Vec<_>, _> = lines.take(note_count).map(|s| {
+            parse_interval(s).ok_or(format!("invalid interval: {}", s))
+        }).collect();
+
+        Ok(Tuning {
+            root,
+            scale: scale?,
+            arrow_steps: 1,
         })
     }
 
@@ -81,14 +115,32 @@ impl Tuning {
 
     pub fn midi_pitch(&self, note: &Note) -> f32 {
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
-        let steps = self.nominal_steps(note.nominal) +
-            self.sharp_steps() * note.demisharps as i32 / 2 +
-            self.arrow_steps as i32 * note.arrows as i32;
+        let root_steps = self.nominal_steps(self.root.nominal)
+            + self.sharp_steps() * self.root.demisharps as i32 / 2
+            + self.arrow_steps as i32 * self.root.arrows as i32;
+        let steps = -root_steps
+            + self.nominal_steps(note.nominal)
+            + self.sharp_steps() * note.demisharps as i32 / 2
+            + self.arrow_steps as i32 * note.arrows as i32;
+        let len = self.scale.len() as i32;
+        let scale_index = (steps - 1).rem_euclid(len) as usize;
+        let step_equaves = (steps - 1).div_euclid(len);
+        self.root_pitch() +
+            equave * (note.equave as i32 - self.root.equave as i32 + step_equaves) as f32
+            + self.scale[scale_index] / 100.0
+    }
+
+    // TODO: fix duplication of code with midi_pitch
+    fn root_pitch(&self) -> f32 {
+        let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
+        let steps = self.nominal_steps(self.root.nominal)
+            + self.sharp_steps() * self.root.demisharps as i32 / 2
+            + self.arrow_steps as i32 * self.root.arrows as i32;
         let len = self.scale.len() as i32;
         let scale_index = (steps - 1).rem_euclid(len) as usize;
         let step_equaves = (steps - 1).div_euclid(len);
         REFERENCE_MIDI_PITCH +
-            equave * (note.equave as i32 - 4 + step_equaves) as f32
+            equave * (self.root.equave as i32 - 4 + step_equaves) as f32
             + self.scale[scale_index] / 100.0
     }
 
@@ -98,6 +150,23 @@ impl Tuning {
 
     pub fn size(&self) -> u16 {
         self.scale.len() as u16
+    }
+}
+
+/// Parses a Scala file interval into cents.
+fn parse_interval(s: &str) -> Option<f32> {
+    let s = s.trim();
+
+    if let Ok(n) = s.parse::<u32>() {
+        Some(cents(n as f32))
+    } else if let Ok(n) = s.parse::<f32>() {
+        Some(n)
+    } else if let Some((n, d)) = s.split_once("/") {
+        let n = n.parse::<u32>().ok()?;
+        let d = d.parse::<u32>().ok()?;
+        Some(cents(n as f32 / d as f32))
+    } else {
+        None
     }
 }
 
@@ -166,6 +235,7 @@ mod tests {
     #[test]
     fn test_tuning_divide() {
         assert_eq!(Tuning::divide(2.0, 5, 1).unwrap(), Tuning {
+            root: DEFAULT_ROOT,
             scale: vec![240.0, 480.0, 720.0, 960.0, 1200.0],
             arrow_steps: 1,
         });
@@ -204,7 +274,7 @@ mod tests {
 
     #[test]
     fn test_tuning_midi_pitch() {
-        let t = Tuning::divide(2.0, 12, 1).unwrap();
+        let mut t = Tuning::divide(2.0, 12, 1).unwrap();
         assert_eq!(t.midi_pitch(&A4), 69.0);
         assert_eq!(t.midi_pitch(&Note { arrows: 1, ..A4 }), 70.0);
         assert_eq!(t.midi_pitch(&Note { nominal: Nominal::B, ..A4 }), 71.0);
@@ -213,6 +283,8 @@ mod tests {
         assert_eq!(t.midi_pitch(&Note { demisharps: 1, ..A4 }), 69.0);
         assert_eq!(t.midi_pitch(&Note { demisharps: -1, ..A4 }), 69.0);
         assert_eq!(t.midi_pitch(&Note { demisharps: 2, ..A4 }), 70.0);
+        t.root = Note::new(0, Nominal::D, 0, 0);
+        assert_eq!(t.midi_pitch(&A4), 69.0);
     }
 
     #[test]
@@ -220,5 +292,13 @@ mod tests {
         assert_eq!(format!("{}", A4), "A4");
         assert_eq!(format!("{}", Note { demisharps: 2, ..A4 }), "A#4");
         assert_eq!(format!("{}", Note { arrows: -1, demisharps: 2, ..A4 }), "vA#4");
+    }
+
+    #[test]
+    fn test_parse_interval() {
+        assert_eq!(parse_interval("2"), Some(1200.0));
+        assert_eq!(parse_interval("4/1"), Some(2400.0));
+        assert_eq!(parse_interval("386.6"), Some(386.6));
+        assert_eq!(parse_interval("4/"), None);
     }
 }
