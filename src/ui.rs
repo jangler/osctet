@@ -865,7 +865,7 @@ impl UI {
                 self.style.theme.fg);
         }
 
-        let label_rect = self.push_text(box_rect.x + box_rect.w + MARGIN,
+        let label_rect = self.push_text(box_rect.x + box_rect.w,
             self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
         
         self.update_cursor(width + label_rect.w + MARGIN, box_rect.h + MARGIN);

@@ -17,7 +17,7 @@ fn is_ctrl_down() -> bool {
 pub struct PatternEditor {
     edit_start: Position,
     edit_end: Position,
-    beat_division: u32,
+    pub beat_division: u8,
     scroll: f32,
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
@@ -74,7 +74,7 @@ impl PatternEditor {
         let mut pos = Position {
             tick: ((y - cell_height * 0.5) as f32
                 / BEAT_HEIGHT * self.beat_division as f32).round() as u32
-                * TICKS_PER_BEAT / self.beat_division,
+                * TICKS_PER_BEAT / self.beat_division as u32,
             track: 0,
             channel: 0,
             column: 0,
@@ -152,10 +152,12 @@ impl PatternEditor {
         } else {
             match key {
                 KeyCode::Up => {
-                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64 * -1);
+                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division as u32)
+                        as i64 * -1);
                 },
                 KeyCode::Down =>
-                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division) as i64),
+                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division as u32)
+                        as i64),
                 KeyCode::Left => shift_column_left(self, &module.tracks),
                 KeyCode::Right => shift_column_right(self, &module.tracks),
                 KeyCode::Tab => if is_shift_down() {
