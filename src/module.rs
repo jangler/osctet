@@ -127,6 +127,16 @@ impl Module {
         events
     }
 
+    pub fn event_at(&mut self, pos: Position) -> Option<&mut Event> {
+        if let Some(track) = self.tracks.get_mut(pos.track) {
+            if let Some(channel) = track.channels.get_mut(pos.channel) {
+                return channel.events.iter_mut().find(|evt|
+                    evt.tick == pos.tick && evt.data.column() == pos.column)
+            }
+        }
+        None
+    }
+
     /// Delete pattern events between two positions.
     pub fn delete_events(&mut self, start: Position, end: Position) {
         let remove = self.scan_events(start, end).iter().map(|x| x.position()).collect();

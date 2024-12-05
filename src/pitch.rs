@@ -53,6 +53,32 @@ impl Nominal {
             Nominal::G => 'G',
         }
     }
+
+    /// Returns the next nominal in the scale, along with octave offset.
+    pub fn next(&self) -> (Nominal, i8) {
+        match self {
+            Nominal::A => (Nominal::B, 0),
+            Nominal::B => (Nominal::C, 1),
+            Nominal::C => (Nominal::D, 0),
+            Nominal::D => (Nominal::E, 0),
+            Nominal::E => (Nominal::F, 0),
+            Nominal::F => (Nominal::G, 0),
+            Nominal::G => (Nominal::A, 0),
+        }
+    }
+
+    /// Returns the previous nominal in the scale, along with octave offset.
+    pub fn prev(&self) -> (Nominal, i8) {
+        match self {
+            Nominal::A => (Nominal::G, 0),
+            Nominal::B => (Nominal::A, 0),
+            Nominal::C => (Nominal::B, -1),
+            Nominal::D => (Nominal::C, 0),
+            Nominal::E => (Nominal::D, 0),
+            Nominal::F => (Nominal::E, 0),
+            Nominal::G => (Nominal::F, 0),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

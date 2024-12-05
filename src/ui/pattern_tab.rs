@@ -1,6 +1,6 @@
 use gcd::Gcd;
 
-use crate::{module::*, playback::Player, synth::Patch};
+use crate::{input, module::*, playback::Player, synth::Patch};
 
 use super::*;
 
@@ -195,6 +195,9 @@ impl PatternEditor {
                 KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
                 KeyCode::T => self.tap_tempo(module),
                 KeyCode::R => self.rational_tempo(module),
+                input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
+                    | input::SHARP_KEY | input::FLAT_KEY
+                    | input::ENHARMONIC_ALT_KEY => nudge_note(module, &self.edit_start),
                 _ => (),
             }
         }
@@ -463,6 +466,14 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
 
 fn input_note_off(cursor: &Position, module: &mut Module) {
     insert_event_at_cursor(module, cursor, EventData::NoteOff);
+}
+
+fn nudge_note(module: &mut Module, cursor: &Position) {
+    if let Some(evt) = module.event_at(*cursor) {
+        if let EventData::Pitch(ref mut note) = evt.data {
+            *note = input::adjust_note_for_modifier_keys(*note);
+        }
+    }
 }
 
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {

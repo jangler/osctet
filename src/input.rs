@@ -11,12 +11,11 @@ pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
 
-// TODO: allow these to be applied in pattern after the fact
-const ARROW_DOWN_KEY: KeyCode = KeyCode::LeftBracket;
-const ARROW_UP_KEY: KeyCode = KeyCode::RightBracket;
-const SHARP_KEY: KeyCode = KeyCode::Equal;
-const FLAT_KEY: KeyCode = KeyCode::Minus;
-const ENHARMONIC_ALT_KEY: KeyCode = KeyCode::Space;
+pub const ARROW_DOWN_KEY: KeyCode = KeyCode::LeftBracket;
+pub const ARROW_UP_KEY: KeyCode = KeyCode::RightBracket;
+pub const SHARP_KEY: KeyCode = KeyCode::Equal;
+pub const FLAT_KEY: KeyCode = KeyCode::Minus;
+pub const ENHARMONIC_ALT_KEY: KeyCode = KeyCode::Space;
 
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
@@ -100,7 +99,7 @@ pub fn note_from_midi(n: u8, t: &Tuning) -> Note {
     }
 }
 
-fn adjust_note_for_modifier_keys(note: Note) -> Note {
+pub fn adjust_note_for_modifier_keys(note: Note) -> Note {
     let note = Note {
         arrows: note.arrows
             + if is_key_down(ARROW_UP_KEY) { 1 } else { 0 }
@@ -118,21 +117,19 @@ fn adjust_note_for_modifier_keys(note: Note) -> Note {
 }
 
 fn enharmonic_alternative(note: Note) -> Note {
-    let (nominal, demisharps, equave_offset) = match (note.nominal, note.demisharps) {
-        (Nominal::C, 0) => (Nominal::B, 2, -1),
-        (Nominal::C, 2) => (Nominal::D, -2, 0),
-        (Nominal::D, 2) => (Nominal::E, -2, 0),
-        (Nominal::E, 0) => (Nominal::F, -2, 0),
-        (Nominal::F, 0) => (Nominal::E, 2, 0),
-        (Nominal::F, 2) => (Nominal::G, -2, 0),
-        (Nominal::G, 2) => (Nominal::A, -2, 0),
-        (Nominal::A, 2) => (Nominal::B, -2, 0),
-        (Nominal::B, 0) => (Nominal::C, -2, 1),
-        _ => (note.nominal, note.demisharps, 0),
+    let bias = match note.nominal {
+        Nominal::E | Nominal::B => 1,
+        Nominal::C | Nominal::F => -1,
+        _ => 0,
+    };
+    let ((nominal, equave_offset), demisharp_offset) = if note.demisharps + bias >= 0 {
+        (note.nominal.next(), if bias > 0 { -2 } else { -4 })
+    } else {
+        (note.nominal.prev(), if bias < 0 { 2 } else { 4 })
     };
     Note {
         nominal,
-        demisharps,
+        demisharps: note.demisharps + demisharp_offset,
         equave: note.equave + equave_offset,
         ..note
     }
