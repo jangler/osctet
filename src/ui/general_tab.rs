@@ -6,8 +6,13 @@ use super::*;
 
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX) {
     ui.layout = Layout::Vertical;
+    if let Some(s) = ui.edit_box("Title", 20, module.title.clone()) {
+        module.title = s;
+    }
+    if let Some(s) = ui.edit_box("Author", 20, module.author.clone()) {
+        module.author = s;
+    }
     fx_controls(ui, &mut module.fx, fx);
-    ui.space(2.0);
     tuning_controls(ui, &mut module.tuning);
 }
 
@@ -15,6 +20,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.shared_slider("gain",
         "Global volume", &settings.gain.0, 0.0..=1.0, None);
 
+    ui.space(2.0);
     ui.label("REVERB");
 
     ui.shared_slider("reverb_level",
@@ -35,6 +41,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
 }
 
 fn tuning_controls(ui: &mut UI, tuning: &mut Tuning) {
+    ui.space(2.0);
     ui.label("TUNING");
     if let Some(s) = ui.edit_box("Equave", 8, tuning.equave().to_string()) {
         match s.parse() {
