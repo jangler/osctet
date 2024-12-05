@@ -183,7 +183,8 @@ impl App {
                 //       of changes
                 match key {
                     KeyCode::E => self.render_and_save(),
-                    KeyCode::O => self.open_module(),
+                    KeyCode::N => self.new_module(), // TODO: prompt if unsaved
+                    KeyCode::O => self.open_module(), // TODO: prompt if unsaved
                     KeyCode::S => self.save_module(),
                     KeyCode::Y => if self.module.redo() {
                         self.player.update_synths(self.module.drain_track_history());
@@ -454,6 +455,10 @@ impl App {
         }
     }
 
+    fn new_module(&mut self) {
+        self.load_module(Module::new(Default::default()));
+    }
+
     fn save_module(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
@@ -469,14 +474,16 @@ impl App {
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .pick_file() {
             match Module::load(path) {
-                Ok(module) => {
-                    self.module = module;
-                    self.player.reinit(self.module.tracks.len());
-                    self.fx.reinit(&self.module.fx);
-                }
+                Ok(module) => self.load_module(module),
                 Err(e) => self.ui.report(e),
             }
         }
+    }
+
+    fn load_module(&mut self, module: Module) {
+        self.module = module;
+        self.player.reinit(self.module.tracks.len());
+        self.fx.reinit(&self.module.fx);
     }
 }
 
