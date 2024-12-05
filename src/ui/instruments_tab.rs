@@ -116,6 +116,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
             if let Some(path) = FileDialog::new()
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                .set_file_name(patch.name.clone())
                 .save_file() {
                 if let Err(e) = patch.save(&path) {
                     ui.report(e);
@@ -128,7 +129,12 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
             .pick_file() {
             match Patch::load(&path) {
-                Ok(p) => {
+                Ok(mut p) => {
+                    if let Some(s) = path.file_stem() {
+                        if let Some(s) = s.to_str() {
+                            p.name = s.to_owned();
+                        }
+                    }
                     edit = Some(Edit::InsertPatch(patches.len(), p));
                     *patch_index = Some(patches.len());
                 },

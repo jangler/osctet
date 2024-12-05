@@ -482,6 +482,7 @@ impl App {
     fn save_module_as(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
+            .set_file_name(self.module.title.clone())
             .save_file() {
             if let Err(e) = self.module.save(&path) {
                 self.ui.report(e);
