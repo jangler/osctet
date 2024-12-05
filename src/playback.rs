@@ -25,7 +25,7 @@ impl Player {
     pub fn new(seq: Sequencer, num_tracks: usize) -> Self {
         Self {
             seq,
-            synths: (0..=num_tracks).map(|_| Synth::new()).collect(),
+            synths: (0..=num_tracks).map(|i| Synth::new(i)).collect(),
             playing: false,
             tick: 0,
             playtime: 0.0, // not total playtime!
@@ -66,7 +66,7 @@ impl Player {
     pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
         for edit in edits {
             match edit {
-                TrackEdit::Insert(i) => self.synths.insert(i, Synth::new()),
+                TrackEdit::Insert(i) => self.synths.insert(i, Synth::new(i)),
                 TrackEdit::Remove(i) => { self.synths.remove(i); }
             }
         }

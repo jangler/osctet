@@ -1,7 +1,7 @@
 //! Subtractive/FM synth engine.
 
 use core::f64;
-use std::{collections::HashMap, error::Error, fmt::Display, fs, path::Path, u64};
+use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path, u64};
 
 use rand::prelude::*;
 use fundsp::hacker32::*;
@@ -12,6 +12,7 @@ use crate::adsr::adsr_scalable;
 const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICE_GAIN: f32 = 0.5; // -6 dB
+const VOICES_PER_CHANNEL: usize = 3;
 
 const MAX_ENV_SPEED: f32 = 4.0;
 
@@ -193,21 +194,32 @@ const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to a 6 in pattern
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
-    voices: HashMap<Key, Voice>,
+    active_voices: HashMap<Key, Voice>,
+    released_voices: VecDeque<Voice>,
     bend_memory: Vec<f32>,
     mod_memory: Vec<f32>,
     pressure_memory: Vec<f32>,
     prev_freq: Option<f32>,
+    max_voices: usize,
 }
 
 impl Synth {
-    pub fn new() -> Self {
+    pub fn new(track_index: usize) -> Self {
+        // TODO: max_voices tracking doesn't account for removing channels,
+        //       which could lead to playback differences after a module is
+        //       saved and loaded
         Self {
-            voices: HashMap::new(),
+            active_voices: HashMap::new(),
+            released_voices: VecDeque::new(),
             bend_memory: vec![0.0],
             mod_memory: vec![0.0],
             pressure_memory: vec![DEFAULT_PRESSURE],
             prev_freq: None,
+            max_voices: if track_index == 0 {
+                8
+            } else {
+                VOICES_PER_CHANNEL
+            },
         }
     }
 
@@ -236,13 +248,14 @@ impl Synth {
     ) {
         // turn off prev note(s) in channel
         if key.origin == KeyOrigin::Pattern {
-            let removed_keys: Vec<Key> = self.voices.keys()
+            let removed_keys: Vec<Key> = self.active_voices.keys()
                 .filter(|k| k.origin == key.origin && k.channel == key.channel)
                 .cloned()
                 .collect();
             for key in removed_keys {
-                if let Some(voice) = self.voices.remove(&key) {
+                if let Some(voice) = self.active_voices.remove(&key) {
                     voice.off(seq);
+                    self.released_voices.push_back(voice);
                 }
             }
         }
@@ -256,25 +269,28 @@ impl Synth {
         let insert_voice = match patch.play_mode {
             PlayMode::Poly => true,
             PlayMode::Mono => {
-                for voice in self.voices.values_mut() {
+                for (_, voice) in self.active_voices.drain() {
                     voice.off(seq);
+                    self.released_voices.push_back(voice);
                 }
                 true
             },
             PlayMode::SingleTrigger => {
-                if self.voices.is_empty() {
+                if self.active_voices.is_empty() {
                     true
                 } else {
-                    let voice = self.voices.drain().map(|(_, v)| v).next()
+                    let voice = self.active_voices.drain().map(|(_, v)| v).next()
                         .expect("voices confirmed non-empty");
                     voice.vars.freq.set(midi_hz(pitch));
-                    self.voices.insert(key.clone(), voice);
+                    self.active_voices.insert(key.clone(), voice);
                     false
                 }
             },
         };
         if insert_voice {
             let channel = key.channel as usize;
+            self.max_voices = std::cmp::Ord::max(self.max_voices,
+                (channel + 1) * VOICES_PER_CHANNEL);
             self.expand_memory(channel);
             let pressure = if let Some(p) = pressure {
                 self.pressure_memory[channel] = p;
@@ -282,31 +298,49 @@ impl Synth {
             } else {
                 self.pressure_memory[channel]
             };
-            self.voices.insert(key, Voice::new(pitch, bend, pressure,
+            self.active_voices.insert(key, Voice::new(pitch, bend, pressure,
                 self.mod_memory[channel], self.prev_freq, &patch, seq));
+            self.check_truncate_voices(seq);
             self.prev_freq = Some(midi_hz(pitch));
         }
     }
 
+    /// Cut the oldest released voice if max_voices is exceeded.
+    fn check_truncate_voices(&mut self, seq: &mut Sequencer) {
+        if self.active_voices.len() + self.released_voices.len() > self.max_voices {
+            if let Some(voice) = self.released_voices.pop_front() {
+                voice.cut(seq);
+            } else if let Some(k) = self.active_voices.keys().next().cloned() {
+                let voice = self.active_voices.remove(&k).unwrap();
+                voice.cut(seq);
+            }
+        }
+    }
+
     pub fn note_off(&mut self, key: Key, seq: &mut Sequencer) {
-        if let Some(voice) = self.voices.remove(&key) {
+        if let Some(voice) = self.active_voices.remove(&key) {
             voice.off(seq);
+            self.released_voices.push_back(voice);
         }
     }
 
     /// Turns off all notes from a specific origin.
     pub fn clear_notes_with_origin(&mut self, seq: &mut Sequencer, origin: KeyOrigin) {
-        for (key, voice) in &self.voices {
-            if key.origin == origin {
-                voice.off(seq);
-            }
+        let remove_keys: Vec<_> = self.active_voices.keys()
+            .filter(|k| k.origin == origin)
+            .cloned()
+            .collect();
+        for k in remove_keys {
+            let voice = self.active_voices.remove(&k).unwrap();
+            voice.off(seq);
+            self.released_voices.push_back(voice);
         }
     }
 
     pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
         self.expand_memory(channel as usize);
         self.bend_memory[channel as usize] = bend;
-        for (key, voice) in self.voices.iter_mut() {
+        for (key, voice) in self.active_voices.iter_mut() {
             if key.origin == KeyOrigin::Midi && key.channel == channel {
                 voice.vars.freq.set(midi_hz(voice.base_pitch + bend));
             }
@@ -314,13 +348,13 @@ impl Synth {
     }
 
     pub fn poly_pressure(&mut self, key: Key, pressure: f32) {
-        self.voices.get(&key).inspect(|v| v.vars.pressure.set(pressure));
+        self.active_voices.get(&key).inspect(|v| v.vars.pressure.set(pressure));
     }
 
     pub fn channel_pressure(&mut self, channel: u8, pressure: f32) {
         self.expand_memory(channel as usize);
         self.pressure_memory[channel as usize] = pressure;
-        for (key, voice) in self.voices.iter_mut() {
+        for (key, voice) in self.active_voices.iter_mut() {
             if key.channel == channel {
                 voice.vars.pressure.set(pressure);
             }
@@ -330,7 +364,7 @@ impl Synth {
     pub fn modulate(&mut self, channel: u8, depth: f32) {
         self.expand_memory(channel as usize);
         self.mod_memory[channel as usize] = depth;
-        for (key, voice) in self.voices.iter_mut() {
+        for (key, voice) in self.active_voices.iter_mut() {
             if key.channel == channel {
                 voice.vars.modulation.set(depth);
             }
@@ -930,6 +964,10 @@ impl Voice {
     fn off(&self, seq: &mut Sequencer) {
         self.vars.gate.set(0.0);
         seq.edit_relative(self.event_id, self.release_time as f64, SMOOTH_TIME as f64);
+    }
+
+    fn cut(&self, seq: &mut Sequencer) {
+        seq.edit_relative(self.event_id, 0.0, SMOOTH_TIME as f64);
     }
 }
 
