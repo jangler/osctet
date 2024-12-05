@@ -440,7 +440,6 @@ impl UI {
             let (_, y) = mouse_position();
             let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
                 .min(1.0).max(0.0);
-            dbg!(offset);
             *current_y = (max_y - viewport_h) * offset;
         } else {
             self.scrollbar_grabbed = false;
@@ -717,9 +716,9 @@ impl UI {
         let groove_w = SLIDER_WIDTH;
         let groove_x = self.cursor_x + MARGIN * 2.0;
         let groove_y = (self.cursor_y + MARGIN * 2.0 + h * 0.5).round() + 0.5;
-        draw_line(groove_x, groove_y,
+        self.push_line(groove_x, groove_y,
             groove_x + groove_w, groove_y,
-            LINE_THICKNESS, self.style.theme.fg);
+            self.style.theme.fg);
 
         // get/set grabbed state
         let hit_rect = Rect {
@@ -767,7 +766,7 @@ impl UI {
             w: MARGIN * 2.0,
             ..hit_rect
         };
-        draw_filled_rect(handle_rect, fill, self.style.theme.fg);
+        self.push_rect(handle_rect, fill, Some(self.style.theme.fg));
 
         // draw label
         let text_rect = self.push_text(self.cursor_x + MARGIN * 3.0 + groove_w,
