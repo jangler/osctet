@@ -53,12 +53,12 @@ impl Module {
         }
     }
 
-    pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+    pub fn load(path: &PathBuf) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         Ok(rmp_serde::from_slice::<Self>(&input)?)
     }
 
-    pub fn save(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
         Ok(fs::write(path, contents)?)
     }

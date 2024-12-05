@@ -1,6 +1,7 @@
 //! Microtonal tracker with built-in subtractive/FM synth.
 
 use std::error::Error;
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 use config::Config;
@@ -106,6 +107,7 @@ struct App {
     fullscreen: bool,
     pattern_editor: PatternEditor,
     instruments_scroll: f32,
+    save_path: Option<PathBuf>,
 }
 
 impl App {
@@ -133,6 +135,7 @@ impl App {
             fullscreen: false,
             pattern_editor: PatternEditor::new(),
             instruments_scroll: 0.0,
+            save_path: None,
         };
         if let Some(err) = err {
             app.ui.report(err);
@@ -174,6 +177,7 @@ impl App {
             }
         }
 
+        let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         for key in pressed {
             if ctrl {
@@ -185,7 +189,11 @@ impl App {
                     KeyCode::E => self.render_and_save(),
                     KeyCode::N => self.new_module(), // TODO: prompt if unsaved
                     KeyCode::O => self.open_module(), // TODO: prompt if unsaved
-                    KeyCode::S => self.save_module(),
+                    KeyCode::S => if shift {
+                        self.save_module_as();
+                    } else {
+                        self.save_module();
+                    }
                     KeyCode::Y => if self.module.redo() {
                         self.player.update_synths(self.module.drain_track_history());
                         fix_patch_index(&mut self.patch_index, self.module.patches.len());
@@ -457,14 +465,27 @@ impl App {
 
     fn new_module(&mut self) {
         self.load_module(Module::new(Default::default()));
+        self.save_path = None;
     }
 
     fn save_module(&mut self) {
+        if let Some(path) = &self.save_path {
+            if let Err(e) = self.module.save(path) {
+                self.ui.report(e);
+            }
+        } else {
+            self.save_module_as();
+        }
+    }
+
+    fn save_module_as(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .save_file() {
-            if let Err(e) = self.module.save(path) {
+            if let Err(e) = self.module.save(&path) {
                 self.ui.report(e);
+            } else {
+                self.save_path = Some(path);
             }
         }
     }
@@ -473,8 +494,11 @@ impl App {
         if let Some(path) = FileDialog::new()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .pick_file() {
-            match Module::load(path) {
-                Ok(module) => self.load_module(module),
+            match Module::load(&path) {
+                Ok(module) => {
+                    self.load_module(module);
+                    self.save_path = Some(path);
+                },
                 Err(e) => self.ui.report(e),
             }
         }
