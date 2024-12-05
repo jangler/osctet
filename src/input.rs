@@ -1,4 +1,4 @@
-use macroquad::input::KeyCode;
+use macroquad::input::{is_key_down, KeyCode};
 
 use crate::pitch::{Nominal, Note, Tuning};
 
@@ -10,6 +10,13 @@ pub const CC_RPN_LSB: u8 = 100;
 pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
+
+// TODO: allow these to be applied in pattern after the fact
+const ARROW_DOWN_KEY: KeyCode = KeyCode::LeftBracket;
+const ARROW_UP_KEY: KeyCode = KeyCode::RightBracket;
+const SHARP_KEY: KeyCode = KeyCode::Equal;
+const FLAT_KEY: KeyCode = KeyCode::Minus;
+const ENHARMONIC_ALT_KEY: KeyCode = KeyCode::Space;
 
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
@@ -26,12 +33,12 @@ fn use_sharps(t: &Tuning) -> bool {
 
 pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8) -> Option<Note> {
     let f = |nominal, accidentals, offset| {
-        Some(Note {
+        Some(adjust_note_for_modifier_keys(Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
             nominal,
             demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
             equave: equave + offset,
-        })
+        }))
     };
     match k {
         KeyCode::Z => f(Nominal::C, 0, -1),
@@ -69,12 +76,12 @@ pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8) -> Option<Note> {
 
 pub fn note_from_midi(n: u8, t: &Tuning) -> Note {
     let f = |nominal, accidentals| {
-        Note {
+        adjust_note_for_modifier_keys(Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
             nominal,
             demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
             equave: (n as i8) / 12 - 1,
-        }
+        })
     };
     match n % 12 {
         0 => f(Nominal::C, 0),
@@ -90,6 +97,44 @@ pub fn note_from_midi(n: u8, t: &Tuning) -> Note {
         10 => f(Nominal::A, 1),
         11 => f(Nominal::B, 0),
         _ => panic!("unreachable"),
+    }
+}
+
+fn adjust_note_for_modifier_keys(note: Note) -> Note {
+    let note = Note {
+        arrows: note.arrows
+            + if is_key_down(ARROW_UP_KEY) { 1 } else { 0 }
+            - if is_key_down(ARROW_DOWN_KEY) { 1 } else { 0 },
+        demisharps: note.demisharps
+            + if is_key_down(SHARP_KEY) { 2 } else { 0 }
+            - if is_key_down(FLAT_KEY) { 2 } else { 0 },
+        ..note
+    };
+    if is_key_down(ENHARMONIC_ALT_KEY) {
+        enharmonic_alternative(note)
+    } else {
+        note
+    }
+}
+
+fn enharmonic_alternative(note: Note) -> Note {
+    let (nominal, demisharps, equave_offset) = match (note.nominal, note.demisharps) {
+        (Nominal::C, 0) => (Nominal::B, 2, -1),
+        (Nominal::C, 2) => (Nominal::D, -2, 0),
+        (Nominal::D, 2) => (Nominal::E, -2, 0),
+        (Nominal::E, 0) => (Nominal::F, -2, 0),
+        (Nominal::F, 0) => (Nominal::E, 2, 0),
+        (Nominal::F, 2) => (Nominal::G, -2, 0),
+        (Nominal::G, 2) => (Nominal::A, -2, 0),
+        (Nominal::A, 2) => (Nominal::B, -2, 0),
+        (Nominal::B, 0) => (Nominal::C, -2, 1),
+        _ => (note.nominal, note.demisharps, 0),
+    };
+    Note {
+        nominal,
+        demisharps,
+        equave: note.equave + equave_offset,
+        ..note
     }
 }
 
