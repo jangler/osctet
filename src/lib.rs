@@ -472,6 +472,7 @@ impl App {
                 Ok(module) => {
                     self.module = module;
                     self.player.reinit(self.module.tracks.len());
+                    self.fx.reinit(&self.module.fx);
                 }
                 Err(e) => self.ui.report(e),
             }

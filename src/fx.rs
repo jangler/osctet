@@ -20,6 +20,14 @@ pub struct FXSettings {
 }
 
 impl FXSettings {
+    pub fn make_gain(&self) -> Box<dyn AudioUnit> {
+        Box::new(var(&self.gain.0) >> split::<U2>())
+    }
+
+    pub fn make_amount(&self) -> Box<dyn AudioUnit> {
+        Box::new(var(&self.reverb_amount.0) >> split::<U2>())
+    }
+
     pub fn make_predelay(&self) -> Box<dyn AudioUnit> {
         Box::new(delay(self.predelay_time) | delay(self.predelay_time))
     }
@@ -52,6 +60,8 @@ impl Default for FXSettings {
 // controls updates of global FX
 pub struct GlobalFX {
     pub net: Net,
+    gain_id: NodeId,
+    amount_id: NodeId,
     predelay_id: NodeId,
     reverb_id: NodeId,
 }
@@ -60,13 +70,17 @@ impl GlobalFX {
     pub fn new(backend: SequencerBackend, settings: &FXSettings) -> Self {
         let (predelay, predelay_id) = Net::wrap_id(settings.make_predelay());
         let (reverb, reverb_id) = Net::wrap_id(settings.make_reverb());
+        let (gain, gain_id) = Net::wrap_id(settings.make_gain());
+        let (amount, amount_id) = Net::wrap_id(settings.make_amount());
 
         Self {
             net: Net::wrap(Box::new(backend))
-                * (var(&settings.gain.0) | var(&settings.gain.0))
+                * gain
                 >> (highpass_hz(1.0, 0.1) | highpass_hz(1.0, 0.1))
                 >> (shape(Tanh(1.0)) | shape(Tanh(1.0)))
-                >> (multipass::<U2>() & (var(&settings.reverb_amount.0) >> split::<U2>()) * (predelay >> reverb)),
+                >> (multipass::<U2>() & amount * (predelay >> reverb)),
+            gain_id,
+            amount_id,
             predelay_id,
             reverb_id,
         }
@@ -75,6 +89,14 @@ impl GlobalFX {
     /// Constructs a new instance with a dummy sequencer backend.
     pub fn new_dummy(settings: &FXSettings) -> Self {
         Self::new(Sequencer::new(false, 2).backend(), settings)
+    }
+
+    pub fn reinit(&mut self, settings: &FXSettings) {
+        self.net.crossfade(self.gain_id, Fade::Smooth, 0.1, settings.make_gain());
+        self.net.crossfade(self.amount_id, Fade::Smooth, 0.1, settings.make_amount());
+        self.net.crossfade(self.predelay_id, Fade::Smooth, 0.1, settings.make_predelay());
+        self.net.crossfade(self.reverb_id, Fade::Smooth, 0.1, settings.make_reverb());
+        self.net.commit();
     }
 
     pub fn commit_predelay(&mut self, settings: &FXSettings) {
