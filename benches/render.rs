@@ -4,7 +4,7 @@ use osctet::{fx::GlobalFX, module::{Event, EventData, Module}, playback::render}
 
 fn empty_module(c: &mut Criterion) {
     let mut module = Module::new(GlobalFX::new_dummy());
-    module.tracks[0].channels[0].push(Event {
+    module.tracks[0].channels[0].events.push(Event {
         tick: 480,
         data: EventData::End,
     });

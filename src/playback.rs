@@ -128,7 +128,7 @@ impl Player {
 
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
-                for event in channel {
+                for event in &channel.events {
                     if event.tick >= prev_tick && event.tick < self.tick {
                         self.handle_event(&event.data, module, track_i, channel_i);
                     }

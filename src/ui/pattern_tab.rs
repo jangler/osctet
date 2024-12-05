@@ -407,7 +407,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
             edit = Some(Edit::RemoveChannel(i));
         }
         if ui.button("+") {
-            edit = Some(Edit::AddChannel(i, Vec::new()));
+            edit = Some(Edit::AddChannel(i, Channel::new()));
         }
         ui.layout = Layout::Vertical;
         ui.end_group();
@@ -498,9 +498,9 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
     ui.push_rect(rect, ui.style.theme.hover, None);
 }
 
-fn draw_channel(ui: &mut UI, channel: &Vec<Event>) {
+fn draw_channel(ui: &mut UI, channel: &Channel) {
     let char_width = text_width("x", &ui.style.text_params());
-    for event in channel {
+    for event in &channel.events {
         draw_event(ui, event, char_width);
     }
 }

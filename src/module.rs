@@ -102,7 +102,7 @@ impl Module {
 
         for (track_i, track) in self.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
-                for evt in channel {
+                for evt in &channel.events {
                     let tuple = (track_i, channel_i, evt.data.column());
                     if tick_range.contains(&evt.tick)
                         && tuple >= start_tuple && tuple <= end_tuple {
@@ -130,9 +130,9 @@ impl Module {
 
     fn delete_event(&mut self, pos: Position) -> Option<Event> {
         let channel = &mut self.tracks[pos.track].channels[pos.channel];
-        channel.iter()
+        channel.events.iter()
             .position(|e| e.tick == pos.tick && e.data.column() == pos.column)
-            .map(|i| channel.remove(i))
+            .map(|i| channel.events.remove(i))
     }
 
     pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
@@ -143,15 +143,6 @@ impl Module {
                 TrackTarget::Patch(i) => self.patches.get(i).map(|x| (x, note)),
             }
         }).flatten()
-    }
-
-    /// Returns the tick of the last event in the module.
-    pub fn last_event_tick(&self) -> u32 {
-        self.tracks.iter()
-            .flat_map(|track| track.channels.iter())
-            .flat_map(|channel| channel.iter().map(|x| x.tick))
-            .max()
-            .unwrap_or(0)
     }
 
     pub fn add_track(&mut self) {
@@ -217,7 +208,7 @@ impl Module {
                 }).collect();
                 let flip_remove = add.into_iter().map(|e| {
                     let pos = e.position();
-                    self.tracks[e.track].channels[e.channel].push(e.event);
+                    self.tracks[e.track].channels[e.channel].events.push(e.event);
                     pos
                 }).collect();
                 Edit::PatternData { remove: flip_remove, add: flip_add }
@@ -261,7 +252,7 @@ impl Module {
 
     pub fn find_loop_start(&self, before_tick: u32) -> Option<u32> {
         self.tracks[0].channels.iter().flat_map(|c| {
-            c.iter()
+            c.events.iter()
                 .filter(|e| e.data == EventData::Loop && e.tick < before_tick)
                 .map(|e| e.tick)
         }).max()
@@ -270,7 +261,7 @@ impl Module {
     pub fn ends(&self) -> bool {
         for track in &self.tracks {
             for channel in &track.channels {
-                for event in channel {
+                for event in &channel.events {
                     if event.data == EventData::End {
                         return true
                     }
@@ -305,14 +296,18 @@ pub struct KitEntry {
 
 pub struct Track {
     pub target: TrackTarget,
-    pub channels: Vec<Vec<Event>>,
+    pub channels: Vec<Channel>,
+    pub share_pressure: bool, // TODO
+    pub share_modulation: bool, // TODO
 }
 
 impl Track {
     pub fn new(target: TrackTarget) -> Self {
         Self {
             target,
-            channels: vec![Vec::new()],
+            channels: vec![Channel::new()],
+            share_pressure: false,
+            share_modulation: false,
         }
     }
 }
@@ -323,6 +318,26 @@ pub enum TrackTarget {
     Global,
     Kit,
     Patch(usize),
+}
+
+pub struct Channel {
+    pub events: Vec<Event>,
+    pub pitch_interp: Vec<u32>, // TODO
+    pub vel_interp: Vec<u32>, // TODO
+    pub mod_interp: Vec<u32>, // TODO
+    pub links: Vec<Link>, // TODO
+}
+
+impl Channel {
+    pub fn new() -> Self {
+        Self {
+            events: Vec::new(),
+            pitch_interp: Vec::new(),
+            vel_interp: Vec::new(),
+            mod_interp: Vec::new(),
+            links: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -359,6 +374,13 @@ impl EventData {
             _ => true,
         }
     }
+}
+
+/// Defines a linked copy region.
+pub struct Link {
+    pub src_tick: u32,
+    pub dst_tick: u32,
+    pub duration: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -406,7 +428,7 @@ pub enum Edit {
     InsertTrack(usize, Track),
     RemoveTrack(usize),
     RemapTrack(usize, TrackTarget),
-    AddChannel(usize, Vec<Event>),
+    AddChannel(usize, Channel),
     RemoveChannel(usize),
     PatternData {
         remove: Vec<Position>,
