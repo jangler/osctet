@@ -409,6 +409,13 @@ impl Patch {
         Ok(fs::write(path, contents)?)
     }
 
+    pub fn duplicate(&self) -> Result<Self, Box<dyn Error>> {
+        let data = rmp_serde::to_vec(self)?;
+        let mut patch = rmp_serde::from_slice::<Self>(&data)?;
+        patch.name = format!("Copy of {}", patch.name);
+        Ok(patch)
+    }
+
     fn dsp_component(&self, vars: &VoiceVars, target: ModTarget, path: &[ModSource]) -> Net {
         let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
         for (i, m) in self.mod_matrix.iter().enumerate() {

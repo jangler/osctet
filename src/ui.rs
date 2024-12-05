@@ -313,10 +313,20 @@ impl UI {
     }
 
     fn push_graphic(&mut self, graphic: Graphic) {
+        let (x, y) = match &graphic {
+            Graphic::Line(x1, y1, x2, y2, _) => (x1.max(*x2), y1.max(*y2)),
+            Graphic::Rect(rect, _, _) => (rect.x + rect.w, rect.y + rect.h),
+            Graphic::Text(x, y, text, _) => {
+                let params = self.style.text_params();
+                (x + text_width(&text, &params) + MARGIN * 2.0,
+                    y + cap_height(&params) + MARGIN * 2.0)
+            }
+        };
+        self.expand_groups(x, y);
         self.draw_queue.push(DrawOp {
             z: self.cursor_z,
             graphic,
-        })
+        });
     }
 
     fn push_graphics(&mut self, gfx: Vec<Graphic>) {   
@@ -336,12 +346,10 @@ impl UI {
 
     fn push_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
         self.push_graphic(Graphic::Line(x1, y1, x2, y2, color));
-        self.expand_groups(x1.max(x2), y1.max(y2));
     }
 
     fn push_rect(&mut self, rect: Rect, fill: Color, stroke: Option<Color>) {
         self.push_graphic(Graphic::Rect(rect, fill, stroke));
-        self.expand_groups(rect.x + rect.w, rect.y + rect.h);
     }
 
     fn push_text(&mut self, x: f32, y: f32, text: String, color: Color) -> Rect {
@@ -353,7 +361,6 @@ impl UI {
             h: cap_height(&params) + MARGIN * 2.0,
         };
         self.push_graphic(Graphic::Text(x, y, text, color));
-        self.expand_groups(rect.x + rect.w, rect.y + rect.h);
         rect
     }
 
@@ -888,8 +895,7 @@ impl UI {
             h: line_height * options.len() as f32 + 2.0,
         };
 
-        self.push_graphic(Graphic::Rect(
-            list_rect, self.style.theme.bg, Some(self.style.theme.fg)));
+        self.push_rect(list_rect, self.style.theme.bg, Some(self.style.theme.fg));
 
         // draw options
         let mut hit_rect = Rect {
@@ -903,9 +909,9 @@ impl UI {
         let id = "patch name";
         for (i, option) in options.iter().enumerate() {
             if i == *index {
-                self.push_graphic(Graphic::Rect(hit_rect, self.style.theme.click, None));
+                self.push_rect(hit_rect, self.style.theme.click, None);
             } else if self.mouse_hits(hit_rect) {
-                self.push_graphic(Graphic::Rect(hit_rect, self.style.theme.hover, None));
+                self.push_rect(hit_rect, self.style.theme.hover, None);
                 if lmb {
                     *index = i;
                 }
@@ -926,8 +932,8 @@ impl UI {
                     self.instrument_edit_index = Some(i);
                     *index = i;
                 }
-                self.push_graphic(Graphic::Text(hit_rect.x - 1.0, hit_rect.y,
-                    option.to_owned(), self.style.theme.fg));
+                self.push_text(hit_rect.x - 1.0, hit_rect.y,
+                    option.to_owned(), self.style.theme.fg);
             }
             hit_rect.y += hit_rect.h;
         }

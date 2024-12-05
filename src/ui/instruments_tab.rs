@@ -100,6 +100,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
         i => Some(i - 1),
     };
 
+    ui.start_group();
     ui.layout = Layout::Horizontal;
     if ui.button("Add") {
         edit = Some(Edit::InsertPatch(patches.len(), Patch::new()));
@@ -111,6 +112,11 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
             edit = Some(Edit::RemovePatch(*index));
         }
     }
+    ui.layout = Layout::Vertical;
+    ui.end_group();
+
+    ui.start_group();
+    ui.layout = Layout::Horizontal;
     let patches = &mut module.patches;
     if ui.button("Save") {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
@@ -139,6 +145,17 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
                     *patch_index = Some(patches.len());
                 },
                 Err(e) => ui.report(e),
+            }
+        }
+    }
+    ui.layout = Layout::Vertical;
+    ui.end_group();
+    
+    if ui.button("Duplicate") {
+        if let Some(index) = patch_index {
+            if let Some(p) = patches.get(*index).map(|p| p.duplicate().ok()).flatten() {
+                edit = Some(Edit::InsertPatch(patches.len(), p));
+                *patch_index = Some(patches.len());
             }
         }
     }
