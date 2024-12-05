@@ -1,8 +1,10 @@
 //! Definitions for all stored module data except patches.
 
-use std::error::Error;
+use std::{error::Error, fs, path::PathBuf};
 
-use crate::{fx::GlobalFX, pitch::{Note, Tuning}, synth::Patch};
+use serde::{Deserialize, Serialize};
+
+use crate::{fx::FXSettings, pitch::{Note, Tuning}, synth::Patch};
 
 pub const TICKS_PER_BEAT: u32 = 120;
 
@@ -11,24 +13,28 @@ pub const NOTE_COLUMN: u8 = 0;
 pub const VEL_COLUMN: u8 = 1;
 pub const MOD_COLUMN: u8 = 2;
 
+#[derive(Serialize, Deserialize)]
 pub struct Module {
     pub title: String,
     pub author: String,
     pub tuning: Tuning,
-    pub fx: GlobalFX,
+    pub fx: FXSettings,
     pub kit: Vec<KitEntry>,
     pub patches: Vec<Patch>,
     pub tracks: Vec<Track>,
 
     // TODO: cap size of undo stack.
     //       could use https://crates.io/crates/deepsize?
+    #[serde(skip)]
     undo_stack: Vec<Edit>,
+    #[serde(skip)]
     redo_stack: Vec<Edit>,
+    #[serde(skip)]
     track_history: Vec<TrackEdit>,
 }
 
 impl Module {
-    pub fn new(fx: GlobalFX) -> Module {
+    pub fn new(fx: FXSettings) -> Module {
         Self {
             title: "".to_owned(),
             author: "".to_owned(),
@@ -47,12 +53,14 @@ impl Module {
         }
     }
 
-    pub fn load() -> Result<Module, Box<dyn Error>> {
-        todo!()
+    pub fn load(path: PathBuf) -> Result<Self, Box<dyn Error>> {
+        let input = fs::read(path)?;
+        Ok(rmp_serde::from_slice::<Self>(&input)?)
     }
 
-    pub fn save(&self) -> Result<(), Box<dyn Error>> {
-        todo!()
+    pub fn save(&self, path: PathBuf) -> Result<(), Box<dyn Error>> {
+        let contents = rmp_serde::to_vec(self)?;
+        Ok(fs::write(path, contents)?)
     }
 
     pub fn map_input(&self,
@@ -287,13 +295,14 @@ impl Module {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct KitEntry {
     pub input_note: Note,
     pub patch_index: usize,
     pub patch_note: Note,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Track {
     pub target: TrackTarget,
     pub channels: Vec<Channel>,
@@ -312,7 +321,7 @@ impl Track {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum TrackTarget {
     None,
     Global,
@@ -320,6 +329,7 @@ pub enum TrackTarget {
     Patch(usize),
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
     pub pitch_interp: Vec<u32>, // TODO
@@ -340,13 +350,13 @@ impl Channel {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Event {
     pub tick: u32,
     pub data: EventData,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum EventData {
     Pitch(Note),
     NoteOff,
@@ -377,6 +387,7 @@ impl EventData {
 }
 
 /// Defines a linked copy region.
+#[derive(Serialize, Deserialize)]
 pub struct Link {
     pub src_tick: u32,
     pub dst_tick: u32,

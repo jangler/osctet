@@ -12,7 +12,7 @@ const MAX_MODULATION: u8 = 9;
 /// Handles module playback. In methods that take a `track` argument, 0 can
 /// safely be used for keyjazz events (since track 0 will never sequence).
 pub struct Player {
-    seq: Sequencer,
+    pub seq: Sequencer,
     synths: Vec<Synth>, // one per track
     playing: bool,
     tick: u32,
@@ -32,6 +32,15 @@ impl Player {
             tempo: DEFAULT_TEMPO,
             looped: false,
         }
+    }
+
+    pub fn reinit(&mut self, num_tracks: usize) {
+        self.synths = (0..=num_tracks).map(|i| Synth::new(i)).collect();
+        self.playing = false;
+        self.tick = 0;
+        self.playtime = 0.0;
+        self.tempo = DEFAULT_TEMPO;
+        self.looped = false;
     }
 
     pub fn get_tick(&self) -> u32 {
@@ -193,7 +202,7 @@ pub fn render(module: &Module) -> Wave {
     let mut wave = Wave::new(2, sample_rate as f64);
     let mut seq = Sequencer::new(false, 2);
     seq.set_sample_rate(sample_rate as f64);
-    let mut fx = GlobalFX::new_from_settings(seq.backend(), module.fx.settings.clone());
+    let mut fx = GlobalFX::new(seq.backend(), &module.fx);
     let fadeout_gain = shared(1.0);
     fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
     fx.net.set_sample_rate(sample_rate as f64);

@@ -4,7 +4,7 @@ use std::error::Error;
 use std::sync::mpsc::{channel, Sender, Receiver};
 
 use config::Config;
-use fx::GlobalFX;
+use fx::{FXSettings, GlobalFX};
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
@@ -30,6 +30,8 @@ use ui::pattern_tab::PatternEditor;
 
 /// Application name, for window title, etc.
 pub const APP_NAME: &str = "Osctet";
+const MODULE_FILETYPE_NAME: &str = "Osctet module";
+const MODULE_EXT: &str = "osctet";
 
 const TABS: [&str; 3] = ["General", "Pattern", "Instruments"];
 
@@ -98,6 +100,7 @@ struct App {
     midi: Midi,
     config: Config,
     module: Module,
+    fx: GlobalFX,
     patch_index: Option<usize>, // if None, kit is selected
     ui: ui::UI,
     fullscreen: bool,
@@ -106,7 +109,7 @@ struct App {
 }
 
 impl App {
-    fn new(seq: Sequencer, global_fx: GlobalFX) -> Self {
+    fn new(seq: Sequencer, global_fx: GlobalFX, fx_settings: FXSettings) -> Self {
         let mut err: Option<Box<dyn Error>> = None;
         let config = match Config::load() {
             Ok(c) => c,
@@ -117,13 +120,14 @@ impl App {
         };
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
-        let module = Module::new(global_fx);
+        let module = Module::new(fx_settings);
         let mut app = App {
             player: Player::new(seq, module.tracks.len()),
             octave: 4,
             midi,
             config,
             module,
+            fx: global_fx,
             patch_index: Some(0),
             ui: ui::UI::new(),
             fullscreen: false,
@@ -179,6 +183,8 @@ impl App {
                 //       of changes
                 match key {
                     KeyCode::E => self.render_and_save(),
+                    KeyCode::O => self.open_module(),
+                    KeyCode::S => self.save_module(),
                     KeyCode::Y => if self.module.redo() {
                         self.player.update_synths(self.module.drain_track_history());
                         fix_patch_index(&mut self.patch_index, self.module.patches.len());
@@ -385,7 +391,8 @@ impl App {
         self.bottom_panel();
 
         match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
-            TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module),
+            TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module,
+                &mut self.fx),
             TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
@@ -446,6 +453,30 @@ impl App {
             self.ui.report("Module must have END event to export")
         }
     }
+
+    fn save_module(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
+            .save_file() {
+            if let Err(e) = self.module.save(path) {
+                self.ui.report(e);
+            }
+        }
+    }
+
+    fn open_module(&mut self) {
+        if let Some(path) = FileDialog::new()
+            .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
+            .pick_file() {
+            match Module::load(path) {
+                Ok(module) => {
+                    self.module = module;
+                    self.player.reinit(self.module.tracks.len());
+                }
+                Err(e) => self.ui.report(e),
+            }
+        }
+    }
 }
 
 fn input_names(input: &MidiInput) -> Vec<String> {
@@ -469,7 +500,8 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     let mut seq = Sequencer::new(false, 2);
     seq.set_sample_rate(config.sample_rate.0 as f64);
 
-    let mut global_fx = GlobalFX::new(seq.backend());
+    let fx_settings: FXSettings = Default::default();
+    let mut global_fx = GlobalFX::new(seq.backend(), &fx_settings);
     global_fx.net.set_sample_rate(config.sample_rate.0 as f64);
     let mut backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
     
@@ -492,7 +524,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     )?;
     stream.play()?;
 
-    let mut app = App::new(seq, global_fx);
+    let mut app = App::new(seq, global_fx, fx_settings);
 
     loop {
         app.frame();

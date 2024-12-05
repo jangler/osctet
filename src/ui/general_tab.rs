@@ -1,36 +1,36 @@
 use rfd::FileDialog;
 
-use crate::{fx::GlobalFX, module::Module, pitch::Tuning};
+use crate::{fx::{FXSettings, GlobalFX}, module::Module, pitch::Tuning};
 
 use super::*;
 
-pub fn draw(ui: &mut UI, module: &mut Module) {
+pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX) {
     ui.layout = Layout::Vertical;
-    fx_controls(ui, &mut module.fx);
+    fx_controls(ui, &mut module.fx, fx);
     ui.space(2.0);
     tuning_controls(ui, &mut module.tuning);
 }
 
-fn fx_controls(ui: &mut UI, fx: &mut GlobalFX) {
+fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.shared_slider("gain",
-        "Global volume", &fx.settings.gain.0, 0.0..=1.0, None);
+        "Global volume", &settings.gain.0, 0.0..=1.0, None);
 
     ui.label("REVERB");
 
     ui.shared_slider("reverb_level",
-        "Level", &fx.settings.reverb_amount.0, 0.0..=1.0, None);
+        "Level", &settings.reverb_amount.0, 0.0..=1.0, None);
 
     if ui.slider("predelay",
-        "Predelay time", &mut fx.settings.predelay_time, 0.0..=0.1, Some("s")) {
-        fx.commit_predelay();
+        "Predelay time", &mut settings.predelay_time, 0.0..=0.1, Some("s")) {
+        fx.commit_predelay(settings);
     }
     if ui.slider("room_size",
-        "Room size", &mut fx.settings.reverb_room_size, 5.0..=100.0, Some("m")) {
-        fx.commit_reverb();
+        "Room size", &mut settings.reverb_room_size, 5.0..=100.0, Some("m")) {
+        fx.commit_reverb(settings);
     }
     if ui.slider("decay_time",
-        "Decay time", &mut fx.settings.reverb_time, 0.0..=5.0, Some("s")) {
-        fx.commit_reverb();
+        "Decay time", &mut settings.reverb_time, 0.0..=5.0, Some("s")) {
+        fx.commit_reverb(settings);
     }
 }
 

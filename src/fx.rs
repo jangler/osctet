@@ -2,11 +2,12 @@
 
 use fundsp::hacker32::*;
 use realseq::SequencerBackend;
+use serde::{Deserialize, Serialize};
 
 use crate::synth::Parameter;
 
 // serializable global FX settings
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FXSettings {
     pub gain: Parameter,
     pub reverb_amount: Parameter,
@@ -50,18 +51,13 @@ impl Default for FXSettings {
 
 // controls updates of global FX
 pub struct GlobalFX {
-    pub settings: FXSettings,
     pub net: Net,
     predelay_id: NodeId,
     reverb_id: NodeId,
 }
 
 impl GlobalFX {
-    pub fn new(backend: SequencerBackend) -> Self {
-        Self::new_from_settings(backend, Default::default())
-    }
-
-    pub fn new_from_settings(backend: SequencerBackend, settings: FXSettings) -> Self {
+    pub fn new(backend: SequencerBackend, settings: &FXSettings) -> Self {
         let (predelay, predelay_id) = Net::wrap_id(settings.make_predelay());
         let (reverb, reverb_id) = Net::wrap_id(settings.make_reverb());
 
@@ -71,23 +67,22 @@ impl GlobalFX {
                 >> (highpass_hz(1.0, 0.1) | highpass_hz(1.0, 0.1))
                 >> (shape(Tanh(1.0)) | shape(Tanh(1.0)))
                 >> (multipass::<U2>() & (var(&settings.reverb_amount.0) >> split::<U2>()) * (predelay >> reverb)),
-            settings,
             predelay_id,
             reverb_id,
         }
     }
 
     /// Constructs a new instance with a dummy sequencer backend.
-    pub fn new_dummy() -> Self {
-        Self::new(Sequencer::new(false, 2).backend())
+    pub fn new_dummy(settings: &FXSettings) -> Self {
+        Self::new(Sequencer::new(false, 2).backend(), settings)
     }
 
-    pub fn commit_predelay(&mut self) {
-        self.crossfade(self.predelay_id, self.settings.make_predelay());
+    pub fn commit_predelay(&mut self, settings: &FXSettings) {
+        self.crossfade(self.predelay_id, settings.make_predelay());
     }
 
-    pub fn commit_reverb(&mut self) {
-        self.crossfade(self.reverb_id, self.settings.make_reverb());
+    pub fn commit_reverb(&mut self, settings: &FXSettings) {
+        self.crossfade(self.reverb_id, settings.make_reverb());
     }
 
     fn crossfade(&mut self, id: NodeId, unit: Box<dyn AudioUnit>) {

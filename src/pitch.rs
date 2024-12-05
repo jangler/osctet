@@ -5,6 +5,8 @@ use std::{fmt, fs};
 use std::cmp::max;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 const REFERENCE_MIDI_PITCH: f32 = 69.0; // A4
 const DEFAULT_ROOT: Note = Note {
     arrows: 0,
@@ -21,7 +23,7 @@ fn find_ratio(cents: f32) -> f32 {
     2.0_f32.powf(2.0_f32.log2() * cents / 1200.0)
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Nominal {
     A, B, C, D, E, F, G
 }
@@ -53,7 +55,7 @@ impl Nominal {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Tuning {
     pub root: Note,
     pub scale: Vec<f32>,
@@ -170,7 +172,7 @@ fn parse_interval(s: &str) -> Option<f32> {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Note {
     pub arrows: i8,
     pub nominal: Nominal,
