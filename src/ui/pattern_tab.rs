@@ -70,6 +70,11 @@ impl PatternEditor {
             && self.edit_start.column != NOTE_COLUMN
     }
 
+    pub fn in_global_track(&self, ui: &UI) -> bool {
+        ui.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
+            && self.edit_start.track == 0
+    }
+
     /// Convert mouse coordinates to a Position.
     fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();

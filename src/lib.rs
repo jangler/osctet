@@ -211,7 +211,8 @@ impl App {
             } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.ui.note_queue.push(EventData::Pitch(note));
                 if !self.ui.accepting_note_input()
-                    && !self.pattern_editor.in_digit_column(&self.ui) {
+                    && !self.pattern_editor.in_digit_column(&self.ui)
+                    && !self.pattern_editor.in_global_track(&self.ui) {
                     if let Some((patch, note)) =
                         self.module.map_input(self.keyjazz_patch_index(), note) {
                         let key = Key {
