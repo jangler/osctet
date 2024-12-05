@@ -1,4 +1,4 @@
-use fundsp::{hacker::{shared, var, AudioUnit, BlockRateAdapter, Sequencer}, wave::Wave};
+use fundsp::hacker32::*;
 
 use crate::{fx::GlobalFX, module::{EventData, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 

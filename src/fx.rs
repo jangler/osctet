@@ -1,6 +1,6 @@
 // global FX
 
-use fundsp::hacker::*;
+use fundsp::hacker32::*;
 use realseq::SequencerBackend;
 
 use crate::synth::Parameter;

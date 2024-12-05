@@ -6,7 +6,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use config::Config;
 use fx::GlobalFX;
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
-use fundsp::hacker::*;
+use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use module::{EventData, Module, TrackTarget};
 use playback::Player;

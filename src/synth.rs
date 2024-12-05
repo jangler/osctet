@@ -4,7 +4,7 @@ use core::f64;
 use std::{collections::HashMap, error::Error, fmt::Display, fs, path::Path, u64};
 
 use rand::prelude::*;
-use fundsp::hacker::*;
+use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
 use crate::adsr::adsr_scalable;
@@ -30,7 +30,7 @@ const SMOOTH_TIME: f32 = 0.01;
 
 const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 
-const LFO_DELAY_CURVE: f64 = 3.0; // cubic
+const LFO_DELAY_CURVE: f32 = 3.0; // cubic
 
 // wrap this type so we can serialize it
 #[derive(Clone, Serialize, Deserialize)]
@@ -108,7 +108,7 @@ impl Waveform {
 
     fn make_osc_net(&self, settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
         let prev_freq = vars.prev_freq.unwrap_or(vars.freq.value());
-        let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq as f64 } else { x });
+        let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio.0)
             * var_fn(&osc.fine_pitch.0, |x| pow(SEMITONE_RATIO, x))
@@ -143,7 +143,7 @@ impl Waveform {
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
             >> shape_fn(|x| pow(MAX_LFO_RATE/MIN_LFO_RATE, x)))
             >> shape_fn(|x| clamp(MIN_LFO_RATE, MAX_LFO_RATE, x));
-        let dt = lfo.delay as f64;
+        let dt = lfo.delay;
         let d = envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)));
         let p = vars.lfo_phases[index];
         let au: Box<dyn AudioUnit> = match self {
@@ -718,8 +718,8 @@ impl ADSR {
     }
 
     fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
-        let attack = self.attack as f64;
-        let power = self.power as f64;
+        let attack = self.attack;
+        let power = self.power;
         let scale = settings.dsp_component(vars, ModTarget::EnvSpeed(index), path)
             >> shape_fn(|x| pow(MAX_ENV_SPEED, -x));
         Net::wrap(Box::new(
