@@ -195,31 +195,22 @@ const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to a 6 in pattern
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
     active_voices: HashMap<Key, Voice>,
-    released_voices: VecDeque<Voice>,
+    released_voices: Vec<VecDeque<Voice>>, // per channel
     bend_memory: Vec<f32>,
     mod_memory: Vec<f32>,
     pressure_memory: Vec<f32>,
     prev_freq: Option<f32>,
-    max_voices: usize,
 }
 
 impl Synth {
-    pub fn new(track_index: usize) -> Self {
-        // TODO: max_voices tracking doesn't account for removing channels,
-        //       which could lead to playback differences after a module is
-        //       saved and loaded
+    pub fn new() -> Self {
         Self {
             active_voices: HashMap::new(),
-            released_voices: VecDeque::new(),
+            released_voices: vec![VecDeque::new()],
             bend_memory: vec![0.0],
             mod_memory: vec![0.0],
             pressure_memory: vec![DEFAULT_PRESSURE],
             prev_freq: None,
-            max_voices: if track_index == 0 {
-                8
-            } else {
-                VOICES_PER_CHANNEL
-            },
         }
     }
 
@@ -240,6 +231,9 @@ impl Synth {
         while self.pressure_memory.len() <= index {
             self.pressure_memory.push(DEFAULT_PRESSURE);
         }
+        while self.released_voices.len() <= index {
+            self.released_voices.push(VecDeque::new());
+        }
     }
 
     /// If pressure is None, use memory.
@@ -255,7 +249,7 @@ impl Synth {
             for key in removed_keys {
                 if let Some(voice) = self.active_voices.remove(&key) {
                     voice.off(seq);
-                    self.released_voices.push_back(voice);
+                    self.released_voices[key.channel as usize].push_back(voice);
                 }
             }
         }
@@ -269,9 +263,9 @@ impl Synth {
         let insert_voice = match patch.play_mode {
             PlayMode::Poly => true,
             PlayMode::Mono => {
-                for (_, voice) in self.active_voices.drain() {
+                for (key, voice) in self.active_voices.drain() {
                     voice.off(seq);
-                    self.released_voices.push_back(voice);
+                    self.released_voices[key.channel as usize].push_back(voice);
                 }
                 true
             },
@@ -289,8 +283,6 @@ impl Synth {
         };
         if insert_voice {
             let channel = key.channel as usize;
-            self.max_voices = std::cmp::Ord::max(self.max_voices,
-                (channel + 1) * VOICES_PER_CHANNEL);
             self.expand_memory(channel);
             let pressure = if let Some(p) = pressure {
                 self.pressure_memory[channel] = p;
@@ -300,27 +292,23 @@ impl Synth {
             };
             self.active_voices.insert(key, Voice::new(pitch, bend, pressure,
                 self.mod_memory[channel], self.prev_freq, &patch, seq));
-            self.check_truncate_voices(seq);
+            self.check_truncate_voices(channel, seq);
             self.prev_freq = Some(midi_hz(pitch));
         }
     }
 
     /// Cut the oldest released voice if max_voices is exceeded.
-    fn check_truncate_voices(&mut self, seq: &mut Sequencer) {
-        if self.active_voices.len() + self.released_voices.len() > self.max_voices {
-            if let Some(voice) = self.released_voices.pop_front() {
-                voice.cut(seq);
-            } else if let Some(k) = self.active_voices.keys().next().cloned() {
-                let voice = self.active_voices.remove(&k).unwrap();
-                voice.cut(seq);
-            }
+    fn check_truncate_voices(&mut self, channel: usize, seq: &mut Sequencer) {
+        if self.released_voices[channel].len() >= VOICES_PER_CHANNEL {
+            let voice = self.released_voices[channel].pop_front().unwrap();
+            voice.cut(seq);
         }
     }
 
     pub fn note_off(&mut self, key: Key, seq: &mut Sequencer) {
         if let Some(voice) = self.active_voices.remove(&key) {
             voice.off(seq);
-            self.released_voices.push_back(voice);
+            self.released_voices[key.channel as usize].push_back(voice);
         }
     }
 
@@ -333,7 +321,7 @@ impl Synth {
         for k in remove_keys {
             let voice = self.active_voices.remove(&k).unwrap();
             voice.off(seq);
-            self.released_voices.push_back(voice);
+            self.released_voices[k.channel as usize].push_back(voice);
         }
     }
 
