@@ -459,6 +459,7 @@ impl App {
         if self.module.ends() {
             if let Some(path) = FileDialog::new()
                 .add_filter("WAV file", &["wav"])
+                .set_file_name(self.module.title.clone())
                 .save_file() {
                 match playback::render(&self.module).save_wav16(path) {
                     Ok(_) => self.ui.report("Wrote WAV."),
