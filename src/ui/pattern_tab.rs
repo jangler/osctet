@@ -334,17 +334,24 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     let end_y = ui.bounds.h - ui.cursor_y
         + module.last_event_tick().unwrap_or(0) as f32
         * BEAT_HEIGHT / TICKS_PER_BEAT as f32;
-    ui.vertical_scrollbar(&mut pe.scroll, end_y, ui.bounds.y + ui.bounds.h - ui.cursor_y);
+    let viewport_h = ui.bounds.h + ui.bounds.y - ui.cursor_y;
+    ui.vertical_scrollbar(&mut pe.scroll, end_y, viewport_h);
     ui.cursor_z -= 1;
+    let viewport = Rect {
+        x: ui.bounds.x,
+        y: ui.cursor_y,
+        w: ui.bounds.w,
+        h: viewport_h,
+    };
     ui.cursor_y -= pe.scroll;
 
-    if mouse_position_vec2().y >= ui.cursor_y {
+    if viewport.contains(mouse_position_vec2()) {
         if is_mouse_button_pressed(MouseButton::Left) {
             pe.edit_end = pe.position_from_mouse(ui, &track_xs, &module.tracks);
             if !is_shift_down() {
                 pe.edit_start = pe.edit_end;
             }
-        } else if is_mouse_button_down(MouseButton::Left) {
+        } else if is_mouse_button_down(MouseButton::Left) && !ui.grabbed() {
             pe.edit_end = pe.position_from_mouse(ui, &track_xs, &module.tracks);
             fix_cursors(pe, &module.tracks);
         }

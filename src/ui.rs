@@ -207,6 +207,10 @@ impl UI {
         }
     }
 
+    pub fn grabbed(&self) -> bool {
+        self.scrollbar_grabbed || self.focused_slider.is_some()
+    }
+
     pub fn get_tab(&self, key: &str) -> Option<usize> {
         self.tabs.get(key).copied()
     }
