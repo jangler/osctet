@@ -331,7 +331,10 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.push_rect(rect, ui.style.theme.bg, None);
     ui.cursor_x = track_xs[0];
 
-    ui.vertical_scrollbar(&mut pe.scroll, 10_000.0, ui.bounds.y + ui.bounds.h - ui.cursor_y);
+    let end_y = ui.bounds.h - ui.cursor_y
+        + module.last_event_tick().unwrap_or(0) as f32
+        * BEAT_HEIGHT / TICKS_PER_BEAT as f32;
+    ui.vertical_scrollbar(&mut pe.scroll, end_y, ui.bounds.y + ui.bounds.h - ui.cursor_y);
     ui.cursor_z -= 1;
     ui.cursor_y -= pe.scroll;
 

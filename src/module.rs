@@ -303,6 +303,15 @@ impl Module {
         }
         n
     }
+
+    /// Return the tick value of the last event in the pattern.
+    pub fn last_event_tick(&self) -> Option<u32> {
+        self.tracks.iter().flat_map(|t| {
+            t.channels.iter().flat_map(|c| {
+                c.events.iter().map(|e| e.tick)
+            })
+        }).max()
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
