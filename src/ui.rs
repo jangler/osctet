@@ -569,7 +569,7 @@ impl UI {
         };
 
         self.push_rect(rect, fill, Some(stroke));
-        self.push_text(x, y, label.to_owned(), self.style.theme.control_fg);
+        self.push_text(x, y, label.to_owned(), self.style.theme.fg);
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
@@ -1069,7 +1069,7 @@ impl UI {
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
         self.cursor_z += TOOLTIP_Z_OFFSET;
-        self.text_rect(text, x, y, self.style.theme.content_bg, false);
+        self.text_rect(text, x, y, self.style.theme.bg, false);
         self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
@@ -1129,7 +1129,7 @@ fn alert_dialog(style: &Style, message: &str) {
     let params = style.text_params();
     let mut r = center(fit_strings(params.clone(), &[message.to_owned()]));
     r.h += MARGIN;
-    draw_filled_rect(r, style.theme.bg, style.theme.fg);
+    draw_filled_rect(r, style.theme.bg, style.theme.border_unfocused);
     draw_text_topleft(params.clone(), message, r.x, r.y);
 }
 
