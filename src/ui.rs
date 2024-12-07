@@ -150,9 +150,6 @@ pub struct UI {
     cursor_x: f32,
     cursor_y: f32,
     cursor_z: i8,
-    grid_x: f32,
-    column_widths: Vec<f32>,
-    column_index: usize,
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
     dialog: Option<Dialog>,
@@ -180,9 +177,6 @@ impl UI {
             cursor_x: 0.0,
             cursor_y: 0.0,
             cursor_z: 0,
-            grid_x: 0.0,
-            column_widths: Vec::new(),
-            column_index: 0,
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
             dialog: None,
@@ -281,34 +275,6 @@ impl UI {
         // drain input queues
         while let Some(_) = get_char_pressed() {}
         self.note_queue.clear();
-    }
-
-    // TODO: this could probably be made to work better by implementing it in
-    //       terms of groups. then we wouldn't need column widths?
-    pub fn start_grid(&mut self, column_widths: &[f32], column_names: &[&str]) {
-        assert_eq!(column_widths.len(), column_names.len());
-        self.layout = Layout::Horizontal;
-        self.grid_x = self.cursor_x;
-        self.column_widths = column_widths.to_vec();
-        self.column_index = 0;
-        for name in column_names {
-            self.offset_label(name);
-            self.next_cell();
-        }
-    }
-
-    pub fn end_grid(&mut self) {
-        self.layout = Layout::Vertical;
-    }
-
-    pub fn next_cell(&mut self) {
-        self.column_index += 1;
-        if self.column_index >= self.column_widths.len() {
-            self.column_index = 0;
-            self.cursor_y += cap_height(&self.style.text_params()) + MARGIN * 3.0;
-        }
-        self.cursor_x = self.grid_x
-            + self.column_widths[..self.column_index].iter().sum::<f32>();
     }
 
     pub fn space(&mut self, scale: f32) {
