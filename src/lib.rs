@@ -128,11 +128,11 @@ impl App {
             player: Player::new(seq, module.tracks.len()),
             octave: 4,
             midi,
+            ui: ui::UI::new(config.theme.clone()),
             config,
             module,
             fx: global_fx,
             patch_index: Some(0),
-            ui: ui::UI::new(),
             fullscreen: false,
             pattern_editor: PatternEditor::new(),
             instruments_scroll: 0.0,
@@ -409,7 +409,7 @@ impl App {
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index, &mut self.instruments_scroll),
-            TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui),
+            TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config),
             _ => panic!("bad tab value"),
         }
 

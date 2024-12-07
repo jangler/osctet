@@ -2,21 +2,25 @@
 
 use macroquad::color::Color;
 use palette::{FromColor, Lchuv, Srgb};
+use serde::{Deserialize, Serialize};
 
 const DEFAULT_ACCENT1_HUE: f32 = 180.0;
 const DEFAULT_ACCENT2_HUE: f32 = -90.0;
 const DEFAULT_ACCENT_CHROMA: f32 = 60.0;
 
 // turns out Lchuv is not actually perceptually uniform --
-// these need to be doubled in dark themes
-const PANEL_L_OFFSET: f32 = 5.0;
-const CONTROL_L_OFFSET: f32 = 10.0;
-const HOVER_L_OFFSET: f32 = 5.0;
-const CLICK_L_OFFSET: f32 = 10.0;
-const ACCENT_L_OFFSET: f32 = 15.0;
+// these need to be scaled up in dark themes
+const PANEL_L_OFFSET: f32 = 2.0;
+const CONTROL_L_OFFSET: f32 = 4.0;
+const HOVER_L_OFFSET: f32 = 3.0;
+const CLICK_L_OFFSET: f32 = 6.0;
+const ACCENT_L_OFFSET: f32 = 12.0;
+
+const DARK_CONTRAST_SCALE: f32 = 2.25;
 
 /// Color theme using four seed colors. Seed colors use the CIE L*C*uv h°uv
 /// color space, which is cylindrical and perceptually uniform.
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Theme {
     pub fg: Lchuv,
     pub bg: Lchuv,
@@ -54,35 +58,35 @@ impl Theme {
     }
 
     pub fn accent1_bg(&self) -> Color {
-        let sign = if self.is_light() { -1.0 } else { 2.0 };
+        let sign = if self.is_light() { -1.0 } else { DARK_CONTRAST_SCALE };
         let c = Lchuv::new(self.bg.l + sign * ACCENT_L_OFFSET,
             self.accent1.chroma * 0.25, self.accent1.hue);
         color_from_lchuv(c)
     }
 
     pub fn accent1_fg(&self) -> Color {
-        let sign = if self.is_light() { -2.0 } else { 1.0 };
+        let sign = if self.is_light() { -DARK_CONTRAST_SCALE } else { 1.0 };
         let c = Lchuv::new(self.fg.l - sign * ACCENT_L_OFFSET,
             self.accent1.chroma, self.accent1.hue);
         color_from_lchuv(c)
     }
 
     pub fn accent2_bg(&self) -> Color {
-        let sign = if self.is_light() { -1.0 } else { 2.0 };
+        let sign = if self.is_light() { -1.0 } else { DARK_CONTRAST_SCALE };
         let c = Lchuv::new(self.bg.l + sign * ACCENT_L_OFFSET,
             self.accent2.chroma * 0.25, self.accent2.hue);
         color_from_lchuv(c)
     }
 
     pub fn accent2_fg(&self) -> Color {
-        let sign = if self.is_light() { -2.0 } else { 1.0 };
+        let sign = if self.is_light() { -DARK_CONTRAST_SCALE } else { 1.0 };
         let c = Lchuv::new(self.fg.l - sign * ACCENT_L_OFFSET,
             self.accent2.chroma, self.accent2.hue);
         color_from_lchuv(c)
     }
 
     fn bg_plus(&self, offset: f32) -> Color {
-        let sign = if self.is_light() { -1.0 } else { 2.0 };
+        let sign = if self.is_light() { -1.0 } else { DARK_CONTRAST_SCALE };
         let bg = Lchuv::new(self.bg.l + sign * offset, self.bg.chroma, self.bg.hue);
         color_from_lchuv(bg)
     }

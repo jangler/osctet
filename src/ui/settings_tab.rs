@@ -1,8 +1,10 @@
 use palette::Lchuv;
 
+use crate::config::Config;
+
 use super::{theme::Theme, Layout, UI};
 
-pub fn draw(ui: &mut UI) {
+pub fn draw(ui: &mut UI, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
     ui.header("COLOR THEME");
 
@@ -20,6 +22,12 @@ pub fn draw(ui: &mut UI) {
     }
     if ui.button("Reset (dark)") {
         ui.style.theme = Theme::dark();
+    }
+    if ui.button("Save settings") {
+        cfg.theme = Some(ui.style.theme.clone());
+        if let Err(e) = cfg.save() {
+            ui.report(e);
+        }
     }
 }
 

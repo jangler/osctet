@@ -2,12 +2,15 @@ use std::error::Error;
 
 use serde::{Serialize, Deserialize};
 
+use crate::ui::theme::Theme;
+
 const CONFIG_PATH: &str = "config.toml";
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub default_midi_input: Option<String>,
     pub midi_send_pressure: Option<bool>,
+    pub theme: Option<Theme>,
 }
 
 impl Config {
@@ -15,6 +18,7 @@ impl Config {
         Self {
             default_midi_input: None,
             midi_send_pressure: Some(true),
+            theme: None,
         }
     }
 

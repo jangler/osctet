@@ -165,12 +165,12 @@ pub struct UI {
 }
 
 impl UI {
-    pub fn new() -> Self {
+    pub fn new(theme: Option<Theme>) -> Self {
         Self {
             style: Style {
                 font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
                     .expect("included font should be loadable"),
-                theme: Theme::light(), // TODO: load from config
+                theme: theme.unwrap_or(Theme::light()),
             },
             open_combo_box: None,
             tabs: HashMap::new(),
@@ -815,7 +815,7 @@ impl UI {
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
-        if self.text_box(id, label, MARGIN, SLIDER_WIDTH, &mut text) {
+        if self.text_box(id, label, SLIDER_WIDTH + MARGIN * 2.0, &mut text) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = f.max(*range.start()).min(*range.end());
@@ -841,7 +841,7 @@ impl UI {
         let w = chars_wide as f32 * text_width("x", &self.style.text_params())
             + MARGIN * 2.0;
 
-        if self.text_box(label, label, 0.0, w, &text) {
+        if self.text_box(label, label, w, &text) {
             let s = self.focused_text.as_ref().map(|x| x.text.clone());
             self.focused_text = None;
             s
@@ -851,11 +851,9 @@ impl UI {
     }
 
     /// Returns true if the text was submitted (i.e. Enter was pressed).
-    fn text_box(&mut self, id: &str, label: &str, offset_x: f32, width: f32,
-        text: &str
-    ) -> bool {
+    fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str) -> bool {
         let box_rect = Rect {
-            x: self.cursor_x + MARGIN + offset_x,
+            x: self.cursor_x + MARGIN,
             y: self.cursor_y + MARGIN,
             w: width,
             h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
