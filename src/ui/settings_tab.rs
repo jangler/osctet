@@ -8,6 +8,9 @@ pub fn draw(ui: &mut UI, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
     ui.header("COLOR THEME");
 
+    // TODO: currently accent 2 isn't used on this page, so there's no way to
+    //       see the effects of adjusting it
+
     ui.start_group();
     color_controls(ui, "Foreground", false, |t| &mut t.fg);
     color_controls(ui, "Background", false, |t| &mut t.bg);

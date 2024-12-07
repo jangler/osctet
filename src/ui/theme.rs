@@ -18,6 +18,8 @@ const ACCENT_L_OFFSET: f32 = 12.0;
 
 const DARK_CONTRAST_SCALE: f32 = 2.25;
 
+// TODO: cache generated colors and only regenerate when needed
+
 /// Color theme using four seed colors. Seed colors use the CIE L*C*uv h°uv
 /// color space, which is cylindrical and perceptually uniform.
 #[derive(Serialize, Deserialize, Clone)]

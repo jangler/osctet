@@ -499,7 +499,8 @@ impl UI {
         self.update_cursor(rect.w, rect.h);
     }
 
-    fn text_rect(&mut self, label: &str, x: f32, y: f32, bg: Color, highlight_bg: bool
+    fn text_rect(&mut self, label: &str, x: f32, y: f32,
+        bg: &Color, bg_hover: &Color, bg_click: &Color,
     ) -> (Rect, MouseEvent) {
         let params = self.style.text_params();
         let rect = Rect {
@@ -512,18 +513,16 @@ impl UI {
     
         // draw fill based on mouse state
         let (fill, stroke) = if mouse_hit {
-            (if is_mouse_button_down(MouseButton::Left) && highlight_bg {
-                bg
-            } else if highlight_bg {
-                bg
+            (if is_mouse_button_down(MouseButton::Left) {
+                bg_click
             } else {
-                bg
+                bg_hover
             }, self.style.theme.border_focused())
         } else {
             (bg, self.style.theme.border_unfocused())
         };
 
-        self.push_rect(rect, fill, Some(stroke));
+        self.push_rect(rect, *fill, Some(stroke));
         self.push_text(x, y, label.to_owned(), self.style.theme.fg());
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
@@ -539,7 +538,9 @@ impl UI {
     pub fn button(&mut self, label: &str) -> bool {
         let (rect, event) = self.text_rect(label,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
-            self.style.theme.control_bg(), true);
+            &self.style.theme.control_bg(),
+            &self.style.theme.control_bg_hover(),
+            &self.style.theme.control_bg_click());
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
         event == MouseEvent::Released
     }
@@ -549,7 +550,9 @@ impl UI {
         let button_text = if *value { "X" } else { " " };
         let (rect, event) = self.text_rect(button_text,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
-            self.style.theme.content_bg(), false);
+            &self.style.theme.content_bg(),
+            &self.style.theme.content_bg(),
+            &self.style.theme.content_bg());
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN * 2.0);
         let clicked = event == MouseEvent::Released;
         let label_rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
@@ -568,7 +571,9 @@ impl UI {
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
-            self.style.theme.control_bg(), true);
+            &self.style.theme.control_bg(),
+            &self.style.theme.control_bg_hover(),
+            &self.style.theme.control_bg_click());
         let label_dim = if !label.is_empty() {
             self.push_text(self.cursor_x + button_rect.w + MARGIN,
                 self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg())
@@ -1027,7 +1032,10 @@ impl UI {
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
         self.cursor_z += TOOLTIP_Z_OFFSET;
-        self.text_rect(text, x, y, self.style.theme.panel_bg(), false);
+        self.text_rect(text, x, y,
+            &self.style.theme.panel_bg(),
+            &self.style.theme.panel_bg(),
+            &self.style.theme.panel_bg());
         self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
