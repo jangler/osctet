@@ -34,7 +34,7 @@ pub const APP_NAME: &str = "Osctet";
 const MODULE_FILETYPE_NAME: &str = "Osctet module";
 const MODULE_EXT: &str = "osctet";
 
-const TABS: [&str; 3] = ["General", "Pattern", "Instruments"];
+const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
 
 struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll
@@ -94,6 +94,7 @@ const MAIN_TAB_ID: &str = "main";
 const TAB_GENERAL: usize = 0;
 const TAB_PATTERN: usize = 1;
 const TAB_INSTRUMENTS: usize = 2;
+const TAB_SETTINGS: usize = 3;
 
 struct App {
     player: Player,
@@ -229,6 +230,7 @@ impl App {
                     KeyCode::F1 => self.ui.set_tab(MAIN_TAB_ID, 0),
                     KeyCode::F2 => self.ui.set_tab(MAIN_TAB_ID, 1),
                     KeyCode::F3 => self.ui.set_tab(MAIN_TAB_ID, 2),
+                    KeyCode::F4 => self.ui.set_tab(MAIN_TAB_ID, 3),
                     KeyCode::F5 => self.player.play_from(0),
                     KeyCode::F7 => self.player.play_from(self.pattern_editor.cursor_tick()),
                     KeyCode::F8 => self.player.stop(),
@@ -407,6 +409,7 @@ impl App {
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index, &mut self.instruments_scroll),
+            TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui),
             _ => panic!("bad tab value"),
         }
 

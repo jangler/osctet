@@ -149,7 +149,8 @@ impl PatternEditor {
             w: end.x - start.x,
             h: end.y - start.y,
         };
-        ui.push_rect(selection_rect, ui.style.theme.click, None);
+        let color = Color { a: 0.1, ..ui.style.theme.content_fg };
+        ui.push_rect(selection_rect, color, None);
     }
     
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
@@ -299,6 +300,31 @@ impl PatternEditor {
         }
         // TODO: report error?
     }
+
+    fn draw_channel(&self, ui: &mut UI, track_index: usize, channel: &Channel) {
+        let char_width = text_width("x", &ui.style.text_params());
+
+        // draw columns
+        // ui.cursor_z -= 1;
+        // for col in [NOTE_COLUMN, VEL_COLUMN, MOD_COLUMN] {
+        //     if col == GLOBAL_COLUMN || track_index > 0 {
+        //         let rect = Rect {
+        //             x: ui.cursor_x + column_x(col, char_width) + (MARGIN * 0.5).round(),
+        //             y: ui.cursor_y + self.scroll,
+        //             w: column_x(col + 1, char_width) - column_x(col, char_width),
+        //             h: ui.bounds.h,
+        //         };
+        //         let color = Color { a: 0.1, ..ui.style.theme.column[col as usize] };
+        //         ui.push_rect(rect, color, None);
+        //     }
+        // }
+        // ui.cursor_z += 1;
+
+        // draw events
+        for event in &channel.events {
+            draw_event(ui, event, char_width);
+        }
+    }
 }
 
 pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut PatternEditor) {
@@ -335,14 +361,17 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         + module.last_event_tick().unwrap_or(0) as f32
         * BEAT_HEIGHT / TICKS_PER_BEAT as f32;
     let viewport_h = ui.bounds.h + ui.bounds.y - ui.cursor_y;
+    ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
+        ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
+        ui.style.theme.border_unfocused);
     ui.vertical_scrollbar(&mut pe.scroll, end_y, viewport_h);
-    ui.cursor_z -= 1;
     let viewport = Rect {
         x: ui.bounds.x,
         y: ui.cursor_y,
         w: ui.bounds.w,
         h: viewport_h,
     };
+    ui.cursor_z -= 1;
     ui.cursor_y -= pe.scroll;
 
     if viewport.contains(mouse_position_vec2()) {
@@ -357,6 +386,10 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         }
     }
 
+    ui.cursor_z -= 1;
+    ui.push_rect(viewport, ui.style.theme.content_bg, None);
+    ui.cursor_z += 1;
+
     draw_playhead(ui, player.get_tick(), left_x);
     draw_beats(ui, left_x);
     pe.draw_cursor(ui, &track_xs);
@@ -367,7 +400,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         let chan_width = channel_width(track_i, char_width);
         for (channel_i, channel) in track.channels.iter().enumerate() {
             ui.cursor_x = track_xs[track_i] + chan_width * channel_i as f32;
-            draw_channel(ui, channel);
+            pe.draw_channel(ui, track_i, channel);
         }
     }
 }
@@ -377,7 +410,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
     let mut y = ui.cursor_y;
     while y < ui.bounds.y + ui.bounds.h {
         if y >= 0.0 {
-            ui.push_text(x, y, beat.to_string(), ui.style.theme.fg);
+            ui.push_text(x, y, beat.to_string(), ui.style.theme.content_fg);
         }
         beat += 1;
         y += BEAT_HEIGHT;
@@ -521,14 +554,8 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
         w: ui.bounds.w,
         h: cap_height(&ui.style.text_params()) + MARGIN * 2.0,
     };
-    ui.push_rect(rect, ui.style.theme.hover, None);
-}
-
-fn draw_channel(ui: &mut UI, channel: &Channel) {
-    let char_width = text_width("x", &ui.style.text_params());
-    for event in &channel.events {
-        draw_event(ui, event, char_width);
-    }
+    let color = Color { a: 0.1, ..ui.style.theme.content_fg };
+    ui.push_rect(rect, color, None);
 }
 
 fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
@@ -536,7 +563,8 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
     if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
         return
     }
-    let x = ui.cursor_x + column_x(evt.data.column(), char_width);
+    let col = evt.data.column();
+    let x = ui.cursor_x + column_x(col, char_width);
     if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
         return
     }
@@ -550,7 +578,14 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
         EventData::Tempo(t) => t.round().to_string(),
         EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
     };
-    ui.push_text(x, y, text, ui.style.theme.fg);
+    let color = Color {
+        a: match evt.data {
+            EventData::Pressure(x) | EventData::Modulation(x) => 0.5 + x as f32 / 18.0,
+            _ => 1.0,
+        },
+        ..ui.style.theme.column[col as usize]
+    };
+    ui.push_text(x, y, text, color);
 }
 
 fn translate_cursor(pe: &mut PatternEditor, offset: i64) {
