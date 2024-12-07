@@ -62,12 +62,10 @@ fn draw_filled_rect(r: Rect, fill: Color, stroke: Color) {
 
 /// Color theme.
 pub struct Theme {
-    pub bg: Color,
     pub fg: Color,
+    pub panel_bg: Color,
     pub content_bg: Color,
-    pub content_fg: Color,
     pub control_bg: Color,
-    pub control_fg: Color,
     pub border_unfocused: Color,
     pub border_focused: Color,
     pub column: [Color; 3],
@@ -83,19 +81,34 @@ impl Theme {
     }
 }
 
+// TODO: color math should use something like this:
+//       https://docs.rs/palette/0.7.6/palette/hsluv/struct.Hsluv.html
+
 pub const LIGHT_THEME: Theme = Theme {
-    bg: Color { r: 0.98, g: 0.98, b: 0.98, a: 1.0 },
     fg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+    panel_bg: Color { r: 0.98, g: 0.98, b: 0.98, a: 1.0 },
     content_bg: Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
-    content_fg: Color { r: 0.15, g: 0.15, b: 0.15, a: 1.0 },
     control_bg: Color { r: 0.92, g: 0.92, b: 0.92, a: 1.0 },
-    control_fg: Color { r: 0.05, g: 0.05, b: 0.05, a: 1.0 },
     border_unfocused: Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
     border_focused: Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
     column: [
         Color { r: 0.5, g: 0.5, b: 0.2, a: 1.0 },
         Color { r: 0.2, g: 0.6, b: 0.4, a: 1.0 },
         Color { r: 0.6, g: 0.4, b: 0.2, a: 1.0 },
+    ],
+};
+
+pub const DARK_THEME: Theme = Theme {
+    fg: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },
+    panel_bg: Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 },
+    content_bg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
+    control_bg: Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
+    border_unfocused: Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
+    border_focused: Color { r: 0.75, g: 0.75, b: 0.75, a: 1.0 },
+    column: [
+        Color { r: 0.9, g: 0.9, b: 0.5, a: 1.0 },
+        Color { r: 0.5, g: 1.0, b: 0.75, a: 1.0 },
+        Color { r: 1.0, g: 0.75, b: 0.5, a: 1.0 },
     ],
 };
 
@@ -282,7 +295,7 @@ impl UI {
             self.focused_slider = None;
         }
         
-        clear_background(self.style.theme.bg);
+        clear_background(self.style.theme.panel_bg);
     }
 
     pub fn start_group(&mut self) {
@@ -336,6 +349,8 @@ impl UI {
         self.note_queue.clear();
     }
 
+    // TODO: this could probably be made to work better by implementing it in
+    //       terms of groups. then we wouldn't need column widths?
     pub fn start_grid(&mut self, column_widths: &[f32], column_names: &[&str]) {
         assert_eq!(column_widths.len(), column_names.len());
         self.layout = Layout::Horizontal;
@@ -429,7 +444,7 @@ impl UI {
             y: self.bounds.h - h,
             h, 
             ..self.bounds
-        }, self.style.theme.bg, None);
+        }, self.style.theme.panel_bg, None);
         self.push_line(self.bounds.x, self.bounds.h - h + 0.5,
             self.bounds.x + self.bounds.w, self.bounds.h - h + 0.5,
             self.style.theme.border_unfocused);
@@ -475,7 +490,7 @@ impl UI {
             w,
             h: viewport_h,
         };
-        self.push_rect(trough, hover(self.style.theme.bg), None);
+        self.push_rect(trough, hover(self.style.theme.panel_bg), None);
 
         let h = clamp(viewport_h / max_y, 0.0, 1.0) * trough.h;
         let handle = Rect {
@@ -483,7 +498,7 @@ impl UI {
             h,
             ..trough
         };
-        self.push_rect(handle, click(self.style.theme.bg), None);
+        self.push_rect(handle, click(self.style.theme.panel_bg), None);
 
         if is_mouse_button_pressed(MouseButton::Left) && self.mouse_hits(trough) {
             self.scrollbar_grabbed = true;
@@ -544,6 +559,21 @@ impl UI {
         self.update_cursor(rect.w, rect.h);
     }
 
+    pub fn header(&mut self, label: &str) {
+        let rect = Rect {
+            x: self.cursor_x,
+            y: self.cursor_y,
+            w: self.bounds.w + self.bounds.x - self.cursor_x,
+            h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
+        };
+        self.push_rect(rect, self.style.theme.control_bg,
+            //Some(self.style.theme.border_unfocused));
+            None);
+        self.push_text(self.cursor_x, self.cursor_y,
+            label.to_owned(), self.style.theme.fg);
+        self.update_cursor(rect.w, rect.h);
+    }
+
     fn text_rect(&mut self, label: &str, x: f32, y: f32, bg: Color, highlight_bg: bool
     ) -> (Rect, MouseEvent) {
         let params = self.style.text_params();
@@ -585,7 +615,7 @@ impl UI {
         let (rect, event) = self.text_rect(label,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             self.style.theme.control_bg, true);
-        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN * 2.0);
+        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
         event == MouseEvent::Released
     }
 
@@ -663,7 +693,7 @@ impl UI {
         self.cursor_z += COMBO_Z_OFFSET;
         let state = self.open_combo_box.as_ref().unwrap();
         let mut gfx = vec![
-            Graphic::Rect(state.list_rect, self.style.theme.bg,
+            Graphic::Rect(state.list_rect, self.style.theme.panel_bg,
                 Some(self.style.theme.border_unfocused))
         ];
 
@@ -679,7 +709,7 @@ impl UI {
         let lmb = is_mouse_button_released(MouseButton::Left);
         for (i, option) in state.options.iter().enumerate() {
             if hit_rect.contains(mouse_pos) {
-                gfx.push(Graphic::Rect(hit_rect, hover(self.style.theme.bg), None));
+                gfx.push(Graphic::Rect(hit_rect, hover(self.style.theme.panel_bg), None));
                 if lmb {
                     return_val = Some(i);
                     self.mouse_consumed = true;
@@ -715,7 +745,7 @@ impl UI {
                 y: self.cursor_y,
                 w: self.bounds.w,
                 h: h
-            }, hover(self.style.theme.bg), None),
+            }, hover(self.style.theme.panel_bg), None),
             Graphic::Line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
                 self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
                 self.style.theme.border_unfocused)
@@ -729,15 +759,15 @@ impl UI {
             };
             // fill background
             let color = if i == selected_index {
-                self.style.theme.bg
+                self.style.theme.panel_bg
             } else if self.mouse_hits(r) {
                 if is_mouse_button_pressed(MouseButton::Left) {
                     self.tabs.insert(id.to_owned(), i);
                     selected_index = i;
                 }
-                click(self.style.theme.bg)
+                click(self.style.theme.panel_bg)
             } else {
-                hover(self.style.theme.bg)
+                hover(self.style.theme.panel_bg)
             };
             gfx.push(Graphic::Rect(Rect {w: r.w, ..r }, color, None));
             gfx.push(Graphic::Text(x, self.cursor_y,
@@ -753,10 +783,10 @@ impl UI {
                 // erase line segment
                 gfx.push(Graphic::Line(r.x, r.y + r.h + LINE_THICKNESS * 0.5,
                     r.x + r.w - LINE_THICKNESS, r.y + r.h + LINE_THICKNESS * 0.5,
-                    self.style.theme.bg));
+                    self.style.theme.panel_bg));
             }
         }
-        self.cursor_y += cap_height(&params) + MARGIN * 2.0;
+        self.cursor_y += cap_height(&params) + MARGIN * 2.0 + LINE_THICKNESS;
         self.push_graphics(gfx);
         selected_index
     }
@@ -1069,7 +1099,7 @@ impl UI {
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
         self.cursor_z += TOOLTIP_Z_OFFSET;
-        self.text_rect(text, x, y, self.style.theme.bg, false);
+        self.text_rect(text, x, y, self.style.theme.panel_bg, false);
         self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
@@ -1129,7 +1159,7 @@ fn alert_dialog(style: &Style, message: &str) {
     let params = style.text_params();
     let mut r = center(fit_strings(params.clone(), &[message.to_owned()]));
     r.h += MARGIN;
-    draw_filled_rect(r, style.theme.bg, style.theme.border_unfocused);
+    draw_filled_rect(r, style.theme.panel_bg, style.theme.border_unfocused);
     draw_text_topleft(params.clone(), message, r.x, r.y);
 }
 

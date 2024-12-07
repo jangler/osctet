@@ -2,19 +2,27 @@ use std::num::ParseIntError;
 
 use macroquad::color::Color;
 
-use super::{Layout, Theme, UI};
+use super::{Layout, Theme, DARK_THEME, LIGHT_THEME, UI};
 
 pub fn draw(ui: &mut UI) {
     ui.layout = Layout::Vertical;
-    color_box(ui, "Panel background", |t| &mut t.bg);
-    color_box(ui, "Panel foreground", |t| &mut t.fg);
-    color_box(ui, "Content background", |t| &mut t.content_bg);
-    color_box(ui, "Content foreground", |t| &mut t.content_fg);
-    color_box(ui, "Control background", |t| &mut t.control_bg);
-    color_box(ui, "Control foreground", |t| &mut t.control_fg);
+    ui.header("COLOR THEME");
+    color_box(ui, "Foreground", |t| &mut t.fg);
+    color_box(ui, "Background (panel)", |t| &mut t.panel_bg);
+    color_box(ui, "Background (content)", |t| &mut t.content_bg);
+    color_box(ui, "Background (control)", |t| &mut t.control_bg);
+    color_box(ui, "Border (unfocused)", |t| &mut t.border_unfocused);
+    color_box(ui, "Border (focused)", |t| &mut t.border_focused);
     color_box(ui, "Note column", |t| &mut t.column[0]);
     color_box(ui, "Pressure column", |t| &mut t.column[1]);
     color_box(ui, "Modulation column", |t| &mut t.column[2]);
+    
+    if ui.button("Use light theme") {
+        ui.style.theme = LIGHT_THEME;
+    }
+    if ui.button("Use dark theme") {
+        ui.style.theme = DARK_THEME;
+    }
 }
 
 fn color_box(ui: &mut UI, label: &str, f: impl Fn(&mut Theme) -> &mut Color) {

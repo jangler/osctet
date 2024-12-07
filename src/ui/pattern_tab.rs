@@ -149,7 +149,7 @@ impl PatternEditor {
             w: end.x - start.x,
             h: end.y - start.y,
         };
-        let color = Color { a: 0.1, ..ui.style.theme.content_fg };
+        let color = Color { a: 0.1, ..ui.style.theme.fg };
         ui.push_rect(selection_rect, color, None);
     }
     
@@ -354,7 +354,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         ..ui.end_group().unwrap()
     };
     ui.cursor_z -= 1;
-    ui.push_rect(rect, ui.style.theme.bg, None);
+    ui.push_rect(rect, ui.style.theme.panel_bg, None);
     ui.cursor_x = track_xs[0];
 
     let end_y = ui.bounds.h - ui.cursor_y
@@ -410,7 +410,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
     let mut y = ui.cursor_y;
     while y < ui.bounds.y + ui.bounds.h {
         if y >= 0.0 {
-            ui.push_text(x, y, beat.to_string(), ui.style.theme.content_fg);
+            ui.push_text(x, y, beat.to_string(), ui.style.theme.fg);
         }
         beat += 1;
         y += BEAT_HEIGHT;
@@ -554,7 +554,7 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
         w: ui.bounds.w,
         h: cap_height(&ui.style.text_params()) + MARGIN * 2.0,
     };
-    let color = Color { a: 0.1, ..ui.style.theme.content_fg };
+    let color = Color { a: 0.1, ..ui.style.theme.fg };
     ui.push_rect(rect, color, None);
 }
 

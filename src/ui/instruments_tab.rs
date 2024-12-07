@@ -72,7 +72,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     ui.cursor_z += 1;
     ui.cursor_y += *scroll;
     let scroll_h = ui.end_group().unwrap().h;
-    ui.cursor_y = old_y + 1.0;
+    ui.cursor_y = old_y;
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y);
 }
 
@@ -206,7 +206,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch) {
     ui.layout = Layout::Vertical;
-    ui.label("GENERAL");
+    ui.header("GENERAL");
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"));
@@ -232,7 +232,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch) {
 
 fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
     let mut removed_osc = None;
-    ui.label("OSCILLATORS");
+    ui.header("OSCILLATORS");
     ui.start_grid(&OSC_COLUMN_WIDTHS, &OSC_COLUMN_NAMES);
     for (i, osc) in patch.oscs.iter_mut().enumerate() {
         ui.offset_label(&(i + 1).to_string());
@@ -277,7 +277,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn filter_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.label("FILTERS");
+    ui.header("FILTERS");
     ui.start_grid(&FILTER_COLUMN_WIDTHS, &FILTER_COLUMN_NAMES);
     let mut removed_filter = None;
     for (i, filter) in patch.filters.iter_mut().enumerate() {
@@ -316,7 +316,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.label("ENVELOPES");
+    ui.header("ENVELOPES");
     ui.start_grid(&ENV_COLUMN_WIDTHS, &ENV_COLUMN_NAMES);
     let mut removed_env = None;
     for (i, env) in patch.envs.iter_mut().enumerate() {
@@ -350,7 +350,7 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.label("LFOS");
+    ui.header("LFOS");
     ui.start_grid(&LFO_COLUMN_WIDTHS, &LFO_COLUMN_NAMES);
     let mut removed_lfo = None;
     for (i, lfo) in patch.lfos.iter_mut().enumerate() {
@@ -382,7 +382,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.label("MOD MATRIX");
+    ui.header("MOD MATRIX");
     ui.start_grid(&MOD_COLUMN_WIDTHS, &MOD_COLUMN_NAMES);
     let mut removed_mod = None;
     let sources = patch.mod_sources();

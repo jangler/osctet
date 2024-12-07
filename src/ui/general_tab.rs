@@ -6,6 +6,7 @@ use super::*;
 
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX) {
     ui.layout = Layout::Vertical;
+    ui.header("METADATA");
     if let Some(s) = ui.edit_box("Title", 20, module.title.clone()) {
         module.title = s;
     }
@@ -17,14 +18,12 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX) {
 }
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
+    ui.space(2.0);
+    ui.header("FX");
     ui.shared_slider("gain",
         "Global volume", &settings.gain.0, 0.0..=1.0, None);
-
-    ui.space(2.0);
-    ui.label("REVERB");
-
     ui.shared_slider("reverb_level",
-        "Level", &settings.reverb_amount.0, 0.0..=1.0, None);
+        "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None);
 
     if ui.slider("predelay",
         "Predelay time", &mut settings.predelay_time, 0.0..=0.1, Some("s")) {
@@ -42,7 +41,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
 
 fn tuning_controls(ui: &mut UI, tuning: &mut Tuning) {
     ui.space(2.0);
-    ui.label("TUNING");
+    ui.header("TUNING");
     if let Some(s) = ui.edit_box("Equave", 8, tuning.equave().to_string()) {
         match s.parse() {
             Ok(ratio) => match Tuning::divide(ratio, tuning.size(), tuning.arrow_steps) {
