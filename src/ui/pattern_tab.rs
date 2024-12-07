@@ -301,29 +301,22 @@ impl PatternEditor {
         // TODO: report error?
     }
 
-    fn draw_channel(&self, ui: &mut UI, track_index: usize, channel: &Channel) {
+    fn draw_channel(&self, ui: &mut UI, channel: &Channel) {
         let char_width = text_width("x", &ui.style.text_params());
-
-        // draw columns
-        // ui.cursor_z -= 1;
-        // for col in [NOTE_COLUMN, VEL_COLUMN, MOD_COLUMN] {
-        //     if col == GLOBAL_COLUMN || track_index > 0 {
-        //         let rect = Rect {
-        //             x: ui.cursor_x + column_x(col, char_width) + (MARGIN * 0.5).round(),
-        //             y: ui.cursor_y + self.scroll,
-        //             w: column_x(col + 1, char_width) - column_x(col, char_width),
-        //             h: ui.bounds.h,
-        //         };
-        //         let color = Color { a: 0.1, ..ui.style.theme.column[col as usize] };
-        //         ui.push_rect(rect, color, None);
-        //     }
-        // }
-        // ui.cursor_z += 1;
+        self.draw_channel_line(ui);
 
         // draw events
         for event in &channel.events {
             draw_event(ui, event, char_width);
         }
+    }
+
+    fn draw_channel_line(&self, ui: &mut UI) {
+        ui.cursor_z -= 1;
+        ui.push_line(ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + self.scroll,
+            ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + self.scroll + ui.bounds.h,
+            ui.style.theme.control_bg());
+        ui.cursor_z += 1;
     }
 }
 
@@ -400,9 +393,11 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         let chan_width = channel_width(track_i, char_width);
         for (channel_i, channel) in track.channels.iter().enumerate() {
             ui.cursor_x = track_xs[track_i] + chan_width * channel_i as f32;
-            pe.draw_channel(ui, track_i, channel);
+            pe.draw_channel(ui, channel);
         }
     }
+    ui.cursor_x += channel_width(1, char_width);
+    pe.draw_channel_line(ui);
 }
 
 fn draw_beats(ui: &mut UI, x: f32) {
