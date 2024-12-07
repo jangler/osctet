@@ -223,7 +223,15 @@ impl UI {
         clear_background(self.style.theme.panel_bg());
     }
 
+    fn flip_layout(&mut self) {
+        self.layout = match self.layout {
+            Layout::Horizontal => Layout::Vertical,
+            Layout::Vertical => Layout::Horizontal,
+        };
+    }
+
     pub fn start_group(&mut self) {
+        self.flip_layout();
         self.group_rects.push(Rect {
             x: self.cursor_x,
             y: self.cursor_y,
@@ -235,6 +243,7 @@ impl UI {
     pub fn end_group(&mut self) -> Option<Rect> {
         let rect = self.group_rects.pop();
         if let Some(rect) = rect {
+            self.flip_layout();
             match self.layout {
                 Layout::Horizontal => {
                     self.cursor_x = rect.x + rect.w;

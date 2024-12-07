@@ -341,7 +341,6 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.start_group();
     let left_x = ui.cursor_x;
     let track_xs = draw_track_headers(ui, module, player);
-    ui.layout = Layout::Vertical;
     let rect = Rect {
         w: ui.bounds.w,
         ..ui.end_group().unwrap()
@@ -415,6 +414,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
 /// Returns x positions of each track, plus one extra position.
 fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> Vec<f32> {
     let mut edit = None;
+    ui.layout = Layout::Horizontal;
 
     // offset for beat width
     ui.cursor_x += text_width("x", &ui.style.text_params()) * 3.0 + MARGIN * 2.0;
@@ -422,13 +422,11 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     let mut xs = vec![ui.cursor_x];
     xs.extend(module.tracks.iter_mut().enumerate().map(|(i, track)| {
         ui.start_group();
-        ui.layout = Layout::Vertical;
 
         // track name & delete button
         let name = track_name(track.target, &module.patches);
         if let TrackTarget::Patch(_) | TrackTarget::None = track.target {
             ui.start_group();
-            ui.layout = Layout::Horizontal;
             if let Some(j) = ui.combo_box(&format!("track_{}", i), "", name,
                 || track_targets(&module.patches)) {
                 edit = Some(Edit::RemapTrack(i, match j {
@@ -439,7 +437,6 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
             if ui.button("X") {
                 edit = Some(Edit::RemoveTrack(i));
             }
-            ui.layout = Layout::Vertical;
             ui.end_group();
         } else {
             ui.offset_label(name);
@@ -448,19 +445,16 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
 
         // chanel add/remove buttons
         ui.start_group();
-        ui.layout = Layout::Horizontal;
         if ui.button("-") && track.channels.len() > 1 {
             edit = Some(Edit::RemoveChannel(i));
         }
         if ui.button("+") {
             edit = Some(Edit::AddChannel(i, Channel::new()));
         }
-        ui.layout = Layout::Vertical;
         ui.end_group();
 
         // column labels
         ui.start_group();
-        ui.layout = Layout::Horizontal;
         for _ in 0..track.channels.len() {
             if i == 0 {
                 ui.label("XXX")
@@ -472,12 +466,9 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
                 ui.label("M");
             }
         }
-        ui.layout = Layout::Vertical;
         ui.end_group();
 
-        ui.layout = Layout::Horizontal;
         ui.end_group();
-
         ui.cursor_x
     }));
 

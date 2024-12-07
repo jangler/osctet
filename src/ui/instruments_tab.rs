@@ -53,9 +53,9 @@ const MOD_COLUMN_WIDTHS: [f32; 5] = [
 pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     scroll: &mut f32
 ) {
+    ui.layout = Layout::Horizontal;
     ui.start_group();
     patch_list(ui, module, patch_index);
-    ui.layout = Layout::Horizontal;
     ui.end_group();
     let old_y = ui.cursor_y;
 
@@ -79,7 +79,6 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
     let mut edit = None;
     let patches = &mut module.patches;
-    ui.layout = Layout::Vertical;
 
     let mut names = vec![String::from("Kit")];
     names.extend(patches.iter().map(|x| x.name.clone()));
@@ -101,7 +100,6 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
     };
 
     ui.start_group();
-    ui.layout = Layout::Horizontal;
     if ui.button("Add") {
         edit = Some(Edit::InsertPatch(patches.len(), Patch::new()));
         *patch_index = Some(patches.len());
@@ -112,11 +110,9 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
             edit = Some(Edit::RemovePatch(*index));
         }
     }
-    ui.layout = Layout::Vertical;
     ui.end_group();
 
     ui.start_group();
-    ui.layout = Layout::Horizontal;
     let patches = &mut module.patches;
     if ui.button("Save") {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
@@ -148,7 +144,6 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
             }
         }
     }
-    ui.layout = Layout::Vertical;
     ui.end_group();
     
     if ui.button("Duplicate") {
@@ -205,7 +200,6 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
 }
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.layout = Layout::Vertical;
     ui.header("GENERAL");
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);

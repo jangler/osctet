@@ -16,10 +16,9 @@ pub fn draw(ui: &mut UI, cfg: &mut Config) {
     color_controls(ui, "Background", false, |t| &mut t.bg);
     color_controls(ui, "Accent 1", true, |t| &mut t.accent1);
     color_controls(ui, "Accent 2", true, |t| &mut t.accent2);
-    ui.layout = Layout::Vertical;
     ui.end_group();
     
-    ui.layout = Layout::Horizontal;
+    ui.flip_layout();
     if ui.button("Reset (light)") {
         ui.style.theme = Theme::light();
     }
@@ -37,8 +36,6 @@ pub fn draw(ui: &mut UI, cfg: &mut Config) {
 fn color_controls(ui: &mut UI, label: &str, accent: bool,
     f: impl Fn(&mut Theme) -> &mut Lchuv) {
     ui.start_group();
-    ui.layout = Layout::Vertical;
-
     ui.label(label);
 
     let lchuv = f(&mut ui.style.theme);
@@ -58,6 +55,5 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
         f(&mut ui.style.theme).hue = hue.into();
     }
 
-    ui.layout = Layout::Horizontal;
     ui.end_group();
 }
