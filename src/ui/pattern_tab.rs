@@ -149,7 +149,7 @@ impl PatternEditor {
             w: end.x - start.x,
             h: end.y - start.y,
         };
-        let color = Color { a: 0.1, ..ui.style.theme.fg };
+        let color = Color { a: 0.1, ..ui.style.theme.fg() };
         ui.push_rect(selection_rect, color, None);
     }
     
@@ -354,7 +354,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         ..ui.end_group().unwrap()
     };
     ui.cursor_z -= 1;
-    ui.push_rect(rect, ui.style.theme.panel_bg, None);
+    ui.push_rect(rect, ui.style.theme.panel_bg(), None);
     ui.cursor_x = track_xs[0];
 
     let end_y = ui.bounds.h - ui.cursor_y
@@ -363,7 +363,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     let viewport_h = ui.bounds.h + ui.bounds.y - ui.cursor_y;
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
-        ui.style.theme.border_unfocused);
+        ui.style.theme.border_unfocused());
     ui.vertical_scrollbar(&mut pe.scroll, end_y, viewport_h);
     let viewport = Rect {
         x: ui.bounds.x,
@@ -387,7 +387,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     }
 
     ui.cursor_z -= 1;
-    ui.push_rect(viewport, ui.style.theme.content_bg, None);
+    ui.push_rect(viewport, ui.style.theme.content_bg(), None);
     ui.cursor_z += 1;
 
     draw_playhead(ui, player.get_tick(), left_x);
@@ -410,7 +410,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
     let mut y = ui.cursor_y;
     while y < ui.bounds.y + ui.bounds.h {
         if y >= 0.0 {
-            ui.push_text(x, y, beat.to_string(), ui.style.theme.fg);
+            ui.push_text(x, y, beat.to_string(), ui.style.theme.fg());
         }
         beat += 1;
         y += BEAT_HEIGHT;
@@ -554,7 +554,7 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
         w: ui.bounds.w,
         h: cap_height(&ui.style.text_params()) + MARGIN * 2.0,
     };
-    let color = Color { a: 0.1, ..ui.style.theme.fg };
+    let color = Color { a: 0.1, ..ui.style.theme.fg() };
     ui.push_rect(rect, color, None);
 }
 
@@ -578,12 +578,16 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
         EventData::Tempo(t) => t.round().to_string(),
         EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
     };
-    let color = Color {
-        a: match evt.data {
-            EventData::Pressure(x) | EventData::Modulation(x) => 0.5 + x as f32 / 18.0,
-            _ => 1.0,
+    let color = match evt.data {
+        EventData::Pressure(x) => Color {
+            a: 0.5 + x as f32 / 18.0,
+            ..ui.style.theme.accent1_fg()
         },
-        ..ui.style.theme.column[col as usize]
+        EventData::Modulation(x) => Color {
+            a: 0.5 + x as f32 / 18.0,
+            ..ui.style.theme.accent2_fg()
+        },
+        _ => ui.style.theme.fg(),
     };
     ui.push_text(x, y, text, color);
 }

@@ -7,6 +7,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
+use theme::Theme;
 
 use crate::{module::EventData, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
 
@@ -14,6 +15,7 @@ pub mod general_tab;
 pub mod pattern_tab;
 pub mod instruments_tab;
 pub mod settings_tab;
+pub mod theme;
 
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
@@ -60,83 +62,6 @@ fn draw_filled_rect(r: Rect, fill: Color, stroke: Color) {
     draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, stroke);
 }
 
-/// Color theme.
-pub struct Theme {
-    pub fg: Color,
-    pub panel_bg: Color,
-    pub content_bg: Color,
-    pub control_bg: Color,
-    pub border_unfocused: Color,
-    pub border_focused: Color,
-    pub column: [Color; 3],
-}
-
-impl Theme {
-    fn border(&self, focused: bool) -> Color {
-        if focused {
-            self.border_focused
-        } else {
-            self.border_unfocused
-        }
-    }
-}
-
-// TODO: color math should use something like this:
-//       https://docs.rs/palette/0.7.6/palette/hsluv/struct.Hsluv.html
-
-pub const LIGHT_THEME: Theme = Theme {
-    fg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
-    panel_bg: Color { r: 0.98, g: 0.98, b: 0.98, a: 1.0 },
-    content_bg: Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
-    control_bg: Color { r: 0.92, g: 0.92, b: 0.92, a: 1.0 },
-    border_unfocused: Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
-    border_focused: Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
-    column: [
-        Color { r: 0.5, g: 0.5, b: 0.2, a: 1.0 },
-        Color { r: 0.2, g: 0.6, b: 0.4, a: 1.0 },
-        Color { r: 0.6, g: 0.4, b: 0.2, a: 1.0 },
-    ],
-};
-
-pub const DARK_THEME: Theme = Theme {
-    fg: Color { r: 0.9, g: 0.9, b: 0.9, a: 1.0 },
-    panel_bg: Color { r: 0.2, g: 0.2, b: 0.2, a: 1.0 },
-    content_bg: Color { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
-    control_bg: Color { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
-    border_unfocused: Color { r: 0.5, g: 0.5, b: 0.5, a: 1.0 },
-    border_focused: Color { r: 0.75, g: 0.75, b: 0.75, a: 1.0 },
-    column: [
-        Color { r: 0.9, g: 0.9, b: 0.5, a: 1.0 },
-        Color { r: 0.5, g: 1.0, b: 0.75, a: 1.0 },
-        Color { r: 1.0, g: 0.75, b: 0.5, a: 1.0 },
-    ],
-};
-
-fn hover(c: Color) -> Color {
-    if c.r + c.g + c.b > 1.5 {
-        shade(c, BLACK, 0.1)
-    } else {
-        shade(c, WHITE, 0.1)
-    }
-}
-
-fn click(c: Color) -> Color {
-    if c.r + c.g + c.b > 1.5 {
-        shade(c, BLACK, 0.2)
-    } else {
-        shade(c, WHITE, 0.2)
-    }
-}
-
-fn shade(a: Color, b: Color, x: f32) -> Color {
-    Color {
-        r: a.r * (1.0 - x) + b.r * x,
-        g: a.g * (1.0 - x) + b.g * x,
-        b: a.g * (1.0 - x) + b.b * x,
-        a: a.a,
-    }
-}
-
 /// UI style, including font and color theme.
 pub struct Style {
     pub font: Font,
@@ -148,7 +73,7 @@ impl Style {
         TextParams {
             font: Some(&self.font),
             font_size: 16,
-            color: self.theme.fg,
+            color: self.theme.fg(),
             ..Default::default()
         }
     }
@@ -245,7 +170,7 @@ impl UI {
             style: Style {
                 font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
                     .expect("included font should be loadable"),
-                theme: LIGHT_THEME,
+                theme: Theme::light(), // TODO: load from config
             },
             open_combo_box: None,
             tabs: HashMap::new(),
@@ -295,7 +220,7 @@ impl UI {
             self.focused_slider = None;
         }
         
-        clear_background(self.style.theme.panel_bg);
+        clear_background(self.style.theme.panel_bg());
     }
 
     pub fn start_group(&mut self) {
@@ -444,10 +369,10 @@ impl UI {
             y: self.bounds.h - h,
             h, 
             ..self.bounds
-        }, self.style.theme.panel_bg, None);
+        }, self.style.theme.panel_bg(), None);
         self.push_line(self.bounds.x, self.bounds.h - h + 0.5,
             self.bounds.x + self.bounds.w, self.bounds.h - h + 0.5,
-            self.style.theme.border_unfocused);
+            self.style.theme.border_unfocused());
         self.layout = Layout::Horizontal;
         self.cursor_x = self.bounds.x;
         self.cursor_y = self.bounds.h - h;
@@ -490,7 +415,7 @@ impl UI {
             w,
             h: viewport_h,
         };
-        self.push_rect(trough, hover(self.style.theme.panel_bg), None);
+        self.push_rect(trough, self.style.theme.control_bg(), None);
 
         let h = clamp(viewport_h / max_y, 0.0, 1.0) * trough.h;
         let handle = Rect {
@@ -498,14 +423,14 @@ impl UI {
             h,
             ..trough
         };
-        self.push_rect(handle, click(self.style.theme.panel_bg), None);
+        let hit = self.mouse_hits(trough);
+        self.push_rect(handle, self.style.theme.control_bg_hover(), None);
 
-        if is_mouse_button_pressed(MouseButton::Left) && self.mouse_hits(trough) {
+        if is_mouse_button_pressed(MouseButton::Left) && hit {
             self.scrollbar_grabbed = true;
         }
 
-        if is_mouse_button_down(MouseButton::Left) &&
-            (self.scrollbar_grabbed || self.mouse_hits(trough)) {
+        if is_mouse_button_down(MouseButton::Left) && (self.scrollbar_grabbed || hit) {
             let (_, y) = mouse_position();
             let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
                 .min(1.0).max(0.0);
@@ -549,13 +474,13 @@ impl UI {
     
     pub fn label(&mut self, label: &str) {
         let rect = self.push_text(self.cursor_x, self.cursor_y,
-            label.to_owned(), self.style.theme.fg);
+            label.to_owned(), self.style.theme.fg());
         self.update_cursor(rect.w, rect.h);
     }
 
     pub fn offset_label(&mut self, label: &str) {
         let rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
-            label.to_owned(), self.style.theme.fg);
+            label.to_owned(), self.style.theme.fg());
         self.update_cursor(rect.w, rect.h);
     }
 
@@ -566,11 +491,11 @@ impl UI {
             w: self.bounds.w + self.bounds.x - self.cursor_x,
             h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
         };
-        self.push_rect(rect, self.style.theme.control_bg,
+        self.push_rect(rect, self.style.theme.accent1_bg(),
             //Some(self.style.theme.border_unfocused));
             None);
         self.push_text(self.cursor_x, self.cursor_y,
-            label.to_owned(), self.style.theme.fg);
+            label.to_owned(), self.style.theme.fg());
         self.update_cursor(rect.w, rect.h);
     }
 
@@ -588,18 +513,18 @@ impl UI {
         // draw fill based on mouse state
         let (fill, stroke) = if mouse_hit {
             (if is_mouse_button_down(MouseButton::Left) && highlight_bg {
-                click(bg)
+                bg
             } else if highlight_bg {
-                hover(bg)
+                bg
             } else {
                 bg
-            }, self.style.theme.border_focused)
+            }, self.style.theme.border_focused())
         } else {
-            (bg, self.style.theme.border_unfocused)
+            (bg, self.style.theme.border_unfocused())
         };
 
         self.push_rect(rect, fill, Some(stroke));
-        self.push_text(x, y, label.to_owned(), self.style.theme.fg);
+        self.push_text(x, y, label.to_owned(), self.style.theme.fg());
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
@@ -614,7 +539,7 @@ impl UI {
     pub fn button(&mut self, label: &str) -> bool {
         let (rect, event) = self.text_rect(label,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
-            self.style.theme.control_bg, true);
+            self.style.theme.control_bg(), true);
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
         event == MouseEvent::Released
     }
@@ -624,11 +549,11 @@ impl UI {
         let button_text = if *value { "X" } else { " " };
         let (rect, event) = self.text_rect(button_text,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
-            self.style.theme.content_bg, false);
+            self.style.theme.content_bg(), false);
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN * 2.0);
         let clicked = event == MouseEvent::Released;
         let label_rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
-            label.to_owned(), self.style.theme.fg);
+            label.to_owned(), self.style.theme.fg());
         self.update_cursor(label_rect.w, label_rect.h);
         if clicked {
             *value = !*value;
@@ -643,10 +568,10 @@ impl UI {
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
-            self.style.theme.control_bg, true);
+            self.style.theme.control_bg(), true);
         let label_dim = if !label.is_empty() {
             self.push_text(self.cursor_x + button_rect.w + MARGIN,
-                self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg)
+                self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg())
         } else {
             Rect::default()
         };
@@ -693,8 +618,8 @@ impl UI {
         self.cursor_z += COMBO_Z_OFFSET;
         let state = self.open_combo_box.as_ref().unwrap();
         let mut gfx = vec![
-            Graphic::Rect(state.list_rect, self.style.theme.panel_bg,
-                Some(self.style.theme.border_unfocused))
+            Graphic::Rect(state.list_rect, self.style.theme.panel_bg(),
+                Some(self.style.theme.border_unfocused()))
         ];
 
         // draw options
@@ -709,14 +634,14 @@ impl UI {
         let lmb = is_mouse_button_released(MouseButton::Left);
         for (i, option) in state.options.iter().enumerate() {
             if hit_rect.contains(mouse_pos) {
-                gfx.push(Graphic::Rect(hit_rect, hover(self.style.theme.panel_bg), None));
+                gfx.push(Graphic::Rect(hit_rect, self.style.theme.panel_bg_hover(), None));
                 if lmb {
                     return_val = Some(i);
                     self.mouse_consumed = true;
                 }
             }
             gfx.push(Graphic::Text(hit_rect.x - 1.0, hit_rect.y - 1.0,
-                option.to_owned(), self.style.theme.fg));
+                option.to_owned(), self.style.theme.fg()));
             hit_rect.y += hit_rect.h;
         }
 
@@ -745,10 +670,10 @@ impl UI {
                 y: self.cursor_y,
                 w: self.bounds.w,
                 h: h
-            }, hover(self.style.theme.panel_bg), None),
+            }, self.style.theme.panel_bg_hover(), None),
             Graphic::Line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
                 self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
-                self.style.theme.border_unfocused)
+                self.style.theme.border_unfocused())
         ];
         for (i, label) in labels.iter().enumerate() {
             let r = Rect {
@@ -759,31 +684,31 @@ impl UI {
             };
             // fill background
             let color = if i == selected_index {
-                self.style.theme.panel_bg
+                self.style.theme.panel_bg()
             } else if self.mouse_hits(r) {
                 if is_mouse_button_pressed(MouseButton::Left) {
                     self.tabs.insert(id.to_owned(), i);
                     selected_index = i;
                 }
-                click(self.style.theme.panel_bg)
+                self.style.theme.panel_bg_click()
             } else {
-                hover(self.style.theme.panel_bg)
+                self.style.theme.panel_bg_hover()
             };
             gfx.push(Graphic::Rect(Rect {w: r.w, ..r }, color, None));
             gfx.push(Graphic::Text(x, self.cursor_y,
-                label.to_string(), self.style.theme.fg));
+                label.to_string(), self.style.theme.fg()));
             x += r.w;
             gfx.push(Graphic::Line(x - LINE_THICKNESS * 0.5, self.cursor_y,
                 x - LINE_THICKNESS *0.5, self.cursor_y + r.h,
-                self.style.theme.border_unfocused));
+                self.style.theme.border_unfocused()));
             gfx.push(Graphic::Line(r.x, r.y + LINE_THICKNESS * 0.5,
                 r.x + r.w - LINE_THICKNESS, r.y + LINE_THICKNESS * 0.5,
-                self.style.theme.border_unfocused));
+                self.style.theme.border_unfocused()));
             if i == selected_index {
                 // erase line segment
                 gfx.push(Graphic::Line(r.x, r.y + r.h + LINE_THICKNESS * 0.5,
                     r.x + r.w - LINE_THICKNESS, r.y + r.h + LINE_THICKNESS * 0.5,
-                    self.style.theme.panel_bg));
+                    self.style.theme.panel_bg()));
             }
         }
         self.cursor_y += cap_height(&params) + MARGIN * 2.0 + LINE_THICKNESS;
@@ -848,11 +773,12 @@ impl UI {
                 .min(*range.end());
             let changed = new_val != *val;
             *val = new_val;
-            (click(self.style.theme.control_bg), self.style.theme.border_focused, changed)
+            (self.style.theme.control_bg_click(), self.style.theme.border_focused(),
+                changed)
         } else if self.mouse_hits(hit_rect) {
-            (hover(self.style.theme.control_bg), self.style.theme.border_focused, false)
+            (self.style.theme.control_bg_hover(), self.style.theme.border_focused(), false)
         } else {
-            (self.style.theme.control_bg, self.style.theme.border_unfocused, false)
+            (self.style.theme.control_bg(), self.style.theme.border_unfocused(), false)
         };
         
         // draw groove & handle
@@ -867,7 +793,7 @@ impl UI {
 
         // draw label
         let text_rect = self.push_text(self.cursor_x + MARGIN * 3.0 + groove_w,
-            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
+            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
         
         if grabbed {
             let text = if let Some(unit) = unit {
@@ -958,20 +884,24 @@ impl UI {
             }
             text.to_string()
         };
-        let stroke = self.style.theme.border(focused || hit);
+        let stroke = if focused || hit {
+            self.style.theme.border_focused()
+        } else {
+            self.style.theme.border_unfocused()
+        };
 
-        self.push_rect(box_rect, self.style.theme.content_bg, Some(stroke));
-        let text_rect = self.push_text(box_rect.x, box_rect.y, text, self.style.theme.fg);
+        self.push_rect(box_rect, self.style.theme.content_bg(), Some(stroke));
+        let text_rect = self.push_text(box_rect.x, box_rect.y, text, self.style.theme.fg());
         
         if focused {
             let line_x = text_rect.x + text_rect.w - MARGIN + 0.5;
             self.push_line(line_x, text_rect.y + MARGIN - 1.0,
                 line_x, text_rect.y + text_rect.h - MARGIN + 1.0,
-                self.style.theme.fg);
+                self.style.theme.fg());
         }
 
         let label_rect = self.push_text(box_rect.x + box_rect.w,
-            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg);
+            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
         
         self.update_cursor(width + label_rect.w + MARGIN, box_rect.h + MARGIN);
         
@@ -993,8 +923,8 @@ impl UI {
             h: line_height * options.len() as f32 + 2.0,
         };
 
-        self.push_rect(list_rect, self.style.theme.content_bg,
-            Some(self.style.theme.border_unfocused));
+        self.push_rect(list_rect, self.style.theme.content_bg(),
+            Some(self.style.theme.border_unfocused()));
 
         // draw options
         let mut hit_rect = Rect {
@@ -1008,9 +938,9 @@ impl UI {
         let id = "patch name";
         for (i, option) in options.iter().enumerate() {
             if i == *index {
-                self.push_rect(hit_rect, click(self.style.theme.content_bg), None);
+                self.push_rect(hit_rect, self.style.theme.content_bg_click(), None);
             } else if self.mouse_hits(hit_rect) {
-                self.push_rect(hit_rect, hover(self.style.theme.content_bg), None);
+                self.push_rect(hit_rect, self.style.theme.content_bg_hover(), None);
                 if lmb {
                     *index = i;
                 }
@@ -1032,7 +962,7 @@ impl UI {
                     *index = i;
                 }
                 self.push_text(hit_rect.x - 1.0, hit_rect.y,
-                    option.to_owned(), self.style.theme.fg);
+                    option.to_owned(), self.style.theme.fg());
             }
             hit_rect.y += hit_rect.h;
         }
@@ -1050,11 +980,11 @@ impl UI {
         if let Some(state) = self.focused_text.as_mut() {
             let text_width = text_width(&state.text, &params);
             let text_height = cap_height(&params);
-            gfx.push(Graphic::Text(x, y, state.text.clone(), self.style.theme.fg));
+            gfx.push(Graphic::Text(x, y, state.text.clone(), self.style.theme.fg()));
             let line_x = x + text_width + MARGIN + 0.5;
             gfx.push(Graphic::Line(line_x, y + MARGIN - 2.0,
                 line_x, y + MARGIN + text_height + 2.0,
-                self.style.theme.fg));
+                self.style.theme.fg()));
             
             while let Some(c) = get_char_pressed() {
                 if c.is_ascii_graphic() || c == ' ' {
@@ -1099,7 +1029,7 @@ impl UI {
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
         self.cursor_z += TOOLTIP_Z_OFFSET;
-        self.text_rect(text, x, y, self.style.theme.panel_bg, false);
+        self.text_rect(text, x, y, self.style.theme.panel_bg(), false);
         self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
@@ -1122,11 +1052,11 @@ impl UI {
     
         // draw fill based on mouse state
         let (fill, stroke) = if focused {
-            (click(self.style.theme.control_bg), self.style.theme.border_focused)
+            (self.style.theme.control_bg_click(), self.style.theme.border_focused())
         } else if mouse_hit {
-            (hover(self.style.theme.control_bg), self.style.theme.border_focused)
+            (self.style.theme.control_bg_hover(), self.style.theme.border_focused())
         } else {
-            (self.style.theme.control_bg, self.style.theme.border_unfocused)
+            (self.style.theme.control_bg(), self.style.theme.border_unfocused())
         };
 
         if focused {
@@ -1139,7 +1069,7 @@ impl UI {
         }
 
         self.push_rect(rect, fill, Some(stroke));
-        self.push_text(rect.x, rect.y, label, self.style.theme.fg);
+        self.push_text(rect.x, rect.y, label, self.style.theme.fg());
 
         self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
     }
@@ -1159,7 +1089,7 @@ fn alert_dialog(style: &Style, message: &str) {
     let params = style.text_params();
     let mut r = center(fit_strings(params.clone(), &[message.to_owned()]));
     r.h += MARGIN;
-    draw_filled_rect(r, style.theme.panel_bg, style.theme.border_unfocused);
+    draw_filled_rect(r, style.theme.panel_bg(), style.theme.border_unfocused());
     draw_text_topleft(params.clone(), message, r.x, r.y);
 }
 
