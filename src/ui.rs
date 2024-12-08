@@ -234,6 +234,7 @@ pub struct UI {
     instrument_edit_index: Option<usize>,
     mouse_consumed: bool,
     scrollbar_grabbed: bool,
+    notification: Option<Notification>,
 }
 
 impl UI {
@@ -261,6 +262,7 @@ impl UI {
             instrument_edit_index: None,
             mouse_consumed: false,
             scrollbar_grabbed: false,
+            notification: None,
         }
     }
 
@@ -294,6 +296,8 @@ impl UI {
         }
         
         clear_background(self.style.theme.panel_bg());
+
+        self.info_box();
     }
 
     fn flip_layout(&mut self) {
@@ -355,6 +359,7 @@ impl UI {
         }
         self.draw_queue.clear();
 
+        // dialog
         let close = if let Some(dialog) = &self.dialog {
             match dialog {
                 Dialog::Alert(s) => alert_dialog(&self.style, s),
@@ -1117,8 +1122,17 @@ impl UI {
         self.dialog = Some(dialog);
     }
 
+    /// Report an error in an alert dialog.
     pub fn report(&mut self, e: impl Display) {
         self.open_dialog(Dialog::Alert(e.to_string()));
+    }
+
+    /// Temporarily use the info box to display a message.
+    pub fn notify(&mut self, message: String) {
+        self.notification = Some(Notification {
+            time_remaining: 1.0 + message.chars().count() as f32 * 0.1,
+            message,
+        });
     }
 
     pub fn accepting_keyboard_input(&self) -> bool {
@@ -1178,6 +1192,40 @@ impl UI {
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
         self.end_widget();
     }
+
+    fn info_box(&mut self) {
+        // notification
+        let mut note_expired = false;
+        let text = if let Some(note) = &mut self.notification {
+            note.time_remaining -= get_frame_time().min(0.1);
+            note_expired = note.time_remaining <= 0.0;
+            Some(note.message.clone())
+        } else {
+            None
+        };
+        if note_expired {
+            self.notification = None;
+        }
+
+        if let Some(text) = text {
+            let params = self.style.text_params();
+            let w = text_width(&text, &params);
+            let h = cap_height(&params);
+            self.cursor_z += TOOLTIP_Z_OFFSET;
+            let (_, evt) = self.text_rect(&text,
+                self.bounds.x + self.bounds.w - w - MARGIN * 3.0,
+                self.bounds.y + self.bounds.h - h - MARGIN * 3.0,
+                &self.style.theme.panel_bg(),
+                &self.style.theme.panel_bg(),
+                &self.style.theme.panel_bg());
+            self.cursor_z -= TOOLTIP_Z_OFFSET;
+
+            if evt == MouseEvent::Pressed {
+                self.notification = None;
+                self.mouse_consumed = true;
+            }
+        }
+    }
 }
 
 fn interpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
@@ -1235,4 +1283,9 @@ fn combo_box_list_rect(params: &TextParams, button_rect: Rect, options: &[String
         w: options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
         h,
     }
+}
+
+struct Notification {
+    message: String,
+    time_remaining: f32,
 }

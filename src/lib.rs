@@ -465,7 +465,7 @@ impl App {
                 .set_file_name(self.module.title.clone())
                 .save_file() {
                 match playback::render(&self.module).save_wav16(path) {
-                    Ok(_) => self.ui.report("Wrote WAV."),
+                    Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
                     Err(e) => self.ui.report(e),
                 }
             }
@@ -483,6 +483,8 @@ impl App {
         if let Some(path) = &self.save_path {
             if let Err(e) = self.module.save(path) {
                 self.ui.report(e);
+            } else {
+                self.ui.notify(String::from("Saved module."));
             }
         } else {
             self.save_module_as();
@@ -498,6 +500,7 @@ impl App {
                 self.ui.report(e);
             } else {
                 self.save_path = Some(path);
+                self.ui.notify(String::from("Saved module."));
             }
         }
     }
