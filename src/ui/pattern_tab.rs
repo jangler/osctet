@@ -198,6 +198,7 @@ impl PatternEditor {
                 KeyCode::R => self.rational_tempo(module),
                 input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
                     | input::SHARP_KEY | input::FLAT_KEY
+                    | input::OCTAVE_UP_KEY | input::OCTAVE_DOWN_KEY
                     | input::ENHARMONIC_ALT_KEY => nudge_note(module, &self.edit_start),
                 _ => (),
             }

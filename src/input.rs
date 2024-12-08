@@ -16,6 +16,8 @@ pub const ARROW_UP_KEY: KeyCode = KeyCode::RightBracket;
 pub const SHARP_KEY: KeyCode = KeyCode::Equal;
 pub const FLAT_KEY: KeyCode = KeyCode::Minus;
 pub const ENHARMONIC_ALT_KEY: KeyCode = KeyCode::Space;
+pub const OCTAVE_UP_KEY: KeyCode = KeyCode::Slash;
+pub const OCTAVE_DOWN_KEY: KeyCode = KeyCode::Backslash;
 
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
@@ -107,6 +109,9 @@ pub fn adjust_note_for_modifier_keys(note: Note) -> Note {
         demisharps: note.demisharps
             + if is_key_down(SHARP_KEY) { 2 } else { 0 }
             - if is_key_down(FLAT_KEY) { 2 } else { 0 },
+        equave: note.equave
+            + if is_key_down(OCTAVE_UP_KEY) { 1 } else { 0 }
+            - if is_key_down(OCTAVE_DOWN_KEY) { 1 } else { 0 },
         ..note
     };
     if is_key_down(ENHARMONIC_ALT_KEY) {
