@@ -106,7 +106,16 @@ struct TextEditState {
     cursor: usize, // end of selection
 }
 impl TextEditState {
-    fn handle_input(&mut self) {
+    fn handle_input(&mut self, mouse_i: Option<usize>) {
+        if let Some(i) = mouse_i {
+            let i = i.min(self.text.chars().count());
+            if is_mouse_button_pressed(MouseButton::Left) {
+                self.set_cursor(i);
+            } else if is_mouse_button_down(MouseButton::Left) {
+                self.cursor = i;
+            }
+        }
+
         while let Some(c) = get_char_pressed() {
             if !c.is_ascii_control() {
                 if self.cursor != self.anchor {
@@ -140,6 +149,8 @@ impl TextEditState {
         self.anchor = self.anchor.min(self.text.chars().count());
     }
 
+    /// Sets the mouse cursor to the given position, updating anchor as needed.
+    /// Does not check bounds.
     fn set_cursor(&mut self, pos: usize) {
         self.cursor = pos;
         if !(is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)) {
@@ -794,12 +805,7 @@ impl UI {
     ) -> bool {
         // are we in text entry mode?
         if self.focused_text.as_ref().is_some_and(|x| x.id == id) {
-            if is_key_pressed(KeyCode::Escape)
-                || is_mouse_button_released(MouseButton::Left) {
-                self.focused_text = None;
-            } else {
-                return self.slider_text_entry(id, label, val, range);
-            }
+            return self.slider_text_entry(id, label, val, range);
         }
 
         self.start_widget();
@@ -912,14 +918,6 @@ impl UI {
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
         text: String
     ) -> Option<String> {
-        // check whether to unfocus
-        if self.focused_text.as_ref().is_some_and(|x| x.id == label)
-            && (is_key_pressed(KeyCode::Escape)
-                || is_mouse_button_pressed(MouseButton::Left)) {
-            self.focused_text = None;
-        }
-
-        // TODO: handle click when already focused
         let w = chars_wide as f32 * text_width("x", &self.style.text_params())
             + MARGIN * 2.0;
 
@@ -944,7 +942,7 @@ impl UI {
         let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
         let hit = self.mouse_hits(box_rect);
         
-        // click to focus
+        // focus/unfocus
         if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
             self.focused_text = Some(TextEditState {
                 id: id.to_owned(),
@@ -952,6 +950,8 @@ impl UI {
                 cursor: text.chars().count(),
                 text: text.to_string(),
             });
+        } else if is_key_pressed(KeyCode::Escape) {
+            self.focused_text = None;
         }
         
         self.start_widget();
@@ -965,12 +965,13 @@ impl UI {
         self.push_rect(box_rect, self.style.theme.content_bg(), Some(stroke));
         
         // draw text
-        if focused {
-            self.editable_text(box_rect.x, box_rect.y);
+        let submit = if focused {
+            self.editable_text(box_rect)
         } else {
             self.push_text(box_rect.x, box_rect.y, text.to_string(),
                 self.style.theme.fg());
-        }
+            false
+        };
 
         // draw label
         if !label.is_empty() {
@@ -979,7 +980,7 @@ impl UI {
         }
         
         self.end_widget();
-        focused && is_key_pressed(KeyCode::Enter)
+        submit
     }
 
     /// List box with editable values. Returns a string when an edit is submitted.
@@ -1020,8 +1021,15 @@ impl UI {
                     *index = i;
                 }
             }
+
+            // check for unfocus
+            if Some(i) == self.instrument_edit_index && is_key_pressed(KeyCode::Escape) {
+                self.focused_text = None;
+                self.instrument_edit_index = None;
+            }
+
             if Some(i) == self.instrument_edit_index {
-                if self.editable_text(hit_rect.x - 1.0, hit_rect.y) {
+                if self.editable_text(hit_rect) {
                     if let Some(state) = self.focused_text.take() {
                         return_val = Some(state.text);
                         self.instrument_edit_index = None;
@@ -1039,7 +1047,7 @@ impl UI {
                     self.instrument_edit_index = Some(i);
                     *index = i;
                 }
-                self.push_text(hit_rect.x - 1.0, hit_rect.y,
+                self.push_text(hit_rect.x, hit_rect.y,
                     option.to_owned(), self.style.theme.fg());
             }
             hit_rect.y += hit_rect.h;
@@ -1050,17 +1058,25 @@ impl UI {
     }
 
     /// Primitive that draws the currently focused text and handles edit input.
-    fn editable_text(&mut self, x: f32, y: f32) -> bool {
-        if let Some(state) = self.focused_text.as_mut() {
-            state.handle_input();
+    fn editable_text(&mut self, rect: Rect) -> bool {
+        let hit = self.mouse_hits(rect);
 
+        if let Some(state) = self.focused_text.as_mut() {
             let params = self.style.text_params();
-            let text_h = cap_height(&params);
             let char_w = text_width("x", &params);
-            let f = |i| x + char_w * i as f32 + MARGIN + LINE_THICKNESS * 0.5;
+            let mouse_i = if hit {
+                Some(((mouse_position_vec2().x - rect.x - MARGIN) / char_w)
+                    .max(0.0).round() as usize)
+            } else {
+                None
+            };
+            state.handle_input(mouse_i);
+
+            let text_h = cap_height(&params);
+            let f = |i| rect.x + char_w * i as f32 + MARGIN + LINE_THICKNESS * 0.5;
             let cursor_x = f(state.cursor);
-            let y1 = y + MARGIN - 1.0;
-            let y2 = y + MARGIN + text_h + 1.0;
+            let y1 = rect.y + MARGIN - 1.0;
+            let y2 = rect.y + MARGIN + text_h + 1.0;
             let text = state.text.clone();
             
             if state.cursor != state.anchor {
@@ -1081,10 +1097,11 @@ impl UI {
             }
             
             self.push_line(cursor_x, y1, cursor_x, y2, self.style.theme.fg());
-            self.push_text(x, y, text, self.style.theme.fg());
+            self.push_text(rect.x, rect.y, text, self.style.theme.fg());
         }
 
-        is_key_pressed(KeyCode::Enter)
+        is_key_pressed(KeyCode::Enter) ||
+            (!hit && is_mouse_button_pressed(MouseButton::Left))
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
