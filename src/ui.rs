@@ -941,74 +941,36 @@ impl UI {
             h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
         };
 
-        // handle keys
-        let focused = if let Some(state) = self.focused_text.as_mut() {
-            if state.id == id {
-                state.handle_input();
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
+        let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
         let hit = self.mouse_hits(box_rect);
-        let text = if focused {
-            self.focused_text.as_mut().unwrap().text.clone()
-        } else {
-            if is_mouse_button_pressed(MouseButton::Left) && hit {
-                let text = text.to_string();
-                self.focused_text = Some(TextEditState {
-                    id: id.to_owned(),
-                    anchor: 0,
-                    cursor: text.chars().count(),
-                    text,
-                });
-            }
-            text.to_string()
-        };
+        
+        // click to focus
+        if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
+            self.focused_text = Some(TextEditState {
+                id: id.to_owned(),
+                anchor: 0,
+                cursor: text.chars().count(),
+                text: text.to_string(),
+            });
+        }
+        
+        self.start_widget();
+
+        // draw box
         let stroke = if focused || hit {
             self.style.theme.border_focused()
         } else {
             self.style.theme.border_unfocused()
         };
-        
-        self.start_widget();
         self.push_rect(box_rect, self.style.theme.content_bg(), Some(stroke));
         
-        // draw cursor/selection
-        if let Some(state) = &self.focused_text {
-            if state.id == id {
-                let char_w = text_width("x", &self.style.text_params());
-                let f = |i| box_rect.x + char_w * i as f32 + MARGIN
-                    + LINE_THICKNESS * 0.5;
-                let cursor_x = f(state.cursor);
-                let y1 = box_rect.y + MARGIN - 1.0;
-                let y2 = box_rect.y + box_rect.h - MARGIN + 1.0;
-                
-                if state.cursor != state.anchor {
-                    let anchor_x = f(state.anchor);
-                    let start = cursor_x.min(anchor_x);
-                    let end = cursor_x.max(anchor_x);
-                    let r = Rect {
-                        x: start,
-                        y: y1,
-                        w: end - start,
-                        h: y2 - y1,
-                    };
-                    let c = Color {
-                        a: 0.1,
-                        ..self.style.theme.fg()
-                    };
-                    self.push_rect(r, c, None);
-                }
-                
-                self.push_line(cursor_x, y1, cursor_x, y2, self.style.theme.fg());
-            }
+        // draw text
+        if focused {
+            self.editable_text(box_rect.x, box_rect.y);
+        } else {
+            self.push_text(box_rect.x, box_rect.y, text.to_string(),
+                self.style.theme.fg());
         }
-
-        self.push_text(box_rect.x, box_rect.y, text, self.style.theme.fg());
 
         // draw label
         if !label.is_empty() {
@@ -1089,30 +1051,38 @@ impl UI {
 
     /// Primitive that draws the currently focused text and handles edit input.
     fn editable_text(&mut self, x: f32, y: f32) -> bool {
-        let mut gfx = Vec::new();
-        let params = self.style.text_params();
-
         if let Some(state) = self.focused_text.as_mut() {
-            let text_width = text_width(&state.text, &params);
-            let text_height = cap_height(&params);
-            gfx.push(Graphic::Text(x, y, state.text.clone(), self.style.theme.fg()));
-            let line_x = x + text_width + MARGIN + 0.5;
-            gfx.push(Graphic::Line(line_x, y + MARGIN - 2.0,
-                line_x, y + MARGIN + text_height + 2.0,
-                self.style.theme.fg()));
+            state.handle_input();
+
+            let params = self.style.text_params();
+            let text_h = cap_height(&params);
+            let char_w = text_width("x", &params);
+            let f = |i| x + char_w * i as f32 + MARGIN + LINE_THICKNESS * 0.5;
+            let cursor_x = f(state.cursor);
+            let y1 = y + MARGIN - 1.0;
+            let y2 = y + MARGIN + text_h + 1.0;
+            let text = state.text.clone();
             
-            while let Some(c) = get_char_pressed() {
-                if c.is_ascii_graphic() || c == ' ' {
-                    state.text.push(c);
-                }
+            if state.cursor != state.anchor {
+                let anchor_x = f(state.anchor);
+                let start = cursor_x.min(anchor_x);
+                let end = cursor_x.max(anchor_x);
+                let r = Rect {
+                    x: start,
+                    y: y1,
+                    w: end - start,
+                    h: y2 - y1,
+                };
+                let c = Color {
+                    a: 0.1,
+                    ..self.style.theme.fg()
+                };
+                self.push_rect(r, c, None);
             }
-
-            if is_key_pressed(KeyCode::Backspace) {
-                state.text.pop();
-            }
+            
+            self.push_line(cursor_x, y1, cursor_x, y2, self.style.theme.fg());
+            self.push_text(x, y, text, self.style.theme.fg());
         }
-
-        self.push_graphics(gfx);
 
         is_key_pressed(KeyCode::Enter)
     }
