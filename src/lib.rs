@@ -451,7 +451,7 @@ impl App {
 
         // TODO: int slider or html-number-style input would be better
         let mut octave = self.octave as f32;
-        if self.ui.slider("octave", "Octave", &mut octave, 0.0..=8.0, None) {
+        if self.ui.slider("octave", "Octave", &mut octave, 0.0..=8.0, None, 1) {
             self.octave = octave.round() as i8;
         }
         

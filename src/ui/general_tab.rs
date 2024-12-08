@@ -21,20 +21,20 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.space(2.0);
     ui.header("FX");
     ui.shared_slider("gain",
-        "Global volume", &settings.gain.0, 0.0..=1.0, None);
+        "Global volume", &settings.gain.0, 0.0..=1.0, None, 1);
     ui.shared_slider("reverb_level",
-        "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None);
+        "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None, 1);
 
     if ui.slider("predelay",
-        "Predelay time", &mut settings.predelay_time, 0.0..=0.1, Some("s")) {
+        "Predelay time", &mut settings.predelay_time, 0.0..=0.1, Some("s"), 2) {
         fx.commit_predelay(settings);
     }
     if ui.slider("room_size",
-        "Room size", &mut settings.reverb_room_size, 5.0..=100.0, Some("m")) {
+        "Room size", &mut settings.reverb_room_size, 5.0..=100.0, Some("m"), 2) {
         fx.commit_reverb(settings);
     }
     if ui.slider("decay_time",
-        "Decay time", &mut settings.reverb_time, 0.0..=5.0, Some("s")) {
+        "Decay time", &mut settings.reverb_time, 0.0..=5.0, Some("s"), 2) {
         fx.commit_reverb(settings);
     }
 }

@@ -182,9 +182,9 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch) {
     ui.header("GENERAL");
-    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None);
-    ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None);
-    ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"));
+    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 1);
+    ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1);
+    ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"), 2);
     if let Some(i) = ui.combo_box("play_mode",
         "Play mode", patch.play_mode.name(),
         || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
@@ -216,28 +216,28 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
     labeled_group(ui, "Level", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_level", i),
-                "", &osc.level.0, 0.0..=1.0, None);
+                "", &osc.level.0, 0.0..=1.0, None, 1);
         }
     });
     
     labeled_group(ui, "Tone", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tone", i),
-                "", &osc.tone.0, 0.0..=1.0, None);
+                "", &osc.tone.0, 0.0..=1.0, None, 1);
         }
     });
     
     labeled_group(ui, "Freq. ratio", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_ratio", i),
-                "", &osc.freq_ratio.0, 0.5..=16.0, None);
+                "", &osc.freq_ratio.0, 0.5..=16.0, None, 1);
         }
     });
     
     labeled_group(ui, "Finetune", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tune", i),
-                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"));
+                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1);
         }
     });
     
@@ -303,14 +303,14 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Cutoff", |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 ui.shared_slider(&format!("filter_{}_cutoff", i), "",
-                    &filter.cutoff.0, MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"));
+                    &filter.cutoff.0, MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"), 2);
             }
         });
 
         labeled_group(ui, "Resonance", |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 ui.shared_slider(&format!("filter_{}_q", i), "",
-                    &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None);
+                    &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None, 1);
             }
         });
 
@@ -355,27 +355,28 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Attack", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_A", i), "", &mut env.attack, 0.0..=10.0,
-                    Some("s"));
+                    Some("s"), 2);
             }
         });
     
         labeled_group(ui, "Decay", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_D", i), "", &mut env.decay, 0.01..=10.0,
-                    Some("s"));
+                    Some("s"), 2);
             }
         });
     
         labeled_group(ui, "Sustain", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
-                ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0, None);
+                ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0,
+                    None, 1);
             }
         });
     
         labeled_group(ui, "Release", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0,
-                    Some("s"));
+                    Some("s"), 2);
             }
         });
         
@@ -429,14 +430,14 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Rate", |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
-                    MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"));
+                    MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"), 2);
             }
         });
     
         labeled_group(ui, "Delay", |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
-                    0.0..=10.0, Some("s"));
+                    0.0..=10.0, Some("s"), 2);
             }
         });
     
@@ -494,7 +495,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Depth", |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 ui.shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0, -1.0..=1.0,
-                    None);
+                    None, 1);
             }
         });
     

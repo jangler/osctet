@@ -43,15 +43,15 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
     let mut hue = lchuv.hue.into_degrees();
 
     if !accent {
-        if ui.slider(&format!("{}_l", label), "Lightness", &mut l, 0.0..=100.0, None) {
+        if ui.slider(&format!("{}_l", label), "Lightness", &mut l, 0.0..=100.0, None, 1) {
             f(&mut ui.style.theme).l = l;
         }
     }
-    if ui.slider(&format!("{}_chroma", label), "Chroma", &mut chroma, 0.0..=180.0, None) {
+    if ui.slider(&format!("{}_chroma", label), "Chroma", &mut chroma, 0.0..=180.0, None, 1) {
         f(&mut ui.style.theme).chroma = chroma;
     }
     if ui.slider(&format!("{}_hue", label), "Hue", &mut hue, -180.0..=180.0,
-        Some("degrees")) {
+        Some("degrees"), 1) {
         f(&mut ui.style.theme).hue = hue.into();
     }
 

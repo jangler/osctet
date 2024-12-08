@@ -726,7 +726,7 @@ impl UI {
 
     /// Draws a slider and returns true if the value was changed.
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>, unit: Option<&str>
+        range: RangeInclusive<f32>, unit: Option<&str>, power: i32,
     ) -> bool {
         // are we in text entry mode?
         if self.focused_text.as_ref().is_some_and(|x| x.id == id) {
@@ -774,7 +774,8 @@ impl UI {
 
         // update position, get handle color
         let (fill, stroke, changed) = if grabbed {
-            let new_val = interpolate((mouse_pos.x - groove_x) / groove_w, &range)
+            let f = ((mouse_pos.x - groove_x) / groove_w).max(0.0).powi(power);
+            let new_val = interpolate(f, &range)
                 .max(*range.start())
                 .min(*range.end());
             let changed = new_val != *val;
@@ -789,7 +790,7 @@ impl UI {
         
         // draw groove & handle
         self.push_line(groove_x, groove_y, groove_x + groove_w, groove_y, stroke);
-        let f = deinterpolate(*val, &range);
+        let f = deinterpolate(*val, &range).powf(1.0/power as f32);
         let handle_rect = Rect {
             x: self.cursor_x + MARGIN + (f * groove_w).round(),
             w: MARGIN * 2.0,
@@ -810,9 +811,9 @@ impl UI {
         
         if grabbed {
             let text = if let Some(unit) = unit {
-                &format!("{:.2} {}", val, unit)
+                &format!("{:.3} {}", val, unit)
             } else {
-                &format!("{:.2}", val)
+                &format!("{:.3}", val)
             };
             self.tooltip(text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
         }
@@ -1018,10 +1019,10 @@ impl UI {
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
-        range: RangeInclusive<f32>, unit: Option<&str>
+        range: RangeInclusive<f32>, unit: Option<&str>, power: i32
     ) {
         let mut val = param.value();
-        if self.slider(id, label, &mut val, range, unit) {
+        if self.slider(id, label, &mut val, range, unit, power) {
             param.set(val);
         }
     }
