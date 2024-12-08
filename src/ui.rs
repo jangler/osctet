@@ -364,6 +364,10 @@ impl UI {
     pub fn vertical_scrollbar(&mut self,
         current_y: &mut f32, max_y: f32, viewport_h: f32
     ) {
+        if viewport_h >= max_y {
+            return // no need for a scrollbar
+        }
+
         let (_, y_scroll) = mouse_wheel();
         let actual_increment = MARGIN * 6.0 + cap_height(&self.style.text_params()) * 3.0;
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
