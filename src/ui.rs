@@ -776,8 +776,16 @@ impl UI {
         self.push_rect(handle_rect, fill, Some(stroke));
 
         // draw label
-        let text_rect = self.push_text(self.cursor_x + MARGIN * 3.0 + groove_w,
-            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
+        let x = self.cursor_x + MARGIN * 3.0 + groove_w;
+        let y = self.cursor_y + MARGIN;
+        let text_rect = if !label.is_empty() {
+            self.push_text(x, y, label.to_owned(), self.style.theme.fg())
+        } else {
+            // push an invisible rect to reserve space for the handle
+            let r = Rect { x, y, w: 0.0, h: 0.0 };
+            self.push_rect(r, Color { a: 0.0, ..Default::default() }, None);
+            r
+        };
         
         if grabbed {
             let text = if let Some(unit) = unit {
@@ -785,7 +793,7 @@ impl UI {
             } else {
                 &format!("{:.2}", val)
             };
-            self.tooltip(text, text_rect.x + text_rect.w, text_rect.y);
+            self.tooltip(text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
         }
 
         self.update_cursor(groove_w + text_rect.w + MARGIN, h + MARGIN * 3.0);
