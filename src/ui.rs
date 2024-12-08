@@ -102,6 +102,70 @@ struct ComboBoxState {
 struct TextEditState {
     id: String,
     text: String,
+    anchor: usize, // beginning of selection
+    cursor: usize, // end of selection
+}
+impl TextEditState {
+    fn handle_input(&mut self) {
+        while let Some(c) = get_char_pressed() {
+            if !c.is_ascii_control() {
+                if self.cursor != self.anchor {
+                    self.delete(0);
+                }
+                self.text.insert(self.cursor, c);
+                self.cursor += 1;
+                self.anchor = self.cursor;
+            }
+        }
+
+        for key in get_keys_pressed() {
+            match key {
+                KeyCode::Backspace => self.delete(-1),
+                KeyCode::Delete => self.delete(1),
+                KeyCode::Home => self.set_cursor(0),
+                KeyCode::End => self.set_cursor(self.text.chars().count()),
+                KeyCode::Left => if self.cursor > 0 {
+                    self.set_cursor(self.cursor - 1);
+                } else {
+                    self.set_cursor(0);
+                }
+                KeyCode::Right => if self.cursor < self.text.chars().count() {
+                    self.set_cursor(self.cursor + 1);
+                } else {
+                    self.set_cursor(self.cursor);
+                }
+                _ => (),
+            }
+        }
+        self.anchor = self.anchor.min(self.text.chars().count());
+    }
+
+    fn set_cursor(&mut self, pos: usize) {
+        self.cursor = pos;
+        if !(is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)) {
+            self.anchor = self.cursor;
+        }
+    }
+
+    fn delete(&mut self, offset: isize) {
+        if self.cursor == self.anchor {
+            self.cursor = ((self.cursor as isize + offset).max(0) as usize)
+                .min(self.text.chars().count());
+        }
+
+        let start = self.cursor.min(self.anchor);
+        let end = self.cursor.max(self.anchor);
+        self.text = self.text.chars()
+            .enumerate()
+            .filter_map(|(i, c)| {
+                if i < start || i >= end {
+                    Some(c)
+                } else {
+                    None
+                }
+            }).collect();
+        self.set_cursor(start);
+    }
 }
 
 enum Graphic {
@@ -760,9 +824,12 @@ impl UI {
                 self.mouse_consumed = true;
             }
             if is_mouse_button_pressed(MouseButton::Right) {
+                let text = val.to_string();
                 self.focused_text = Some(TextEditState {
                     id: id.to_string(),
-                    text: val.to_string(),
+                    anchor: 0,
+                    cursor: text.chars().count(),
+                    text,
                 });
             }
         }
@@ -825,7 +892,6 @@ impl UI {
     fn slider_text_entry(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>
     ) -> bool {
-        self.start_widget();
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
@@ -839,10 +905,10 @@ impl UI {
             }
             self.focused_text = None;
         }
-        self.end_widget();
         changed
     }
 
+    /// Widget for editing a value as text.
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
         text: String
     ) -> Option<String> {
@@ -853,6 +919,7 @@ impl UI {
             self.focused_text = None;
         }
 
+        // TODO: handle click when already focused
         let w = chars_wide as f32 * text_width("x", &self.style.text_params())
             + MARGIN * 2.0;
 
@@ -874,25 +941,29 @@ impl UI {
             h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
         };
 
-        let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
+        // handle keys
+        let focused = if let Some(state) = self.focused_text.as_mut() {
+            if state.id == id {
+                state.handle_input();
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         let hit = self.mouse_hits(box_rect);
         let text = if focused {
-            let text = &mut self.focused_text.as_mut().unwrap().text;
-            // handle text editing
-            while let Some(c) = get_char_pressed() {
-                if !c.is_ascii_control() {
-                    text.push(c);
-                }
-            }
-            if is_key_pressed(KeyCode::Backspace) {
-                text.pop();
-            }
-            text.clone()
+            self.focused_text.as_mut().unwrap().text.clone()
         } else {
             if is_mouse_button_pressed(MouseButton::Left) && hit {
+                let text = text.to_string();
                 self.focused_text = Some(TextEditState {
                     id: id.to_owned(),
-                    text: text.to_string(),
+                    anchor: 0,
+                    cursor: text.chars().count(),
+                    text,
                 });
             }
             text.to_string()
@@ -902,19 +973,44 @@ impl UI {
         } else {
             self.style.theme.border_unfocused()
         };
-
+        
         self.start_widget();
         self.push_rect(box_rect, self.style.theme.content_bg(), Some(stroke));
-        let text_rect = self.push_text(box_rect.x, box_rect.y,
-            text, self.style.theme.fg());
         
-        if focused {
-            let line_x = text_rect.x + text_rect.w - MARGIN + 0.5;
-            self.push_line(line_x, text_rect.y + MARGIN - 1.0,
-                line_x, text_rect.y + text_rect.h - MARGIN + 1.0,
-                self.style.theme.fg());
+        // draw cursor/selection
+        if let Some(state) = &self.focused_text {
+            if state.id == id {
+                let char_w = text_width("x", &self.style.text_params());
+                let f = |i| box_rect.x + char_w * i as f32 + MARGIN
+                    + LINE_THICKNESS * 0.5;
+                let cursor_x = f(state.cursor);
+                let y1 = box_rect.y + MARGIN - 1.0;
+                let y2 = box_rect.y + box_rect.h - MARGIN + 1.0;
+                
+                if state.cursor != state.anchor {
+                    let anchor_x = f(state.anchor);
+                    let start = cursor_x.min(anchor_x);
+                    let end = cursor_x.max(anchor_x);
+                    let r = Rect {
+                        x: start,
+                        y: y1,
+                        w: end - start,
+                        h: y2 - y1,
+                    };
+                    let c = Color {
+                        a: 0.1,
+                        ..self.style.theme.fg()
+                    };
+                    self.push_rect(r, c, None);
+                }
+                
+                self.push_line(cursor_x, y1, cursor_x, y2, self.style.theme.fg());
+            }
         }
 
+        self.push_text(box_rect.x, box_rect.y, text, self.style.theme.fg());
+
+        // draw label
         if !label.is_empty() {
             self.push_text(box_rect.x + box_rect.w, self.cursor_y + MARGIN,
                 label.to_owned(), self.style.theme.fg());
@@ -971,9 +1067,12 @@ impl UI {
                 }
             } else {
                 if self.mouse_hits(hit_rect) && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
+                    let text = option.clone();
                     self.focused_text = Some(TextEditState {
                         id: id.to_owned(),
-                        text: option.clone(),
+                        anchor: 0,
+                        cursor: text.chars().count(),
+                        text,
                     });
                     self.instrument_edit_index = Some(i);
                     *index = i;
