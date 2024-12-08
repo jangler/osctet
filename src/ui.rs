@@ -208,7 +208,11 @@ impl UI {
         self.cursor_x = MARGIN;
         self.cursor_y = MARGIN;
         self.cursor_z = 0;
-        self.mouse_consumed = false;
+
+        if !is_mouse_button_down(MouseButton::Left)
+            && !is_mouse_button_released(MouseButton::Left) {
+            self.mouse_consumed = false;
+        }
 
         if self.focused_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
             self.focused_slider = None;
@@ -736,6 +740,7 @@ impl UI {
         if self.mouse_hits(hit_rect) {
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.focused_slider = Some(id.to_string());
+                self.mouse_consumed = true;
             }
             if is_mouse_button_pressed(MouseButton::Right) {
                 self.focused_text = Some(TextEditState {
