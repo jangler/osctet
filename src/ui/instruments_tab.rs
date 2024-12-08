@@ -21,6 +21,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 
     ui.cursor_y -= *scroll;
     ui.cursor_z -= 1;
+    ui.space(1.0);
     ui.start_group();
     if let Some(index) = patch_index {
         if let Some(patch) = module.patches.get_mut(*index) {
