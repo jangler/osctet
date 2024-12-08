@@ -102,7 +102,7 @@ impl Module {
         patch
     }
 
-    /// Return pattern events between two positions.
+    /// Return copies of pattern events between two positions.
     pub fn scan_events(&self, start: Position, end: Position) -> Vec<LocatedEvent> {
         let tick_range = start.tick..=end.tick;
         let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
@@ -119,6 +119,27 @@ impl Module {
                             channel: channel_i,
                             event: evt.clone(),
                         });
+                    }
+                }
+            }
+        }
+
+        events
+    }
+
+    /// Return references to pattern events between two locations.
+    pub fn modify_events(&mut self, start: Position, end: Position) -> Vec<&mut Event> {
+        let tick_range = start.tick..=end.tick;
+        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+        let mut events = Vec::new();
+
+        for (track_i, track) in self.tracks.iter_mut().enumerate() {
+            for (channel_i, channel) in track.channels.iter_mut().enumerate() {
+                for evt in &mut channel.events {
+                    let tuple = (track_i, channel_i, evt.data.column());
+                    if tick_range.contains(&evt.tick)
+                        && tuple >= start_tuple && tuple <= end_tuple {
+                        events.push(evt);
                     }
                 }
             }

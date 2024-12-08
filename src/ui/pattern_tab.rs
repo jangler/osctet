@@ -199,7 +199,8 @@ impl PatternEditor {
                 input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
                     | input::SHARP_KEY | input::FLAT_KEY
                     | input::OCTAVE_UP_KEY | input::OCTAVE_DOWN_KEY
-                    | input::ENHARMONIC_ALT_KEY => nudge_note(module, &self.edit_start),
+                    | input::ENHARMONIC_ALT_KEY =>
+                        nudge_notes(module, self.selection_corners()),
                 _ => (),
             }
         }
@@ -497,8 +498,8 @@ fn input_note_off(cursor: &Position, module: &mut Module) {
     insert_event_at_cursor(module, cursor, EventData::NoteOff);
 }
 
-fn nudge_note(module: &mut Module, cursor: &Position) {
-    if let Some(evt) = module.event_at(*cursor) {
+fn nudge_notes(module: &mut Module, (start, end): (Position, Position)) {
+    for evt in module.modify_events(start, end) {
         if let EventData::Pitch(ref mut note) = evt.data {
             *note = input::adjust_note_for_modifier_keys(*note);
         }
