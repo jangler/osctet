@@ -263,7 +263,6 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
 
     labeled_group(ui, "", |ui| {
         ui.offset_label(""); // can't delete first osc!
-        ui.space(1.0);
         for i in 1..patch.oscs.len() {
             if ui.button("X") {
                 removed_osc = Some(i);
@@ -523,7 +522,6 @@ fn index_group(ui: &mut UI, len: usize) {
     ui.label("#");
     for i in 0..len {
         ui.offset_label(&(i + 1).to_string());
-        ui.space(1.0);
     }
     ui.end_group();
 }

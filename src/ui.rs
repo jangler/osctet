@@ -86,7 +86,7 @@ enum MouseEvent {
     Released,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Layout {
     Vertical,
     Horizontal,
@@ -228,8 +228,15 @@ impl UI {
         };
     }
 
+    /// Starting a group changes the layout axis and starts tracking the total
+    /// area of pushed graphics.
     pub fn start_group(&mut self) {
         self.flip_layout();
+        self.start_widget();
+    }
+
+    /// A widget is just like a group, but doesn't change the layout axis.
+    fn start_widget(&mut self) {
         self.group_rects.push(Rect {
             x: self.cursor_x,
             y: self.cursor_y,
@@ -238,10 +245,19 @@ impl UI {
         });
     }
 
+    /// Ending a group changes the layout axis and offsets the cursor along the
+    /// new axis by the width or height of the graphics in the group.
     pub fn end_group(&mut self) -> Option<Rect> {
+        if !self.group_rects.is_empty() {
+            self.flip_layout();
+        }
+        self.end_widget()
+    }
+
+    /// A widget is just like a group, but doesn't change the layout axis.
+    pub fn end_widget(&mut self) -> Option<Rect> {
         let rect = self.group_rects.pop();
         if let Some(rect) = rect {
-            self.flip_layout();
             match self.layout {
                 Layout::Horizontal => {
                     self.cursor_x = rect.x + rect.w;
@@ -282,7 +298,10 @@ impl UI {
     }
 
     pub fn space(&mut self, scale: f32) {
-        self.update_cursor(MARGIN * scale, MARGIN * scale);
+        match self.layout {
+            Layout::Horizontal => self.cursor_x += MARGIN * scale,
+            Layout::Vertical => self.cursor_y += MARGIN * scale,
+        }
     }
 
     fn push_graphic(&mut self, graphic: Graphic) {
@@ -309,7 +328,7 @@ impl UI {
     }
 
     fn expand_groups(&mut self, x: f32, y: f32) {
-        if self.cursor_z < 10 {
+        if self.cursor_z < 15 {
             for rect in self.group_rects.iter_mut() {
                 rect.w = rect.w.max(x - rect.x);
                 rect.h = rect.h.max(y - rect.y);
@@ -425,13 +444,6 @@ impl UI {
         self.bounds.w -= w;
     }
 
-    fn update_cursor(&mut self, w: f32, h: f32) {
-        match self.layout {
-            Layout::Horizontal => self.cursor_x += w,
-            Layout::Vertical => self.cursor_y += h,
-        }
-    }
-
     /// Check whether the mouse is within the rect and unoccluded.
     fn mouse_hits(&self, rect: Rect) -> bool {
         if self.mouse_consumed || self.dialog.is_some() {
@@ -455,16 +467,21 @@ impl UI {
         rect.contains(pt)
     }
     
+    /// A label is non-interactive text.
     pub fn label(&mut self, label: &str) {
-        let rect = self.push_text(self.cursor_x, self.cursor_y,
+        self.start_widget();
+        self.push_text(self.cursor_x, self.cursor_y,
             label.to_owned(), self.style.theme.fg());
-        self.update_cursor(rect.w, rect.h);
+        self.end_widget();
     }
 
+    /// An offset label is a label offset in the y direction to align with
+    /// control labels.
     pub fn offset_label(&mut self, label: &str) {
-        let rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
+        self.start_widget();
+        self.push_text(self.cursor_x, self.cursor_y + MARGIN,
             label.to_owned(), self.style.theme.fg());
-        self.update_cursor(rect.w, rect.h);
+        self.end_widget();
     }
 
     pub fn header(&mut self, label: &str) {
@@ -474,12 +491,11 @@ impl UI {
             w: self.bounds.w + self.bounds.x - self.cursor_x,
             h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
         };
-        self.push_rect(rect, self.style.theme.accent1_bg(),
-            //Some(self.style.theme.border_unfocused));
-            None);
+        self.start_widget();
+        self.push_rect(rect, self.style.theme.accent1_bg(), None);
         self.push_text(self.cursor_x, self.cursor_y,
             label.to_owned(), self.style.theme.fg());
-        self.update_cursor(rect.w, rect.h);
+        self.end_widget();
     }
 
     fn text_rect(&mut self, label: &str, x: f32, y: f32,
@@ -519,31 +535,32 @@ impl UI {
 
     /// Draws a button and returns true if it was clicked this frame.
     pub fn button(&mut self, label: &str) -> bool {
-        let (rect, event) = self.text_rect(label,
+        self.start_widget();
+        let (_, event) = self.text_rect(label,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
-        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
+        self.end_widget();
         event == MouseEvent::Released
     }
 
     /// Draws a checkbox and returns true if it was changed this frame.
     pub fn checkbox(&mut self, label: &str, value: &mut bool) -> bool {
         let button_text = if *value { "X" } else { " " };
+        self.start_widget();
         let (rect, event) = self.text_rect(button_text,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg());
-        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN * 2.0);
         let clicked = event == MouseEvent::Released;
-        let label_rect = self.push_text(self.cursor_x, self.cursor_y + MARGIN,
+        self.push_text(self.cursor_x + rect.w + MARGIN, self.cursor_y + MARGIN,
             label.to_owned(), self.style.theme.fg());
-        self.update_cursor(label_rect.w, label_rect.h);
         if clicked {
             *value = !*value;
         }
+        self.end_widget();
         clicked
     }
     
@@ -551,18 +568,18 @@ impl UI {
     pub fn combo_box(&mut self, id: &str, label: &str, button_text: &str,
         get_options: impl Fn() -> Vec<String>
     ) -> Option<usize> {
+        self.start_widget();
+
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
-        let label_dim = if !label.is_empty() {
+        if !label.is_empty() {
             self.push_text(self.cursor_x + button_rect.w + MARGIN,
-                self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg())
-        } else {
-            Rect::default()
-        };
+                self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
+        }
         let params = self.style.text_params();
 
         // check to open list
@@ -596,8 +613,7 @@ impl UI {
             self.open_combo_box = None;
         }
 
-        self.update_cursor(button_rect.w + label_dim.w + MARGIN, button_rect.h + MARGIN);
-    
+        self.end_widget();
         return_val
     }
 
@@ -722,6 +738,7 @@ impl UI {
             }
         }
 
+        self.start_widget();
         let h = cap_height(&self.style.text_params());
 
         // draw groove
@@ -783,13 +800,12 @@ impl UI {
         // draw label
         let x = self.cursor_x + MARGIN * 3.0 + groove_w;
         let y = self.cursor_y + MARGIN;
-        let text_rect = if !label.is_empty() {
-            self.push_text(x, y, label.to_owned(), self.style.theme.fg())
+        if !label.is_empty() {
+            self.push_text(x, y, label.to_owned(), self.style.theme.fg());
         } else {
             // push an invisible rect to reserve space for the handle
             let r = Rect { x, y, w: 0.0, h: 0.0 };
             self.push_rect(r, Color { a: 0.0, ..Default::default() }, None);
-            r
         };
         
         if grabbed {
@@ -801,14 +817,14 @@ impl UI {
             self.tooltip(text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
         }
 
-        self.update_cursor(groove_w + text_rect.w + MARGIN, h + MARGIN * 3.0);
-
+        self.end_widget();
         changed
     }
 
     fn slider_text_entry(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>
     ) -> bool {
+        self.start_widget();
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
@@ -822,6 +838,7 @@ impl UI {
             }
             self.focused_text = None;
         }
+        self.end_widget();
         changed
     }
 
@@ -885,8 +902,10 @@ impl UI {
             self.style.theme.border_unfocused()
         };
 
+        self.start_widget();
         self.push_rect(box_rect, self.style.theme.content_bg(), Some(stroke));
-        let text_rect = self.push_text(box_rect.x, box_rect.y, text, self.style.theme.fg());
+        let text_rect = self.push_text(box_rect.x, box_rect.y,
+            text, self.style.theme.fg());
         
         if focused {
             let line_x = text_rect.x + text_rect.w - MARGIN + 0.5;
@@ -895,11 +914,12 @@ impl UI {
                 self.style.theme.fg());
         }
 
-        let label_rect = self.push_text(box_rect.x + box_rect.w,
-            self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
+        if !label.is_empty() {
+            self.push_text(box_rect.x + box_rect.w, self.cursor_y + MARGIN,
+                label.to_owned(), self.style.theme.fg());
+        }
         
-        self.update_cursor(width + label_rect.w + MARGIN, box_rect.h + MARGIN);
-        
+        self.end_widget();
         focused && is_key_pressed(KeyCode::Enter)
     }
 
@@ -918,6 +938,7 @@ impl UI {
             h: line_height * options.len() as f32 + 2.0,
         };
 
+        self.start_widget();
         self.push_rect(list_rect, self.style.theme.content_bg(),
             Some(self.style.theme.border_unfocused()));
 
@@ -962,8 +983,7 @@ impl UI {
             hit_rect.y += hit_rect.h;
         }
 
-        self.update_cursor(list_rect.w + MARGIN * 2.0, list_rect.h + MARGIN);
-
+        self.end_widget();
         return_val
     }
 
@@ -1066,10 +1086,10 @@ impl UI {
             }
         }
 
+        self.start_widget();
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
-
-        self.update_cursor(rect.w + MARGIN, rect.h + MARGIN);
+        self.end_widget();
     }
 }
 

@@ -440,7 +440,6 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
             ui.end_group();
         } else {
             ui.offset_label(name);
-            ui.space(1.0);
         }
 
         // chanel add/remove buttons
