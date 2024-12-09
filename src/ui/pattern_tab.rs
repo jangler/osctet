@@ -191,9 +191,11 @@ impl PatternEditor {
                 KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
                 KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
                 KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
-                KeyCode::GraveAccent => input_note_off(&self.edit_start, module),
-                KeyCode::E => insert_event_at_cursor(module, &self.edit_start, EventData::End),
-                KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
+                KeyCode::GraveAccent => self.input_note_off(module),
+                KeyCode::E =>
+                    insert_event_at_cursor(module, &self.edit_start, EventData::End),
+                KeyCode::L =>
+                    insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
                 KeyCode::R => self.rational_tempo(module),
                 KeyCode::T => self.tap_tempo(module),
                 KeyCode::Insert => self.push_rows(module),
@@ -342,6 +344,33 @@ impl PatternEditor {
             ticks -= TICKS_PER_BEAT as i32 / self.beat_division as i32;
         }
         module.shift_channel_events(start, end, ticks);
+    }
+
+    fn input_note_off(&self, module: &mut Module) {
+        let (start, end) = self.selection_corners();
+        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+        let mut add = Vec::new();
+
+        for (track_i, track) in module.tracks.iter().enumerate() {
+            for channel_i in 0..track.channels.len() {
+                let tuple = (track_i, channel_i, NOTE_COLUMN);
+                if track_i > 0 && tuple >= start_tuple && tuple <= end_tuple {
+                    add.push(LocatedEvent {
+                        track: track_i,
+                        channel: channel_i,
+                        event: Event {
+                            tick: self.edit_start.tick,
+                            data: EventData::NoteOff
+                        }
+                    });
+                }
+            }
+        }
+
+        module.push_edit(Edit::PatternData {
+            remove: add.iter().map(|e| e.position()).collect(),
+            add,
+        });
     }
 }
 
@@ -515,10 +544,6 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
         MOD_COLUMN => insert_event_at_cursor(module, cursor, EventData::Modulation(value)),
         _ => (),
     }
-}
-
-fn input_note_off(cursor: &Position, module: &mut Module) {
-    insert_event_at_cursor(module, cursor, EventData::NoteOff);
 }
 
 fn nudge_notes(module: &mut Module, (start, end): (Position, Position)) {
