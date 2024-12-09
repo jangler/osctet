@@ -178,11 +178,15 @@ impl Module {
 
     /// Delete pattern events between two positions.
     pub fn delete_events(&mut self, start: Position, end: Position) {
-        let remove = self.scan_events(start, end).iter().map(|x| x.position()).collect();
-        self.push_edit(Edit::PatternData {
-            remove,
-            add: Vec::new(),
-        });
+        let remove: Vec<_> = self.scan_events(start, end).iter()
+            .map(|x| x.position())
+            .collect();
+        if !remove.is_empty() {
+            self.push_edit(Edit::PatternData {
+                remove,
+                add: Vec::new(),
+            });
+        }
     }
 
     fn delete_event(&mut self, pos: Position) -> Option<Event> {
