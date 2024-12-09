@@ -238,6 +238,8 @@ impl App {
                         self.fullscreen = !self.fullscreen;
                         set_fullscreen(self.fullscreen);
                     },
+                    KeyCode::KpDivide => self.octave -= 1,
+                    KeyCode::KpMultiply => self.octave += 1,
                     _ => (),
                 }
             }
@@ -449,10 +451,11 @@ impl App {
             }
         }
 
-        // TODO: int slider or html-number-style input would be better
-        let mut octave = self.octave as f32;
-        if self.ui.slider("octave", "Octave", &mut octave, 0.0..=8.0, None, 1) {
-            self.octave = octave.round() as i8;
+        if let Some(n) = self.ui.edit_box("Octave", 2, self.octave.to_string()) {
+            match n.parse::<i8>() {
+                Ok(n) => self.octave = n,
+                Err(e) => self.ui.report(e),
+            }
         }
         
         self.ui.end_bottom_panel();
