@@ -194,13 +194,15 @@ impl PatternEditor {
                 KeyCode::GraveAccent => input_note_off(&self.edit_start, module),
                 KeyCode::E => insert_event_at_cursor(module, &self.edit_start, EventData::End),
                 KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
-                KeyCode::T => self.tap_tempo(module),
                 KeyCode::R => self.rational_tempo(module),
+                KeyCode::T => self.tap_tempo(module),
+                KeyCode::Insert => self.push_rows(module), // TODO: undo/redo
+                KeyCode::Backspace => self.pull_rows(module), // TODO: undo/redo
                 input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
                     | input::SHARP_KEY | input::FLAT_KEY
                     | input::OCTAVE_UP_KEY | input::OCTAVE_DOWN_KEY
                     | input::ENHARMONIC_ALT_KEY =>
-                        nudge_notes(module, self.selection_corners()),
+                        nudge_notes(module, self.selection_corners()), // TODO: undo/redo
                 _ => (),
             }
         }
@@ -319,6 +321,35 @@ impl PatternEditor {
             ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + self.scroll + ui.bounds.h,
             ui.style.theme.control_bg());
         ui.cursor_z += 1;
+    }
+
+    /// Inserts rows into the pattern, shifting events.
+    fn push_rows(&self, module: &mut Module) {
+        // TODO: have a way to do this for all channels
+        let (start, end) = self.selection_corners();
+        let mut ticks = end.tick - start.tick;
+        if ticks == 0 {
+            ticks = TICKS_PER_BEAT / self.beat_division as u32;
+        }
+
+        for channel in module.modify_channels(start, end) {
+            channel.shift_events(start.tick, ticks as i32);
+        }
+    }
+
+    /// Deletes rows from the pattern, shifting events.
+    fn pull_rows(&self, module: &mut Module) {
+        let (start, end) = self.selection_corners();
+        let mut ticks = start.tick as i32 - end.tick as i32;
+        if ticks == 0 {
+            ticks -= TICKS_PER_BEAT as i32 / self.beat_division as i32;
+        }
+
+        for channel in module.modify_channels(start, end) {
+            channel.events.retain(|e|
+                e.tick < start.tick || e.tick >= (start.tick as i32 - ticks) as u32);
+            channel.shift_events(start.tick, ticks);
+        }
     }
 }
 

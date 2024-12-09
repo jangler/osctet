@@ -148,6 +148,24 @@ impl Module {
         events
     }
 
+    pub fn modify_channels(&mut self, start: Position, end: Position) -> Vec<&mut Channel> {
+        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+        let start_tuple = (start_tuple.0, start_tuple.1);
+        let end_tuple = (end_tuple.0, end_tuple.1);
+        let mut channels = Vec::new();
+        
+        for (track_i, track) in self.tracks.iter_mut().enumerate() {
+            for (channel_i, channel) in track.channels.iter_mut().enumerate() {
+                let tuple = (track_i, channel_i);
+                if tuple >= start_tuple && tuple <= end_tuple {
+                    channels.push(channel);
+                }
+            }
+        }
+
+        channels
+    }
+
     pub fn event_at(&mut self, pos: Position) -> Option<&mut Event> {
         if let Some(track) = self.tracks.get_mut(pos.track) {
             if let Some(channel) = track.channels.get_mut(pos.channel) {
@@ -404,6 +422,15 @@ impl Channel {
             vel_interp: Vec::new(),
             mod_interp: Vec::new(),
             links: Vec::new(),
+        }
+    }
+
+    /// Shifts events after `start` by `distance` ticks.
+    pub fn shift_events(&mut self, start: u32, distance: i32) {
+        for event in self.events.iter_mut() {
+            if event.tick >= start {
+                event.tick = (event.tick as i32 + distance).max(0) as u32;
+            }
         }
     }
 }
