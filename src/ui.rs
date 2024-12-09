@@ -106,6 +106,8 @@ struct TextEditState {
     cursor: usize, // end of selection
 }
 impl TextEditState {
+    /// Handles text editing input. `mouse_i` is the character index of the
+    /// mouse cursor, if the mouse cursor is over the text area.
     fn handle_input(&mut self, mouse_i: Option<usize>) {
         if let Some(i) = mouse_i {
             let i = i.min(self.text.chars().count());
@@ -158,6 +160,8 @@ impl TextEditState {
         }
     }
 
+    /// Delete selected text. `offset` determines which character(s) are
+    /// deleted when there is no selection.
     fn delete(&mut self, offset: isize) {
         if self.cursor == self.anchor {
             self.cursor = ((self.cursor as isize + offset).max(0) as usize)
@@ -166,6 +170,7 @@ impl TextEditState {
 
         let start = self.cursor.min(self.anchor);
         let end = self.cursor.max(self.anchor);
+
         self.text = self.text.chars()
             .enumerate()
             .filter_map(|(i, c)| {
@@ -175,7 +180,9 @@ impl TextEditState {
                     None
                 }
             }).collect();
-        self.set_cursor(start);
+        
+        self.cursor = start;
+        self.anchor = start;
     }
 }
 
