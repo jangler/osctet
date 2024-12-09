@@ -196,8 +196,8 @@ impl PatternEditor {
                 KeyCode::L => insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
                 KeyCode::R => self.rational_tempo(module),
                 KeyCode::T => self.tap_tempo(module),
-                KeyCode::Insert => self.push_rows(module), // TODO: undo/redo
-                KeyCode::Backspace => self.pull_rows(module), // TODO: undo/redo
+                KeyCode::Insert => self.push_rows(module),
+                KeyCode::Backspace => self.pull_rows(module),
                 input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
                     | input::SHARP_KEY | input::FLAT_KEY
                     | input::OCTAVE_UP_KEY | input::OCTAVE_DOWN_KEY
@@ -522,11 +522,20 @@ fn input_note_off(cursor: &Position, module: &mut Module) {
 }
 
 fn nudge_notes(module: &mut Module, (start, end): (Position, Position)) {
-    for evt in module.modify_events(start, end) {
-        if let EventData::Pitch(ref mut note) = evt.data {
-            *note = input::adjust_note_for_modifier_keys(*note);
+    let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
+        if let EventData::Pitch(note) = evt.event.data {
+            Some(LocatedEvent {
+                event: Event {
+                    data: EventData::Pitch(input::adjust_note_for_modifier_keys(note)),
+                    ..evt.event
+                },
+                ..evt.clone()
+            })
+        } else {
+            None
         }
-    }
+    }).collect();
+    module.push_edit(Edit::ReplaceEvents(replacements));
 }
 
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {

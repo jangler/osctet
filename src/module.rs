@@ -326,7 +326,26 @@ impl Module {
                     distance: -distance,
                     insert: deleted,
                 }
-            }
+            },
+            Edit::ReplaceEvents(events) => {
+                Edit::ReplaceEvents(events.into_iter().map(|event| {
+                    self.replace_event(event)
+                }).collect())
+            },
+        }
+    }
+
+    /// Replace an event in-place, returning the old value.
+    pub fn replace_event(&mut self, new_evt: LocatedEvent) -> LocatedEvent {
+        if let Some(old_evt) = self.event_at(new_evt.position()) {
+            let ret = LocatedEvent {
+                event: old_evt.clone(),
+                ..new_evt
+            };
+            old_evt.data = new_evt.event.data;
+            ret
+        } else {
+            new_evt.clone()
         }
     }
 
@@ -600,6 +619,7 @@ pub enum Edit {
         distance: i32,
         insert: Vec<LocatedEvent>,
     },
+    ReplaceEvents(Vec<LocatedEvent>),
 }
 
 pub struct ChannelCoords {
@@ -614,7 +634,7 @@ pub enum TrackEdit {
 }
 
 /// Event with global location data, for the undo stack.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LocatedEvent {
     pub track: usize,
     pub channel: usize,
