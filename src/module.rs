@@ -219,6 +219,28 @@ impl Module {
             add: vec![LocatedEvent { track, channel, event }]
         });
     }
+
+    pub fn shift_channel_events(&mut self, start: Position, end: Position, distance: i32) {
+        let (x_start, x_end) = ((start.track, start.channel), (end.track, end.channel));
+        let mut channels = Vec::new();
+        for (track_i, track) in self.tracks.iter().enumerate() {
+            for channel_i in 0..track.channels.len() {
+                if (track_i, channel_i) >= x_start && (track_i, channel_i) <= x_end {
+                    channels.push(ChannelCoords {
+                        track: track_i as u8,
+                        channel: channel_i as u8
+                    });
+                }
+            }
+        }
+
+        self.push_edit(Edit::ShiftEvents {
+            channels,
+            start: start.tick,
+            distance,
+            insert: Vec::new(),
+        });
+    }
     
     /// Performs an edit operation and handles undo/redo stacks.
     pub fn push_edit(&mut self, edit: Edit) {
@@ -277,6 +299,33 @@ impl Module {
             Edit::RemovePatch(index) => {
                 let patch = self.remove_patch(index);
                 Edit::InsertPatch(index, patch)
+            }
+            Edit::ShiftEvents { channels, start, distance, insert } => {
+                // shift/delete events starting at selection
+                let mut deleted = Vec::new();
+                for coords in &channels {
+                    deleted.extend(self.tracks[coords.track as usize]
+                        .channels[coords.channel as usize]
+                        .shift_events(start, distance)
+                        .into_iter()
+                        .map(|event| LocatedEvent {
+                            track: coords.track as usize,
+                            channel: coords.channel as usize,
+                            event,
+                        }));
+                }
+
+                // re-insert previously deleted events
+                for e in insert {
+                    self.tracks[e.track].channels[e.channel].events.push(e.event);
+                }
+
+                Edit::ShiftEvents {
+                    channels,
+                    start,
+                    distance: -distance,
+                    insert: deleted,
+                }
             }
         }
     }
@@ -425,13 +474,25 @@ impl Channel {
         }
     }
 
-    /// Shifts events after `start` by `distance` ticks.
-    pub fn shift_events(&mut self, start: u32, distance: i32) {
+    /// Shifts events after `start` by `distance` ticks, returning deleted events.
+    pub fn shift_events(&mut self, start: u32, distance: i32) -> Vec<Event> {
+        let mut deleted = Vec::new();
+
+        if distance < 0 {
+            let (keep, pass) = std::mem::take(&mut self.events).into_iter()
+                .partition(|e| e.tick < start
+                    || e.tick >= (start as i32 - distance) as u32);
+            self.events = keep;
+            deleted = pass;
+        }
+
         for event in self.events.iter_mut() {
             if event.tick >= start {
                 event.tick = (event.tick as i32 + distance).max(0) as u32;
             }
         }
+
+        deleted
     }
 }
 
@@ -533,6 +594,17 @@ pub enum Edit {
     // TODO: redoing patch removal doesn't revert track/kit mappings
     InsertPatch(usize, Patch),
     RemovePatch(usize),
+    ShiftEvents {
+        channels: Vec<ChannelCoords>,
+        start: u32,
+        distance: i32,
+        insert: Vec<LocatedEvent>,
+    },
+}
+
+pub struct ChannelCoords {
+    track: u8,
+    channel: u8,
 }
 
 /// Used to track added/removed Tracks for synchronizing Player with Module.

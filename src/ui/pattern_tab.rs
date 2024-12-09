@@ -331,10 +331,7 @@ impl PatternEditor {
         if ticks == 0 {
             ticks = TICKS_PER_BEAT / self.beat_division as u32;
         }
-
-        for channel in module.modify_channels(start, end) {
-            channel.shift_events(start.tick, ticks as i32);
-        }
+        module.shift_channel_events(start, end, ticks as i32);
     }
 
     /// Deletes rows from the pattern, shifting events.
@@ -344,12 +341,7 @@ impl PatternEditor {
         if ticks == 0 {
             ticks -= TICKS_PER_BEAT as i32 / self.beat_division as i32;
         }
-
-        for channel in module.modify_channels(start, end) {
-            channel.events.retain(|e|
-                e.tick < start.tick || e.tick >= (start.tick as i32 - ticks) as u32);
-            channel.shift_events(start.tick, ticks);
-        }
+        module.shift_channel_events(start, end, ticks);
     }
 }
 
