@@ -379,7 +379,7 @@ impl Patch {
     pub fn new() -> Self {
         Self {
             name: String::from("init"),
-            gain: Parameter(shared(1.0)),
+            gain: Parameter(shared(0.5)),
             oscs: vec![Oscillator::new()],
             envs: vec![ADSR::new()],
             filters: Vec::new(),
