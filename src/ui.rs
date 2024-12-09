@@ -513,7 +513,7 @@ impl UI {
             ..trough
         };
         let hit = self.mouse_hits(trough);
-        self.push_rect(handle, self.style.theme.control_bg_hover(), None);
+        self.push_rect(handle, self.style.theme.control_bg_click(), None);
 
         if is_mouse_button_pressed(MouseButton::Left) && hit {
             self.scrollbar_grabbed = true;
