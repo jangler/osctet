@@ -4,7 +4,7 @@ use std::{error::Error, fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{fx::FXSettings, pitch::{Note, Tuning}, synth::Patch};
+use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::DEFAULT_TEMPO, synth::Patch};
 
 pub const TICKS_PER_BEAT: u32 = 120;
 
@@ -332,6 +332,24 @@ impl Module {
                 c.events.iter().map(|e| e.tick)
             })
         }).max()
+    }
+
+    /// Return the tempo at a given tick.
+    pub fn tempo_at(&self, tick: u32) -> f32 {
+        let mut events: Vec<_> = self.tracks[0].channels.iter()
+            .flat_map(|c| c.events.iter().filter(|e| e.tick < tick))
+            .collect();
+        events.sort_by_key(|e| e.tick);
+
+        let mut result = DEFAULT_TEMPO;
+        for evt in events {
+            match evt.data {
+                EventData::Tempo(t) => result = t,
+                EventData::RationalTempo(n, d) => result *= n as f32 / d as f32,
+                _ => (),
+            }
+        }
+        result
     }
 }
 

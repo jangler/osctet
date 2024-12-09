@@ -2,7 +2,7 @@ use fundsp::hacker32::*;
 
 use crate::{fx::GlobalFX, module::{EventData, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
-const DEFAULT_TEMPO: f32 = 120.0;
+pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f32 = 10.0;
 
 // maximum values as written to pattern
@@ -62,12 +62,8 @@ impl Player {
         self.looped = false;
     }
 
-    pub fn play_from(&mut self, tick: u32) {
-        // TODO: calulcate correct memory if tick is nonzero
-        for synth in self.synths.iter_mut() {
-            synth.reset_memory();
-        }
-        self.tempo = DEFAULT_TEMPO;
+    pub fn play_from(&mut self, tick: u32, module: &Module) {
+        self.simulate_events(tick, module);
         self.tick = tick;
         self.play();
     }
@@ -141,6 +137,59 @@ impl Player {
                     if event.tick >= prev_tick && event.tick < self.tick {
                         self.handle_event(&event.data, module, track_i, channel_i);
                     }
+                }
+            }
+        }
+    }
+
+    /// Update state as if the module had been played up to a given tick.
+    fn simulate_events(&mut self, tick: u32, module: &Module) {
+        for synth in self.synths.iter_mut() {
+            synth.reset_memory();
+        }
+        self.tempo = DEFAULT_TEMPO;
+
+        for (track_i, track) in module.tracks.iter().enumerate() {
+            for (channel_i, channel) in track.channels.iter().enumerate() {
+                let mut events: Vec<_> = channel.events.iter()
+                    .filter(|e| e.tick < tick)
+                    .collect();
+                events.sort_by_key(|e| e.tick);
+
+                let mut active_note = None;
+
+                for evt in events {
+                    match evt.data {
+                        EventData::Pitch(note) => {
+                            if let Some((patch, note)) = module.map_note(note, track_i) {
+                                if patch.sustains() {
+                                    active_note = Some((patch, note));
+                                }
+                            }
+                        }
+                        EventData::Pressure(v) => {
+                            self.channel_pressure(track_i, channel_i as u8,
+                                v as f32 / MAX_PRESSURE as f32);
+                        }
+                        EventData::Modulation(v) => {
+                            self.modulate(track_i, channel_i as u8,
+                                v as f32 / MAX_MODULATION as f32);
+                        }
+                        EventData::NoteOff => active_note = None,
+                        EventData::Tempo(t) => self.tempo = t,
+                        EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
+                        EventData::End | EventData::Loop => (),
+                    }
+                }
+                
+                if let Some((patch, note)) = active_note {
+                    let key = Key {
+                        origin: KeyOrigin::Pattern,
+                        channel: channel_i as u8,
+                        key: 0,
+                    };
+                    let pitch = module.tuning.midi_pitch(&note);
+                    self.note_on(track_i, key, pitch, None, patch);
                 }
             }
         }

@@ -607,6 +607,23 @@ impl Patch {
         }
         net
     }
+
+    /// Returns true unless gain is modulated by an envelope with zero sustain.
+    pub fn sustains(&self) -> bool {
+        for m in &self.mod_matrix {
+            if m.target == ModTarget::Gain {
+                if let ModSource::Envelope(i) = m.source {
+                    if let Some(env) = self.envs.get(i) {
+                        if env.sustain == 0.0 {
+                            return false
+                        }
+                    }
+                }
+            }
+        }
+        
+        true
+    }
 }
 
 #[derive(Serialize, Deserialize)]
