@@ -21,7 +21,7 @@ pub struct FXSettings {
 
 impl FXSettings {
     pub fn make_gain(&self) -> Box<dyn AudioUnit> {
-        Box::new(var(&self.gain.0) >> split::<U2>())
+        Box::new(var(&self.gain.0) >> split::<U4>())
     }
 
     pub fn make_amount(&self) -> Box<dyn AudioUnit> {
@@ -76,9 +76,17 @@ impl GlobalFX {
         Self {
             net: Net::wrap(Box::new(backend))
                 * gain
-                >> (highpass_hz(1.0, 0.1) | highpass_hz(1.0, 0.1))
-                >> (shape(Tanh(1.0)) | shape(Tanh(1.0)))
-                >> (multipass::<U2>() & amount * (predelay >> reverb)),
+                >> (highpass_hz(1.0, 0.1)
+                    | highpass_hz(1.0, 0.1)
+                    | highpass_hz(1.0, 0.1)
+                    | highpass_hz(1.0, 0.1))
+                >> (shape(Tanh(1.0))
+                    | shape(Tanh(1.0))
+                    | shape(Tanh(1.0))
+                    | shape(Tanh(1.0)))
+                >> (multipass::<U2>()
+                    | (multipass::<U2>() >> amount * (predelay >> reverb)))
+                >> multijoin::<U2, U2>(),
             gain_id,
             amount_id,
             predelay_id,
@@ -88,7 +96,7 @@ impl GlobalFX {
 
     /// Constructs a new instance with a dummy sequencer backend.
     pub fn new_dummy(settings: &FXSettings) -> Self {
-        Self::new(Sequencer::new(false, 2).backend(), settings)
+        Self::new(Sequencer::new(false, 4).backend(), settings)
     }
 
     pub fn reinit(&mut self, settings: &FXSettings) {

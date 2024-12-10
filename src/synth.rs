@@ -373,6 +373,12 @@ pub struct Patch {
     pub envs: Vec<ADSR>,
     pub lfos: Vec<LFO>,
     pub mod_matrix: Vec<Modulation>,
+    #[serde(default = "default_reverb_send")]
+    pub reverb_send: Parameter,
+}
+
+fn default_reverb_send() -> Parameter {
+    Parameter(shared(1.0))
 }
 
 impl Patch {
@@ -380,6 +386,7 @@ impl Patch {
         Self {
             name: String::from("init"),
             gain: Parameter(shared(0.5)),
+            reverb_send: Parameter(shared(1.0)),
             oscs: vec![Oscillator::new()],
             envs: vec![ADSR::new()],
             filters: Vec::new(),
@@ -962,7 +969,9 @@ impl Voice {
         let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
             | var(&settings.pan.0) >> follow(SMOOTH_TIME)
                 + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
-            >> panner();
+            >> panner() >> multisplit::<U2, U2>()
+            >> (multipass::<U2>()
+                | multipass::<U2>() * (var(&settings.reverb_send.0) >> split::<U2>()));
         Self {
             vars,
             base_pitch: pitch,

@@ -249,7 +249,7 @@ fn tick_interval(dtick: u32, tempo: f32) -> f64 {
 pub fn render(module: &Module) -> Wave {
     let sample_rate = 44100;
     let mut wave = Wave::new(2, sample_rate as f64);
-    let mut seq = Sequencer::new(false, 2);
+    let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(sample_rate as f64);
     let mut fx = GlobalFX::new(seq.backend(), &module.fx);
     let fadeout_gain = shared(1.0);

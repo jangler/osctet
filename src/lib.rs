@@ -548,7 +548,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         .with_max_sample_rate()
         .into();
 
-    let mut seq = Sequencer::new(false, 2);
+    let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(config.sample_rate.0 as f64);
 
     let fx_settings: FXSettings = Default::default();

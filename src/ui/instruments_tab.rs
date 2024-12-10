@@ -185,6 +185,8 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch) {
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 1);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"), 2);
+    ui.shared_slider("reverb_send", "Reverb send",
+        &patch.reverb_send.0, 0.0..=1.0, None, 1);
     if let Some(i) = ui.combo_box("play_mode",
         "Play mode", patch.play_mode.name(),
         || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
