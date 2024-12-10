@@ -38,7 +38,8 @@ impl FXSettings {
             self.reverb_time,
             self.reverb_diffusion,
             self.reverb_mod_speed,
-            highshelf_hz(5000.0, 1.0, db_amp(-self.reverb_damping))))
+            highshelf_hz(5000.0, 1.0, db_amp(-self.reverb_damping))
+                >> lowshelf_hz(80.0, 1.0, db_amp(-self.reverb_damping))))
     }
 }
 
