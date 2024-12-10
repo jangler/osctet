@@ -373,11 +373,13 @@ pub struct Patch {
     pub envs: Vec<ADSR>,
     pub lfos: Vec<LFO>,
     pub mod_matrix: Vec<Modulation>,
-    #[serde(default = "default_reverb_send")]
+    #[serde(default = "one_parameter")]
     pub reverb_send: Parameter,
+    #[serde(default = "one_parameter")]
+    pub clip_gain: Parameter,
 }
 
-fn default_reverb_send() -> Parameter {
+fn one_parameter() -> Parameter {
     Parameter(shared(1.0))
 }
 
@@ -387,6 +389,7 @@ impl Patch {
             name: String::from("init"),
             gain: Parameter(shared(0.5)),
             reverb_send: Parameter(shared(1.0)),
+            clip_gain: Parameter(shared(1.0)),
             oscs: vec![Oscillator::new()],
             envs: vec![ADSR::new()],
             filters: Vec::new(),
@@ -968,7 +971,15 @@ impl Voice {
             * settings.dsp_component(&vars, ModTarget::Gain, &[])
             * VOICE_GAIN;
         let filter_net = settings.make_filter_net(&vars);
-        let net = ((settings.make_osc(0, &vars) >> filter_net) * gain
+
+        // use dry signal if clip gain is set to 1.0
+        let clip = pass()
+            * var_fn(&settings.clip_gain.0, |x| if x == 1.0 { 1.0 } else { 0.0 })
+            & pass()
+            * var_fn(&settings.clip_gain.0, |x| x * if x == 1.0 { 0.0 } else { 1.0 })
+            >> shape(Clip(1.0));
+
+        let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
             | var(&settings.pan.0) >> follow(SMOOTH_TIME)
                 + settings.dsp_component(&vars, ModTarget::Pan, &[]) >> shape_fn(|x| clamp11(x)))
             >> panner() >> multisplit::<U2, U2>()
