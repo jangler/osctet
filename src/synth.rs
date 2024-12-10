@@ -20,7 +20,7 @@ pub const MIN_LFO_RATE: f32 = 0.1;
 pub const MAX_LFO_RATE: f32 = 20.0;
 
 pub const MIN_FILTER_CUTOFF: f32 = 20.0;
-pub const MAX_FILTER_CUTOFF: f32 = 20_000.0;
+pub const MAX_FILTER_CUTOFF: f32 = 22_000.0;
 
 pub const MIN_FILTER_RESONANCE: f32 = 0.1;
 
