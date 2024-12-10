@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, path::PathBuf};
 
 use serde::{Serialize, Deserialize};
 
@@ -11,6 +11,10 @@ pub struct Config {
     pub default_midi_input: Option<String>,
     pub midi_send_pressure: Option<bool>,
     pub theme: Option<Theme>,
+    pub module_folder: Option<String>,
+    pub patch_folder: Option<String>,
+    pub render_folder: Option<String>,
+    pub scale_folder: Option<String>,
 }
 
 impl Config {
@@ -19,6 +23,10 @@ impl Config {
             default_midi_input: None,
             midi_send_pressure: Some(true),
             theme: None,
+            module_folder: None,
+            patch_folder: None,
+            render_folder: None,
+            scale_folder: None,
         }
     }
 
@@ -33,4 +41,8 @@ impl Config {
         std::fs::write(CONFIG_PATH, s)?;
         Ok(())
     }
+}
+
+pub fn dir_as_string(p: &PathBuf) -> Option<String> {
+    p.parent().map(|p| p.to_str().map(|s| s.to_owned())).flatten()
 }

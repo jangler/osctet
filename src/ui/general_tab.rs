@@ -1,10 +1,10 @@
 use rfd::FileDialog;
 
-use crate::{fx::{FXSettings, GlobalFX}, module::Module, pitch::Tuning};
+use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX}, module::Module, pitch::Tuning};
 
 use super::*;
 
-pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX) {
+pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
     ui.header("METADATA");
     if let Some(s) = ui.edit_box("Title", 20, module.title.clone()) {
@@ -14,7 +14,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX) {
         module.author = s;
     }
     fx_controls(ui, &mut module.fx, fx);
-    tuning_controls(ui, &mut module.tuning);
+    tuning_controls(ui, &mut module.tuning, cfg);
 }
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
@@ -39,7 +39,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     }
 }
 
-fn tuning_controls(ui: &mut UI, tuning: &mut Tuning) {
+fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
     ui.space(2.0);
     ui.header("TUNING");
     if let Some(s) = ui.edit_box("Equave", 8, tuning.equave().to_string()) {
@@ -70,7 +70,10 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning) {
     if ui.button("Load scale") {
         if let Some(path) = FileDialog::new()
             .add_filter("Scala scale file", &["scl"])
+            .set_directory(cfg.scale_folder.clone().unwrap_or(String::from(".")))
             .pick_file() {
+            cfg.scale_folder = config::dir_as_string(&path);
+            let _ = cfg.save();
             match Tuning::load(path, tuning.root) {
                 Ok(t) => *tuning = t,
                 Err(e) => ui.report(e),

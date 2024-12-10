@@ -407,11 +407,11 @@ impl App {
 
         match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
             TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module,
-                &mut self.fx),
+                &mut self.fx, &mut self.config),
             TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
-                &mut self.patch_index, &mut self.instruments_scroll),
+                &mut self.patch_index, &mut self.instruments_scroll, &mut self.config),
             TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config),
             _ => panic!("bad tab value"),
         }
@@ -466,8 +466,12 @@ impl App {
         if self.module.ends() {
             if let Some(path) = FileDialog::new()
                 .add_filter("WAV file", &["wav"])
+                .set_directory(self.config.render_folder.clone()
+                    .unwrap_or(String::from(".")))
                 .set_file_name(self.module.title.clone())
                 .save_file() {
+                self.config.render_folder = config::dir_as_string(&path);
+                let _ = self.config.save();
                 match playback::render(&self.module).save_wav16(path) {
                     Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
                     Err(e) => self.ui.report(e),
@@ -498,8 +502,12 @@ impl App {
     fn save_module_as(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
+            .set_directory(self.config.module_folder.clone()
+                .unwrap_or(String::from(".")))
             .set_file_name(self.module.title.clone())
             .save_file() {
+            self.config.module_folder = config::dir_as_string(&path);
+            let _ = self.config.save();
             if let Err(e) = self.module.save(&path) {
                 self.ui.report(e);
             } else {
@@ -512,7 +520,11 @@ impl App {
     fn open_module(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
+            .set_directory(self.config.module_folder.clone()
+                .unwrap_or(String::from(".")))
             .pick_file() {
+            self.config.module_folder = config::dir_as_string(&path);
+            let _ = self.config.save();
             match Module::load(&path) {
                 Ok(module) => {
                     self.load_module(module);

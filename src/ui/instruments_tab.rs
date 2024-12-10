@@ -1,6 +1,6 @@
 use rfd::FileDialog;
 
-use crate::{module::{Edit, Module}, synth::*};
+use crate::{config::{self, Config}, module::{Edit, Module}, synth::*};
 
 use super::{Layout, UI};
 
@@ -11,11 +11,11 @@ const PATCH_FILTER_EXT: &str = "oscins";
 const CURVES: [&str; 3] = ["Linear", "Quadratic", "Cubic"];
 
 pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
-    scroll: &mut f32
+    scroll: &mut f32, cfg: &mut Config
 ) {
     ui.layout = Layout::Horizontal;
     ui.start_group();
-    patch_list(ui, module, patch_index);
+    patch_list(ui, module, patch_index, cfg);
     ui.end_group();
     let old_y = ui.cursor_y;
 
@@ -37,7 +37,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y);
 }
 
-fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>) {
+fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
+    cfg: &mut Config
+) {
     let mut edit = None;
     let patches = &mut module.patches;
 
@@ -79,8 +81,11 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
             if let Some(path) = FileDialog::new()
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+                .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
                 .set_file_name(patch.name.clone())
                 .save_file() {
+                cfg.patch_folder = config::dir_as_string(&path);
+                let _ = cfg.save();
                 if let Err(e) = patch.save(&path) {
                     ui.report(e);
                 }
@@ -90,7 +95,10 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>)
     if ui.button("Load") {
         if let Some(path) = FileDialog::new()
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+            .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
             .pick_file() {
+            cfg.patch_folder = config::dir_as_string(&path);
+            let _ = cfg.save();
             match Patch::load(&path) {
                 Ok(mut p) => {
                     if let Some(s) = path.file_stem() {
