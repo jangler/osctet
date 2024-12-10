@@ -26,3 +26,6 @@ harness = false
 
 [profile.dev]
 opt-level = 1
+
+[build-dependencies]
+winresource = "0.1.19"
