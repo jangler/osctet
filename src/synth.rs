@@ -327,6 +327,14 @@ impl Synth {
         }
     }
 
+    /// Turns off all notes.
+    pub fn clear_all_notes(&mut self, seq: &mut Sequencer) {
+        for (k, voice) in self.active_voices.drain() {
+            voice.off(seq);
+            self.released_voices[k.channel as usize].push_back(voice);
+        }
+    }
+
     pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
         self.expand_memory(channel as usize);
         self.bend_memory[channel as usize] = bend;

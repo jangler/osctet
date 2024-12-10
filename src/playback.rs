@@ -35,6 +35,9 @@ impl Player {
     }
 
     pub fn reinit(&mut self, num_tracks: usize) {
+        for synth in &mut self.synths {
+            synth.clear_all_notes(&mut self.seq);
+        }
         self.synths = (0..=num_tracks).map(|_| Synth::new()).collect();
         self.playing = false;
         self.tick = 0;
