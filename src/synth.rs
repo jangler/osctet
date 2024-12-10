@@ -383,14 +383,8 @@ pub struct Patch {
     pub envs: Vec<ADSR>,
     pub lfos: Vec<LFO>,
     pub mod_matrix: Vec<Modulation>,
-    #[serde(default = "one_parameter")]
     pub reverb_send: Parameter,
-    #[serde(default = "one_parameter")]
     pub clip_gain: Parameter,
-}
-
-fn one_parameter() -> Parameter {
-    Parameter(shared(1.0))
 }
 
 impl Patch {
