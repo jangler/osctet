@@ -33,6 +33,8 @@ const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 
 const LFO_DELAY_CURVE: f32 = 3.0; // cubic
 
+pub const MAX_CLIP_GAIN: f32 = 8.0;
+
 // wrap this type so we can serialize it
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(from = "f32", into = "f32")]
@@ -460,6 +462,7 @@ impl Patch {
             if osc.waveform.has_tone_control() {
                 v.push(ModTarget::Tone(i));
             }
+            v.push(ModTarget::ClipGain);
         }
         for i in 0..self.filters.len() {
             v.push(ModTarget::FilterCutoff(i));
@@ -906,6 +909,7 @@ pub enum ModTarget {
     EnvSpeed(usize),
     LFORate(usize),
     ModDepth(usize),
+    ClipGain,
 }
 
 impl ModTarget {
@@ -941,6 +945,7 @@ impl Display for ModTarget {
             Self::EnvSpeed(n) => &format!("Env {} speed", n + 1),
             Self::LFORate(n) => &format!("LFO {} freq", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
+            Self::ClipGain => "Distortion",
         };
         f.write_str(s)
     }
@@ -974,9 +979,13 @@ impl Voice {
 
         // use dry signal if clip gain is set to 1.0
         let clip = pass()
-            * var_fn(&settings.clip_gain.0, |x| if x == 1.0 { 1.0 } else { 0.0 })
+            * (var(&settings.clip_gain.0)
+                + settings.dsp_component(&vars, ModTarget::ClipGain, &[]) * MAX_CLIP_GAIN
+                >> shape_fn(|x| if x == 1.0 { 1.0 } else { 0.0 }))
             & pass()
-            * var_fn(&settings.clip_gain.0, |x| x * if x == 1.0 { 0.0 } else { 1.0 })
+            * (var(&settings.clip_gain.0)
+                + settings.dsp_component(&vars, ModTarget::ClipGain, &[]) * MAX_CLIP_GAIN
+                >> shape_fn(|x| x * if x == 1.0 { 0.0 } else { 1.0 }))
             >> shape(Clip(1.0));
 
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain

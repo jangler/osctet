@@ -192,7 +192,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch) {
         patch.play_mode = PlayMode::VARIANTS[i];
     }
     ui.shared_slider("distortion", "Distortion",
-        &patch.clip_gain.0, 1.0..=8.0, None, 1);
+        &patch.clip_gain.0, 1.0..=MAX_CLIP_GAIN, None, 1);
     ui.shared_slider("reverb_send", "Reverb send",
         &patch.reverb_send.0, 0.0..=1.0, None, 1);
 
