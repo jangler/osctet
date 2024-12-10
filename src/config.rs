@@ -1,10 +1,17 @@
-use std::{error::Error, path::PathBuf};
+use std::{env, error::Error, path::PathBuf};
 
 use serde::{Serialize, Deserialize};
 
 use crate::ui::theme::Theme;
 
-const CONFIG_PATH: &str = "config.toml";
+const CONFIG_FILENAME: &str = "config.toml";
+
+fn config_path() -> Result<PathBuf, std::io::Error> {
+    let mut path = env::current_exe()?;
+    path.pop();
+    path.push(CONFIG_FILENAME);
+    Ok(path)
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -31,14 +38,14 @@ impl Config {
     }
 
     pub fn load() -> Result<Self, Box<dyn Error>> {
-        let s = std::fs::read_to_string(CONFIG_PATH)?;
+        let s = std::fs::read_to_string(config_path()?)?;
         let c = toml::from_str(&s)?;
         Ok(c)
     }
 
     pub fn save(&self) -> Result<(), Box<dyn Error>> {
         let s = toml::to_string(self)?;
-        std::fs::write(CONFIG_PATH, s)?;
+        std::fs::write(config_path()?, s)?;
         Ok(())
     }
 }

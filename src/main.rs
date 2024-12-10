@@ -1,7 +1,7 @@
 // disable console in windows release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{error::Error, fs, panic};
+use std::{env, error::Error, fs, panic};
 
 use macroquad::prelude::Conf;
 
@@ -33,6 +33,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             eprint!("{}", message);
         }));
     }
-    
-    run().await
+
+    run(env::args().nth(1)).await
 }

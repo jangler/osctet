@@ -549,7 +549,7 @@ fn input_names(input: &MidiInput) -> Vec<String> {
 }
 
 /// Application entry point.
-pub async fn run() -> Result<(), Box<dyn Error>> {
+pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let device = cpal::default_host()
         .default_output_device()
         .ok_or("could not open audio output device")?;
@@ -588,6 +588,13 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     stream.play()?;
 
     let mut app = App::new(seq, global_fx, fx_settings);
+
+    if let Some(arg) = arg {
+        match Module::load(&arg.into()) {
+            Ok(m) => app.load_module(m),
+            Err(e) => app.ui.report(e),
+        }
+    }
 
     loop {
         app.frame();
