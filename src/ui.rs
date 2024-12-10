@@ -164,7 +164,7 @@ impl UI {
     pub fn new(theme: Option<Theme>) -> Self {
         Self {
             style: Style {
-                font: load_ttf_font_from_bytes(include_bytes!("font/ProggyClean.ttf"))
+                font: load_ttf_font_from_bytes(include_bytes!("../font/ProggyClean.ttf"))
                     .expect("included font should be loadable"),
                 theme: theme.unwrap_or(Theme::light()),
             },
