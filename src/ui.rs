@@ -7,6 +7,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
+use textedit::TextEditState;
 use theme::Theme;
 
 use crate::{module::EventData, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
@@ -16,6 +17,7 @@ pub mod pattern_tab;
 pub mod instruments_tab;
 pub mod settings_tab;
 pub mod theme;
+mod textedit;
 
 const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
@@ -99,93 +101,6 @@ struct ComboBoxState {
     list_rect: Rect,
 }
 
-struct TextEditState {
-    id: String,
-    text: String,
-    anchor: usize, // beginning of selection
-    cursor: usize, // end of selection
-}
-impl TextEditState {
-    /// Handles text editing input. `mouse_i` is the character index of the
-    /// mouse cursor, if the mouse cursor is over the text area.
-    fn handle_input(&mut self, mouse_i: Option<usize>) {
-        if let Some(i) = mouse_i {
-            let i = i.min(self.text.chars().count());
-            if is_mouse_button_pressed(MouseButton::Left) {
-                self.set_cursor(i);
-            } else if is_mouse_button_down(MouseButton::Left) {
-                self.cursor = i;
-            }
-        }
-
-        while let Some(c) = get_char_pressed() {
-            if !c.is_ascii_control() {
-                if self.cursor != self.anchor {
-                    self.delete(0);
-                }
-                self.text.insert(self.cursor, c);
-                self.cursor += 1;
-                self.anchor = self.cursor;
-            }
-        }
-
-        for key in get_keys_pressed() {
-            match key {
-                KeyCode::Backspace => self.delete(-1),
-                KeyCode::Delete => self.delete(1),
-                KeyCode::Home => self.set_cursor(0),
-                KeyCode::End => self.set_cursor(self.text.chars().count()),
-                KeyCode::Left => if self.cursor > 0 {
-                    self.set_cursor(self.cursor - 1);
-                } else {
-                    self.set_cursor(0);
-                }
-                KeyCode::Right => if self.cursor < self.text.chars().count() {
-                    self.set_cursor(self.cursor + 1);
-                } else {
-                    self.set_cursor(self.cursor);
-                }
-                _ => (),
-            }
-        }
-        self.anchor = self.anchor.min(self.text.chars().count());
-    }
-
-    /// Sets the mouse cursor to the given position, updating anchor as needed.
-    /// Does not check bounds.
-    fn set_cursor(&mut self, pos: usize) {
-        self.cursor = pos;
-        if !(is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)) {
-            self.anchor = self.cursor;
-        }
-    }
-
-    /// Delete selected text. `offset` determines which character(s) are
-    /// deleted when there is no selection.
-    fn delete(&mut self, offset: isize) {
-        if self.cursor == self.anchor {
-            self.cursor = ((self.cursor as isize + offset).max(0) as usize)
-                .min(self.text.chars().count());
-        }
-
-        let start = self.cursor.min(self.anchor);
-        let end = self.cursor.max(self.anchor);
-
-        self.text = self.text.chars()
-            .enumerate()
-            .filter_map(|(i, c)| {
-                if i < start || i >= end {
-                    Some(c)
-                } else {
-                    None
-                }
-            }).collect();
-        
-        self.cursor = start;
-        self.anchor = start;
-    }
-}
-
 enum Graphic {
     Rect(Rect, Color, Option<Color>),
     Line(f32, f32, f32, f32, Color),
@@ -242,6 +157,7 @@ pub struct UI {
     mouse_consumed: bool,
     scrollbar_grabbed: bool,
     notification: Option<Notification>,
+    text_clipboard: Option<String>,
 }
 
 impl UI {
@@ -270,6 +186,7 @@ impl UI {
             mouse_consumed: false,
             scrollbar_grabbed: false,
             notification: None,
+            text_clipboard: None,
         }
     }
 
@@ -843,12 +760,7 @@ impl UI {
             }
             if is_mouse_button_pressed(MouseButton::Right) {
                 let text = val.to_string();
-                self.focused_text = Some(TextEditState {
-                    id: id.to_string(),
-                    anchor: 0,
-                    cursor: text.chars().count(),
-                    text,
-                });
+                self.focused_text = Some(TextEditState::new(id.to_owned(), text));
             }
         }
         let grabbed = if let Some(s) = &self.focused_slider {
@@ -956,12 +868,7 @@ impl UI {
         
         // focus/unfocus
         if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
-            self.focused_text = Some(TextEditState {
-                id: id.to_owned(),
-                anchor: 0,
-                cursor: text.chars().count(),
-                text: text.to_string(),
-            });
+            self.focused_text = Some(TextEditState::new(id.to_owned(), text.to_owned()));
         } else if is_key_pressed(KeyCode::Escape) {
             self.focused_text = None;
         }
@@ -1050,12 +957,7 @@ impl UI {
             } else {
                 if self.mouse_hits(hit_rect) && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
                     let text = option.clone();
-                    self.focused_text = Some(TextEditState {
-                        id: id.to_owned(),
-                        anchor: 0,
-                        cursor: text.chars().count(),
-                        text,
-                    });
+                    self.focused_text = Some(TextEditState::new(id.to_string(), text));
                     self.instrument_edit_index = Some(i);
                     *index = i;
                 }
@@ -1082,7 +984,7 @@ impl UI {
             } else {
                 None
             };
-            state.handle_input(mouse_i);
+            state.handle_input(mouse_i, &mut self.text_clipboard);
 
             let text_h = cap_height(&params);
             let f = |i| rect.x + char_w * i as f32 + MARGIN + LINE_THICKNESS * 0.5;
