@@ -168,7 +168,8 @@ impl App {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
 
         for key in released {
-            if let Some(_) = input::note_from_key(key, &self.module.tuning, self.octave) {
+            if let Some(_) = input::note_from_key(
+                key, &self.module.tuning, self.octave, &self.config) {
                 let key = Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
@@ -216,7 +217,7 @@ impl App {
                         self.ui.report("Nothing to redo");
                     },
                     _ => if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
-                        self.pattern_editor.action(*action, &mut self.module);
+                        self.pattern_editor.action(*action, &mut self.module, &self.config);
                     },
                 }
             }
@@ -225,7 +226,8 @@ impl App {
                 //       things are being undone/redone offscreen. could either provide
                 //       messages describing what's being done, or move view to location
                 //       of changes
-            } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
+            } else if let Some(note) = input::note_from_key(
+                key, &self.module.tuning, self.octave, &self.config) {
                 self.ui.note_queue.push(EventData::Pitch(note));
                 if !self.ui.accepting_note_input()
                     && !self.pattern_editor.in_digit_column(&self.ui)
@@ -286,7 +288,7 @@ impl App {
                 if let Some(evt) = MidiEvent::parse(&v) {
                     if let MidiEvent::NoteOn { key, velocity, .. } = evt {
                         self.ui.note_queue.push(EventData::Pitch(
-                            input::note_from_midi(key, &self.module.tuning)));
+                            input::note_from_midi(key, &self.module.tuning, &self.config)));
                         let v = (velocity as f32 * 9.0 / 127.0).round() as u8;
                         self.ui.note_queue.push(EventData::Pressure(v));
                     }
@@ -302,7 +304,8 @@ impl App {
                             },
                             MidiEvent::NoteOn { channel, key, velocity } => {
                                 if velocity != 0 {
-                                    let note = input::note_from_midi(key, &self.module.tuning);
+                                    let note = input::note_from_midi(
+                                        key, &self.module.tuning, &self.config);
                                     if let Some((patch, note)) =
                                         self.module.map_input(self.keyjazz_patch_index(), note) {
                                         let key = Key {

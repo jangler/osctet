@@ -71,6 +71,15 @@ impl Config {
         self.key_map.get(hotkey)
     }
 
+    pub fn action_is_down(&self, action: Action) -> bool {
+        for (k, a) in &self.keys {
+            if *a == action && k.is_down() {
+                return true
+            }
+        }
+        false
+    }
+
     pub fn update_hotkeys(&mut self) {
         self.key_map = self.keys.iter().cloned().collect();
     }
@@ -115,5 +124,12 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::R), Action::RationalTempo),
         (Hotkey::new(Modifiers::None, KeyCode::Insert), Action::InsertRows),
         (Hotkey::new(Modifiers::None, KeyCode::Backspace), Action::DeleteRows),
+        (Hotkey::new(Modifiers::None, KeyCode::RightBracket), Action::NudgeArrowUp),
+        (Hotkey::new(Modifiers::None, KeyCode::LeftBracket), Action::NudgeArrowDown),
+        (Hotkey::new(Modifiers::None, KeyCode::Equal), Action::NudgeSharp),
+        (Hotkey::new(Modifiers::None, KeyCode::Minus), Action::NudgeFlat),
+        (Hotkey::new(Modifiers::None, KeyCode::Slash), Action::NudgeOctaveUp),
+        (Hotkey::new(Modifiers::None, KeyCode::Backslash), Action::NudgeOctaveDown),
+        (Hotkey::new(Modifiers::None, KeyCode::Space), Action::NudgeEnharmonic),
     ]
 }

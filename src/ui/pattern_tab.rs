@@ -1,6 +1,6 @@
 use gcd::Gcd;
 
-use crate::{input::{self, Action}, module::*, playback::Player, synth::Patch};
+use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch};
 
 use super::*;
 
@@ -169,7 +169,7 @@ impl PatternEditor {
         ui.push_rect(selection_rect, color, None);
     }
 
-    pub fn action(&mut self, action: Action, module: &mut Module) {
+    pub fn action(&mut self, action: Action, module: &mut Module, cfg: &Config) {
         match action {
             Action::Cut => self.cut(module),
             Action::Copy => self.copy(module),
@@ -195,6 +195,11 @@ impl PatternEditor {
             Action::TapTempo => self.tap_tempo(module),
             Action::InsertRows => self.push_rows(module),
             Action::DeleteRows => self.pull_rows(module),
+            Action::NudgeArrowUp | Action::NudgeArrowDown
+                | Action::NudgeSharp | Action::NudgeFlat
+                | Action::NudgeOctaveUp | Action::NudgeOctaveDown
+                | Action::NudgeEnharmonic =>
+                    nudge_notes(module, self.selection_corners(), cfg),
             _ => (),
         }
     }
@@ -212,11 +217,6 @@ impl PatternEditor {
                 KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
                 KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
                 KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
-                input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
-                    | input::SHARP_KEY | input::FLAT_KEY
-                    | input::OCTAVE_UP_KEY | input::OCTAVE_DOWN_KEY
-                    | input::ENHARMONIC_ALT_KEY =>
-                        nudge_notes(module, self.selection_corners()), // TODO: undo/redo
                 _ => (),
             }
         }
@@ -558,12 +558,12 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
     }
 }
 
-fn nudge_notes(module: &mut Module, (start, end): (Position, Position)) {
+fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Config) {
     let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
         if let EventData::Pitch(note) = evt.event.data {
             Some(LocatedEvent {
                 event: Event {
-                    data: EventData::Pitch(input::adjust_note_for_modifier_keys(note)),
+                    data: EventData::Pitch(input::adjust_note_for_modifier_keys(note, cfg)),
                     ..evt.event
                 },
                 ..evt.clone()

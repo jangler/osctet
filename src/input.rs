@@ -3,7 +3,7 @@ use std::fmt;
 use macroquad::input::{is_key_down, KeyCode};
 use serde::{Deserialize, Serialize};
 
-use crate::pitch::{Nominal, Note, Tuning};
+use crate::{config::Config, pitch::{Nominal, Note, Tuning}};
 
 pub const CC_MODULATION: u8 = 1;
 pub const CC_MACRO_MIN: u8 = 41;
@@ -13,14 +13,6 @@ pub const CC_RPN_LSB: u8 = 100;
 pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
-
-pub const ARROW_DOWN_KEY: KeyCode = KeyCode::LeftBracket;
-pub const ARROW_UP_KEY: KeyCode = KeyCode::RightBracket;
-pub const SHARP_KEY: KeyCode = KeyCode::Equal;
-pub const FLAT_KEY: KeyCode = KeyCode::Minus;
-pub const ENHARMONIC_ALT_KEY: KeyCode = KeyCode::Space;
-pub const OCTAVE_UP_KEY: KeyCode = KeyCode::Slash;
-pub const OCTAVE_DOWN_KEY: KeyCode = KeyCode::Backslash;
 
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
@@ -35,14 +27,14 @@ fn use_sharps(t: &Tuning) -> bool {
         t.midi_pitch(&ds4) != t.midi_pitch(&Note { nominal: Nominal::E, ..d4 })
 }
 
-pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8) -> Option<Note> {
+pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8, cfg: &Config) -> Option<Note> {
     let f = |nominal, accidentals, offset| {
         Some(adjust_note_for_modifier_keys(Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
             nominal,
             demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
             equave: equave + offset,
-        }))
+        }, cfg))
     };
     match k {
         KeyCode::Z => f(Nominal::C, 0, -1),
@@ -78,14 +70,14 @@ pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8) -> Option<Note> {
     }
 }
 
-pub fn note_from_midi(n: u8, t: &Tuning) -> Note {
+pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
     let f = |nominal, accidentals| {
         adjust_note_for_modifier_keys(Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
             nominal,
             demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
             equave: (n as i8) / 12 - 1,
-        })
+        }, cfg)
     };
     match n % 12 {
         0 => f(Nominal::C, 0),
@@ -104,20 +96,34 @@ pub fn note_from_midi(n: u8, t: &Tuning) -> Note {
     }
 }
 
-pub fn adjust_note_for_modifier_keys(note: Note) -> Note {
-    let note = Note {
-        arrows: note.arrows
-            + if is_key_down(ARROW_UP_KEY) { 1 } else { 0 }
-            - if is_key_down(ARROW_DOWN_KEY) { 1 } else { 0 },
-        demisharps: note.demisharps
-            + if is_key_down(SHARP_KEY) { 2 } else { 0 }
-            - if is_key_down(FLAT_KEY) { 2 } else { 0 },
-        equave: note.equave
-            + if is_key_down(OCTAVE_UP_KEY) { 1 } else { 0 }
-            - if is_key_down(OCTAVE_DOWN_KEY) { 1 } else { 0 },
+pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config) -> Note {
+    let mut note = Note {
+        arrows: note.arrows,
+        demisharps: note.demisharps,
+        equave: note.equave,
         ..note
     };
-    if is_key_down(ENHARMONIC_ALT_KEY) {
+
+    if cfg.action_is_down(Action::NudgeArrowUp) {
+        note.arrows += 1;
+    }
+    if cfg.action_is_down(Action::NudgeArrowDown) {
+        note.arrows -= 1;
+    }
+    if cfg.action_is_down(Action::NudgeSharp) {
+        note.demisharps += 2;
+    }
+    if cfg.action_is_down(Action::NudgeFlat) {
+        note.demisharps -= 2;
+    }
+    if cfg.action_is_down(Action::NudgeOctaveUp) {
+        note.equave += 1;
+    }
+    if cfg.action_is_down(Action::NudgeOctaveDown) {
+        note.equave -= 1;
+    }
+
+    if cfg.action_is_down(Action::NudgeEnharmonic) {
         enharmonic_alternative(note)
     } else {
         note
@@ -370,6 +376,10 @@ impl Hotkey {
     pub fn new(mods: Modifiers, key: KeyCode) -> Self {
         Self { mods, key }
     }
+
+    pub fn is_down(&self) -> bool {
+        is_key_down(self.key) && self.mods == Modifiers::current()
+    }
 }
 
 impl fmt::Display for Hotkey {
@@ -417,6 +427,13 @@ pub enum Action {
     RationalTempo,
     InsertRows,
     DeleteRows,
+    NudgeArrowUp,
+    NudgeArrowDown,
+    NudgeSharp,
+    NudgeFlat,
+    NudgeOctaveUp,
+    NudgeOctaveDown,
+    NudgeEnharmonic,
 }
 
 impl Action {
@@ -455,6 +472,13 @@ impl Action {
             Self::RationalTempo => "Insert rational tempo event",
             Self::InsertRows => "Insert rows",
             Self::DeleteRows => "Delete rows",
+            Self::NudgeArrowUp => "Arrow up",
+            Self::NudgeArrowDown => "Arrow down",
+            Self::NudgeSharp => "Sharp",
+            Self::NudgeFlat => "Flat",
+            Self::NudgeOctaveUp => "Octave up",
+            Self::NudgeOctaveDown => "Octave down",
+            Self::NudgeEnharmonic => "Enharmonic swap",
         }
     }
 }
