@@ -1,8 +1,9 @@
-use std::{env, error::Error, path::PathBuf};
+use std::{collections::HashMap, env, error::Error, path::PathBuf};
 
-use serde::{Serialize, Deserialize};
+use macroquad::input::KeyCode;
+use serde::{Deserialize, Serialize};
 
-use crate::ui::theme::Theme;
+use crate::{input::{Action, Hotkey, Modifiers}, ui::theme::Theme};
 
 const CONFIG_FILENAME: &str = "config.toml";
 
@@ -22,6 +23,10 @@ pub struct Config {
     pub patch_folder: Option<String>,
     pub render_folder: Option<String>,
     pub scale_folder: Option<String>,
+    #[serde(default = "default_keys")]
+    keys: Vec<(Hotkey, Action)>, // for serialization
+    #[serde(skip)]
+    pub key_map: HashMap<Hotkey, Action>, // for use
 }
 
 impl Config {
@@ -34,17 +39,20 @@ impl Config {
             patch_folder: None,
             render_folder: None,
             scale_folder: None,
+            keys: default_keys(),
+            key_map: HashMap::new(),
         }
     }
 
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let s = std::fs::read_to_string(config_path()?)?;
-        let c = toml::from_str(&s)?;
+        let mut c: Self = toml::from_str(&s)?;
+        c.key_map = c.keys.iter().cloned().collect();
         Ok(c)
     }
 
     pub fn save(&self) -> Result<(), Box<dyn Error>> {
-        let s = toml::to_string(self)?;
+        let s = toml::to_string_pretty(self)?;
         std::fs::write(config_path()?, s)?;
         Ok(())
     }
@@ -52,4 +60,13 @@ impl Config {
 
 pub fn dir_as_string(p: &PathBuf) -> Option<String> {
     p.parent().map(|p| p.to_str().map(|s| s.to_owned())).flatten()
+}
+
+fn default_keys() -> Vec<(Hotkey, Action)> {
+    vec![
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::Equal), Action::IncrementDivision),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::Minus), Action::DecrementDivision),
+        (Hotkey::new(Modifiers::Alt, KeyCode::Equal), Action::DoubleDivision),
+        (Hotkey::new(Modifiers::Alt, KeyCode::Minus), Action::HalveDivision),
+    ]
 }

@@ -1,4 +1,5 @@
 use macroquad::input::{is_key_down, KeyCode};
+use serde::{Deserialize, Serialize};
 
 use crate::pitch::{Nominal, Note, Tuning};
 
@@ -196,6 +197,186 @@ impl MidiEvent {
     }
 }
 
+/// Redefinition of macroquad's KeyCode for serde.
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "KeyCode")]
+enum KeyCodeDef {
+    Space = 0x0020,
+    Apostrophe = 0x0027,
+    Comma = 0x002c,
+    Minus = 0x002d,
+    Period = 0x002e,
+    Slash = 0x002f,
+    Key0 = 0x0030,
+    Key1 = 0x0031,
+    Key2 = 0x0032,
+    Key3 = 0x0033,
+    Key4 = 0x0034,
+    Key5 = 0x0035,
+    Key6 = 0x0036,
+    Key7 = 0x0037,
+    Key8 = 0x0038,
+    Key9 = 0x0039,
+    Semicolon = 0x003b,
+    Equal = 0x003d,
+    A = 0x0041,
+    B = 0x0042,
+    C = 0x0043,
+    D = 0x0044,
+    E = 0x0045,
+    F = 0x0046,
+    G = 0x0047,
+    H = 0x0048,
+    I = 0x0049,
+    J = 0x004a,
+    K = 0x004b,
+    L = 0x004c,
+    M = 0x004d,
+    N = 0x004e,
+    O = 0x004f,
+    P = 0x0050,
+    Q = 0x0051,
+    R = 0x0052,
+    S = 0x0053,
+    T = 0x0054,
+    U = 0x0055,
+    V = 0x0056,
+    W = 0x0057,
+    X = 0x0058,
+    Y = 0x0059,
+    Z = 0x005a,
+    LeftBracket = 0x005b,
+    Backslash = 0x005c,
+    RightBracket = 0x005d,
+    GraveAccent = 0x0060,
+    World1 = 0x0100,
+    World2 = 0x0101,
+    Escape = 0xff1b,
+    Enter = 0xff0d,
+    Tab = 0xff09,
+    Backspace = 0xff08,
+    Insert = 0xff63,
+    Delete = 0xffff,
+    Right = 0xff53,
+    Left = 0xff51,
+    Down = 0xff54,
+    Up = 0xff52,
+    PageUp = 0xff55,
+    PageDown = 0xff56,
+    Home = 0xff50,
+    End = 0xff57,
+    CapsLock = 0xffe5,
+    ScrollLock = 0xff14,
+    NumLock = 0xff7f,
+    PrintScreen = 0xfd1d,
+    Pause = 0xff13,
+    F1 = 0xffbe,
+    F2 = 0xffbf,
+    F3 = 0xffc0,
+    F4 = 0xffc1,
+    F5 = 0xffc2,
+    F6 = 0xffc3,
+    F7 = 0xffc4,
+    F8 = 0xffc5,
+    F9 = 0xffc6,
+    F10 = 0xffc7,
+    F11 = 0xffc8,
+    F12 = 0xffc9,
+    F13 = 0xffca,
+    F14 = 0xffcb,
+    F15 = 0xffcc,
+    F16 = 0xffcd,
+    F17 = 0xffce,
+    F18 = 0xffcf,
+    F19 = 0xffd0,
+    F20 = 0xffd1,
+    F21 = 0xffd2,
+    F22 = 0xffd3,
+    F23 = 0xffd4,
+    F24 = 0xffd5,
+    F25 = 0xffd6,
+    Kp0 = 0xffb0,
+    Kp1 = 0xffb1,
+    Kp2 = 0xffb2,
+    Kp3 = 0xffb3,
+    Kp4 = 0xffb4,
+    Kp5 = 0xffb5,
+    Kp6 = 0xffb6,
+    Kp7 = 0xffb7,
+    Kp8 = 0xffb8,
+    Kp9 = 0xffb9,
+    KpDecimal = 0xffae,
+    KpDivide = 0xffaf,
+    KpMultiply = 0xffaa,
+    KpSubtract = 0xffad,
+    KpAdd = 0xffab,
+    KpEnter = 0xff8d,
+    KpEqual = 0xffbd,
+    LeftShift = 0xffe1,
+    LeftControl = 0xffe3,
+    LeftAlt = 0xffe9,
+    LeftSuper = 0xffeb,
+    RightShift = 0xffe2,
+    RightControl = 0xffe4,
+    RightAlt = 0xffea,
+    RightSuper = 0xffec,
+    Menu = 0xff67,
+    Unknown = 0x01ff,
+}
+
+/// Combination of modifier keys. This is kind of a silly way to store this
+/// information, but it serializes to TOML a lot nicer than a struct of three
+/// booleans.
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Copy)]
+pub enum Modifiers {
+    None,
+    Ctrl,
+    Alt,
+    Shift,
+    CtrlAlt,
+    CtrlShift,
+    AltShift,
+    CtrlAltShift,
+}
+
+impl Modifiers {
+    pub fn current() -> Self {
+        let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
+        let alt = is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt);
+        let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
+        match (ctrl, alt, shift) {
+            (false, false, false) => Self::None,
+            (true, false, false) => Self::Ctrl,
+            (false, true, false) => Self::Alt,
+            (false, false, true) => Self::Shift,
+            (true, true, false) => Self::CtrlAlt,
+            (true, false, true) => Self::CtrlShift,
+            (false, true, true) => Self::AltShift,
+            (true, true, true) => Self::CtrlAltShift,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+pub struct Hotkey {
+    mods: Modifiers,
+    #[serde(with = "KeyCodeDef")]
+    key: KeyCode,
+}
+
+impl Hotkey {
+    pub fn new(mods: Modifiers, key: KeyCode) -> Self {
+        Self { mods, key }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub enum Action {
+    IncrementDivision,
+    DecrementDivision,
+    DoubleDivision,
+    HalveDivision,
+}
 
 #[cfg(test)]
 mod tests {

@@ -57,6 +57,22 @@ impl PatternEditor {
         }
     }
 
+    pub fn inc_division(&mut self) {
+        self.beat_division = (self.beat_division + 1).min(TICKS_PER_BEAT as u8);
+    }
+
+    pub fn dec_division(&mut self) {
+        self.beat_division = (self.beat_division - 1).max(1);
+    }
+
+    pub fn double_division(&mut self) {
+        self.beat_division = (self.beat_division * 2).min(TICKS_PER_BEAT as u8);
+    }
+
+    pub fn halve_division(&mut self) {
+        self.beat_division = (self.beat_division / 2).max(1);
+    }
+
     pub fn cursor_track(&self) -> usize {
         self.edit_start.track
     }

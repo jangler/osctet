@@ -25,7 +25,7 @@ pub mod ui;
 pub mod module;
 pub mod playback;
 
-use input::MidiEvent;
+use input::{Action, Hotkey, MidiEvent, Modifiers};
 use ui::instruments_tab::fix_patch_index;
 use ui::pattern_tab::PatternEditor;
 
@@ -178,7 +178,16 @@ impl App {
 
         let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
+        let mods = Modifiers::current();
         for key in pressed {
+            if let Some(action) = self.config.key_map.get(&Hotkey::new(mods, key)) {
+                match action {
+                    Action::IncrementDivision => self.pattern_editor.inc_division(),
+                    Action::DecrementDivision => self.pattern_editor.dec_division(),
+                    Action::DoubleDivision => self.pattern_editor.double_division(),
+                    Action::HalveDivision => self.pattern_editor.halve_division(),
+                }
+            }
             if ctrl {
                 // TODO: undo/redo are silent right now, which could be confusing when
                 //       things are being undone/redone offscreen. could either provide
