@@ -121,11 +121,14 @@ impl TextEditState {
         let start = self.cursor.min(self.anchor);
         let end = self.cursor.max(self.anchor);
 
-        let (start, _) = self.text.char_indices().nth(start).unwrap();
-        if let Some((end, _)) = self.text.char_indices().nth(end) {
-            &self.text[start..end]
+        if let Some((start, _)) = self.text.char_indices().nth(start) {
+            if let Some((end, _)) = self.text.char_indices().nth(end) {
+                &self.text[start..end]
+            } else {
+                &self.text[start..]
+            }
         } else {
-            &self.text[start..]
+            ""
         }
     }
 }
