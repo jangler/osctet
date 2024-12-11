@@ -11,22 +11,30 @@ pub fn adsr_scalable(
     let zero = 0.0;
     let a = shared(zero);
     let b = shared(neg1);
+    let c = shared(zero);
+    let d = shared(zero);
     let attack_start = var(&a);
     let release_start = var(&b);
-    envelope3(move |time, control, scale| {
+    let prev_time = var(&c);
+    let scaled_time = var(&d);
+    envelope3(move |time, control, speed| {
+        scaled_time.set_value(scaled_time.value() + speed * (time - prev_time.value()));
+        prev_time.set_value(time);
+        let time = scaled_time.value();
+
         if release_start.value() >= zero && control > zero {
             attack_start.set_value(time);
             release_start.set_value(neg1);
         } else if release_start.value() < zero && control <= zero {
             release_start.set_value(time);
         }
-        let ads_value = ads(attack * scale, decay * scale, sustain, time - attack_start.value());
+        let ads_value = ads(attack, decay, sustain, time - attack_start.value());
         if release_start.value() < zero {
             ads_value
         } else {
             ads_value
                 * clamp01(delerp(
-                    release_start.value() + release * scale,
+                    release_start.value() + release,
                     release_start.value(),
                     time,
                 ))

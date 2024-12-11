@@ -14,7 +14,7 @@ const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICE_GAIN: f32 = 0.5; // -6 dB
 const VOICES_PER_CHANNEL: usize = 3;
 
-const MAX_ENV_SPEED: f32 = 4.0;
+const MAX_ENV_SCALE: f32 = 16.0;
 
 pub const MIN_LFO_RATE: f32 = 0.1;
 pub const MAX_LFO_RATE: f32 = 20.0;
@@ -471,7 +471,7 @@ impl Patch {
             v.push(ModTarget::FilterQ(i));
         }
         for i in 0..self.envs.len() {
-            v.push(ModTarget::EnvSpeed(i));
+            v.push(ModTarget::EnvScale(i));
         }
         for i in 0..self.lfos.len() {
             v.push(ModTarget::LFORate(i));
@@ -639,6 +639,22 @@ impl Patch {
         
         true
     }
+
+    /// Returns the maximum amount of time that it could take for this patch
+    /// to release.
+    fn release_time(&self) -> f32 {
+        self.envs.iter().enumerate()
+            .map(|(i, env)| env.release * self.env_scale_factor(i))
+            .fold(0.0, f32::max)
+    }
+
+    // TODO: this doesn't account for depth modulation
+    fn env_scale_factor(&self, i: usize) -> f32 {
+        pow(MAX_ENV_SCALE, self.mod_matrix.iter()
+            .filter(|m| m.target == ModTarget::EnvScale(i))
+            .map(|m| m.depth.0.value().max(0.0))
+            .sum())
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -781,8 +797,8 @@ impl ADSR {
     fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let attack = self.attack;
         let power = self.power;
-        let scale = settings.dsp_component(vars, ModTarget::EnvSpeed(index), path)
-            >> shape_fn(|x| pow(MAX_ENV_SPEED, -x));
+        let scale = settings.dsp_component(vars, ModTarget::EnvScale(index), path)
+            >> shape_fn(|x| pow(MAX_ENV_SCALE, -x));
         Net::wrap(Box::new(
             (var(&vars.gate) | scale) >> adsr_scalable(self.attack, self.decay, self.sustain, self.release)
                 >> envelope2(move |t, x| if t < attack {
@@ -908,7 +924,7 @@ pub enum ModTarget {
     Tone(usize),
     FilterCutoff(usize),
     FilterQ(usize),
-    EnvSpeed(usize),
+    EnvScale(usize),
     LFORate(usize),
     ModDepth(usize),
     ClipGain,
@@ -944,7 +960,7 @@ impl Display for ModTarget {
             Self::Tone(n) => &format!("Osc {} tone", n + 1),
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
-            Self::EnvSpeed(n) => &format!("Env {} speed", n + 1),
+            Self::EnvScale(n) => &format!("Env {} scale", n + 1),
             Self::LFORate(n) => &format!("LFO {} freq", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
             Self::ClipGain => "Distortion",
@@ -997,12 +1013,11 @@ impl Voice {
             >> panner() >> multisplit::<U2, U2>()
             >> (multipass::<U2>()
                 | multipass::<U2>() * (var(&settings.reverb_send.0) >> split::<U2>()));
+
         Self {
             vars,
             base_pitch: pitch,
-            release_time: settings.envs.iter()
-                .map(|env| (env.attack + env.release) * MAX_ENV_SPEED)
-                .fold(0.0, f32::max),
+            release_time: settings.release_time(),
             event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(net)),
         }
     }
