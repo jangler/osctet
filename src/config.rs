@@ -26,7 +26,7 @@ pub struct Config {
     #[serde(default = "default_keys")]
     keys: Vec<(Hotkey, Action)>, // for serialization
     #[serde(skip)]
-    pub key_map: HashMap<Hotkey, Action>, // for use
+    key_map: HashMap<Hotkey, Action>, // for use
 }
 
 impl Config {
@@ -55,6 +55,18 @@ impl Config {
         let s = toml::to_string_pretty(self)?;
         std::fs::write(config_path()?, s)?;
         Ok(())
+    }
+
+    pub fn iter_keymap(&mut self) -> impl Iterator<Item = &mut (Hotkey, Action)> {
+        self.keys.iter_mut()
+    }
+
+    pub fn hotkey_action(&self, hotkey: &Hotkey) -> Option<&Action> {
+        self.key_map.get(hotkey)
+    }
+
+    pub fn update_hotkeys(&mut self) {
+        self.key_map = self.keys.iter().cloned().collect();
     }
 }
 

@@ -6,6 +6,15 @@ use super::{theme::Theme, Layout, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
+
+    if ui.button("Save settings") {
+        cfg.theme = Some(ui.style.theme.clone());
+        if let Err(e) = cfg.save() {
+            ui.report(e);
+        }
+    }
+
+    ui.space(2.0);
     ui.header("COLOR THEME");
 
     // TODO: currently accent 2 isn't used on this page, so there's no way to
@@ -18,19 +27,17 @@ pub fn draw(ui: &mut UI, cfg: &mut Config) {
     color_controls(ui, "Accent 2", true, |t| &mut t.accent2);
     ui.end_group();
     
-    ui.flip_layout();
+    ui.start_group();
     if ui.button("Reset (light)") {
         ui.style.theme = Theme::light();
     }
     if ui.button("Reset (dark)") {
         ui.style.theme = Theme::dark();
     }
-    if ui.button("Save settings") {
-        cfg.theme = Some(ui.style.theme.clone());
-        if let Err(e) = cfg.save() {
-            ui.report(e);
-        }
-    }
+    ui.end_group();
+
+    ui.space(2.0);
+    hotkey_controls(ui, cfg);
 }
 
 fn color_controls(ui: &mut UI, label: &str, accent: bool,
@@ -56,4 +63,25 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
     }
 
     ui.end_group();
+}
+
+fn hotkey_controls(ui: &mut UI, cfg: &mut Config) {
+    ui.header("KEYS");
+    
+    let mut id = 0;
+    let mut changed = false;
+    
+    for (hotkey, action) in cfg.iter_keymap() {
+        ui.start_group();
+        if ui.hotkey_input(id, hotkey) {
+            changed = true;
+        }
+        ui.offset_label(action.name());
+        ui.end_group();
+        id += 1;
+    }
+
+    if changed {
+        cfg.update_hotkeys();
+    }
 }

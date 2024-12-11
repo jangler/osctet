@@ -1,3 +1,5 @@
+use std::fmt;
+
 use macroquad::input::{is_key_down, KeyCode};
 use serde::{Deserialize, Serialize};
 
@@ -327,7 +329,7 @@ enum KeyCodeDef {
 /// Combination of modifier keys. This is kind of a silly way to store this
 /// information, but it serializes to TOML a lot nicer than a struct of three
 /// booleans.
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Modifiers {
     None,
     Ctrl,
@@ -359,9 +361,9 @@ impl Modifiers {
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct Hotkey {
-    mods: Modifiers,
+    pub mods: Modifiers,
     #[serde(with = "KeyCodeDef")]
-    key: KeyCode,
+    pub key: KeyCode,
 }
 
 impl Hotkey {
@@ -370,12 +372,33 @@ impl Hotkey {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+impl fmt::Display for Hotkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.mods == Modifiers::None {
+            write!(f, "{:?}", self.key)
+        } else {
+            write!(f, "{:?}+{:?}", self.mods, self.key)
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub enum Action {
     IncrementDivision,
     DecrementDivision,
     DoubleDivision,
     HalveDivision,
+}
+
+impl Action {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::IncrementDivision => "Increment division",
+            Self::DecrementDivision => "Decrement division",
+            Self::DoubleDivision => "Double division",
+            Self::HalveDivision => "Halve division",
+        }
+    }
 }
 
 #[cfg(test)]

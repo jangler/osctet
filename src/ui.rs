@@ -10,7 +10,7 @@ use macroquad::prelude::*;
 use textedit::TextEditState;
 use theme::Theme;
 
-use crate::{module::EventData, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{input::{Hotkey, Modifiers}, module::EventData, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -143,6 +143,7 @@ pub struct UI {
     tabs: HashMap<String, usize>,
     focused_slider: Option<String>,
     focused_text: Option<TextEditState>,
+    focused_hotkey: Option<usize>,
     bounds: Rect,
     cursor_x: f32,
     cursor_y: f32,
@@ -172,6 +173,7 @@ impl UI {
             tabs: HashMap::new(),
             focused_slider: None,
             focused_text: None,
+            focused_hotkey: None,
             bounds: Default::default(),
             cursor_x: 0.0,
             cursor_y: 0.0,
@@ -1045,7 +1047,7 @@ impl UI {
     }
 
     pub fn accepting_keyboard_input(&self) -> bool {
-        self.focused_text.is_some()
+        self.focused_text.is_some() || self.focused_hotkey.is_some()
     }
 
     pub fn accepting_note_input(&self) -> bool {
@@ -1100,6 +1102,51 @@ impl UI {
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
         self.end_widget();
+    }
+
+    // TODO: code duplication with note_input
+    pub fn hotkey_input(&mut self, id: usize, hotkey: &mut Hotkey) -> bool {
+        let params = self.style.text_params();
+        let label = hotkey.to_string();
+
+        let rect = Rect {
+            x: self.cursor_x + MARGIN,
+            y: self.cursor_y + MARGIN,
+            w: text_width(&label, &params) + MARGIN * 2.0,
+            h: cap_height(&params) + MARGIN * 2.0,
+        };
+        let mouse_hit = self.mouse_hits(rect);
+
+        if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
+            self.focused_hotkey = Some(id.to_owned());
+        }
+        let focused = self.focused_hotkey.as_ref().is_some_and(|x| *x == id);
+    
+        // draw fill based on mouse state
+        let (fill, stroke) = if focused {
+            (self.style.theme.control_bg_click(), self.style.theme.border_focused())
+        } else if mouse_hit {
+            (self.style.theme.control_bg_hover(), self.style.theme.border_focused())
+        } else {
+            (self.style.theme.control_bg(), self.style.theme.border_unfocused())
+        };
+
+        let mut changed = false;
+        if focused {
+            let key = get_keys_pressed().into_iter().filter(|x| !is_mod(*x)).next();
+            if let Some(key) = key {
+                *hotkey = Hotkey::new(Modifiers::current(), key);
+                self.focused_hotkey = None;
+                changed = true;
+            }
+        }
+
+        self.start_widget();
+        self.push_rect(rect, fill, Some(stroke));
+        self.push_text(rect.x, rect.y, label, self.style.theme.fg());
+        self.end_widget();
+
+        changed
     }
 
     fn info_box(&mut self) {
@@ -1197,4 +1244,14 @@ fn combo_box_list_rect(params: &TextParams, button_rect: Rect, options: &[String
 struct Notification {
     message: String,
     time_remaining: f32,
+}
+
+fn is_mod(key: KeyCode) -> bool {
+    match key {
+        KeyCode::LeftAlt | KeyCode::RightAlt
+            | KeyCode::LeftControl | KeyCode::RightControl
+            | KeyCode::LeftShift | KeyCode::RightShift
+            | KeyCode::LeftSuper | KeyCode::RightSuper => true,
+        _ => false,
+    }
 }

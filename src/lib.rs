@@ -180,7 +180,7 @@ impl App {
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         let mods = Modifiers::current();
         for key in pressed {
-            if let Some(action) = self.config.key_map.get(&Hotkey::new(mods, key)) {
+            if let Some(action) = self.config.hotkey_action(&Hotkey::new(mods, key)) {
                 match action {
                     Action::IncrementDivision => self.pattern_editor.inc_division(),
                     Action::DecrementDivision => self.pattern_editor.dec_division(),
