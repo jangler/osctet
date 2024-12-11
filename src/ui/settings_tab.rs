@@ -2,7 +2,7 @@ use palette::Lchuv;
 
 use crate::config::Config;
 
-use super::{theme::Theme, Layout, MARGIN, UI};
+use super::{text_width, theme::Theme, Layout, MARGIN, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.layout = Layout::Horizontal;
@@ -81,22 +81,31 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) {
     
     let mut id = 0;
     let mut changed = false;
-    let keymap: Vec<&mut _> = cfg.iter_keymap().collect();
+    let mut keymap: Vec<&mut _> = cfg.iter_keymap().collect();
 
-    ui.start_group();
-    for (_, action) in &keymap {
-        ui.offset_label(action.name());
-    }
-    ui.end_group();
+    // column heuristric
+    let max_action_length = keymap.iter().map(|(_, a)| a.name().len()).max().unwrap();
+    let char_width = text_width("x", &ui.style.text_params());
+    let cols = (ui.bounds.w / (max_action_length as f32 * char_width * 2.0)) as usize;
+    let entries_per_col = (keymap.len() as f32 / cols as f32).ceil() as usize;
 
-    ui.start_group();
-    for (hotkey, _) in keymap {
-        if ui.hotkey_input(id, hotkey) {
-            changed = true;
+    for chunk in keymap.chunks_mut(entries_per_col) {
+        ui.start_group();
+        for (_, action) in chunk.iter() {
+            ui.offset_label(action.name());
         }
-        id += 1;
+        ui.align_right(chunk.len());
+        ui.end_group();
+
+        ui.start_group();
+        for (hotkey, _) in chunk.iter_mut() {
+            if ui.hotkey_input(id, hotkey) {
+                changed = true;
+            }
+            id += 1;
+        }
+        ui.end_group();
     }
-    ui.end_group();
 
     if changed {
         cfg.update_hotkeys();

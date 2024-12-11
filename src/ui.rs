@@ -129,6 +129,18 @@ impl Graphic {
             }
         }
     }
+
+    fn align_right(&mut self, right_edge: f32, params: &TextParams) {
+        match self {
+            Self::Rect(rect, _, _) => {
+                rect.x = right_edge - rect.w;
+            },
+            Self::Line(_, _, _, _, _) => todo!(),
+            Self::Text(x, _, text, _) => {
+                *x = right_edge - text_width(text, params);
+            }
+        }
+    }
 }
 
 struct DrawOp {
@@ -189,6 +201,19 @@ impl UI {
             scrollbar_grabbed: false,
             notification: None,
             text_clipboard: None,
+        }
+    }
+
+    /// Aligns the last `n` graphics elements to the right of the current group.
+    /// Panics if no group.
+    pub fn align_right(&mut self, n: usize) {
+        let start = self.draw_queue.len() - n;
+        let params = self.style.text_params();
+        let rect = self.group_rects.last().unwrap();
+        let edge = rect.x + rect.w - MARGIN;
+
+        for op in self.draw_queue[start..].iter_mut() {
+            op.graphic.align_right(edge, &params);
         }
     }
 
