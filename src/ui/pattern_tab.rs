@@ -1,6 +1,6 @@
 use gcd::Gcd;
 
-use crate::{input, module::*, playback::Player, synth::Patch};
+use crate::{input::{self, Action}, module::*, playback::Player, synth::Patch};
 
 use super::*;
 
@@ -168,35 +168,40 @@ impl PatternEditor {
         let color = Color { a: 0.1, ..ui.style.theme.fg() };
         ui.push_rect(selection_rect, color, None);
     }
+
+    pub fn action(&mut self, action: Action, module: &mut Module) {
+        match action {
+            Action::Cut => self.cut(module),
+            Action::Copy => self.copy(module),
+            Action::Paste => self.paste(module, is_shift_down()),
+            Action::PrevRow => translate_cursor(self,
+                (TICKS_PER_BEAT / self.beat_division as u32) as i64 * -1),
+            Action::NextRow => translate_cursor(self,
+                (TICKS_PER_BEAT / self.beat_division as u32) as i64),
+            Action::PrevColumn => shift_column_left(self, &module.tracks),
+            Action::NextColumn => shift_column_right(self, &module.tracks),
+            Action::NextChannel => shift_channel_right(self, &module.tracks),
+            Action::PrevChannel => shift_channel_left(self),
+            Action::Delete => {
+                let (start, end) = self.selection_corners();
+                module.delete_events(start, end);
+            },
+            Action::NoteOff => self.input_note_off(module),
+            Action::End =>
+                insert_event_at_cursor(module, &self.edit_start, EventData::End),
+            Action::Loop =>
+                insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
+            Action::RationalTempo => self.rational_tempo(module),
+            Action::TapTempo => self.tap_tempo(module),
+            Action::InsertRows => self.push_rows(module),
+            Action::DeleteRows => self.pull_rows(module),
+            _ => (),
+        }
+    }
     
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
-        if is_ctrl_down() {
+        if !is_ctrl_down() {
             match key {
-                KeyCode::X => self.cut(module),
-                KeyCode::C => self.copy(module),
-                KeyCode::V => self.paste(module, is_shift_down()),
-                _ => (),
-            }
-        } else {
-            match key {
-                KeyCode::Up => {
-                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division as u32)
-                        as i64 * -1);
-                },
-                KeyCode::Down =>
-                    translate_cursor(self, (TICKS_PER_BEAT / self.beat_division as u32)
-                        as i64),
-                KeyCode::Left => shift_column_left(self, &module.tracks),
-                KeyCode::Right => shift_column_right(self, &module.tracks),
-                KeyCode::Tab => if is_shift_down() {
-                    shift_channel_left(self);
-                } else {
-                    shift_channel_right(self, &module.tracks);
-                },
-                KeyCode::Delete => {
-                    let (start, end) = self.selection_corners();
-                    module.delete_events(start, end);
-                },
                 KeyCode::Key0 => input_digit(module, &self.edit_start, 0),
                 KeyCode::Key1 => input_digit(module, &self.edit_start, 1),
                 KeyCode::Key2 => input_digit(module, &self.edit_start, 2),
@@ -207,15 +212,6 @@ impl PatternEditor {
                 KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
                 KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
                 KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
-                KeyCode::GraveAccent => self.input_note_off(module),
-                KeyCode::E =>
-                    insert_event_at_cursor(module, &self.edit_start, EventData::End),
-                KeyCode::L =>
-                    insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
-                KeyCode::R => self.rational_tempo(module),
-                KeyCode::T => self.tap_tempo(module),
-                KeyCode::Insert => self.push_rows(module),
-                KeyCode::Backspace => self.pull_rows(module),
                 input::ARROW_DOWN_KEY | input::ARROW_UP_KEY
                     | input::SHARP_KEY | input::FLAT_KEY
                     | input::OCTAVE_UP_KEY | input::OCTAVE_DOWN_KEY

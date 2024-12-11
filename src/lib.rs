@@ -107,6 +107,7 @@ struct App {
     ui: ui::UI,
     pattern_editor: PatternEditor,
     instruments_scroll: f32,
+    settings_scroll: f32,
     save_path: Option<PathBuf>,
 }
 
@@ -134,6 +135,7 @@ impl App {
             patch_index: Some(0),
             pattern_editor: PatternEditor::new(),
             instruments_scroll: 0.0,
+            settings_scroll: 0.0,
             save_path: None,
         };
         if let Some(err) = err {
@@ -186,6 +188,36 @@ impl App {
                     Action::DecrementDivision => self.pattern_editor.dec_division(),
                     Action::DoubleDivision => self.pattern_editor.double_division(),
                     Action::HalveDivision => self.pattern_editor.halve_division(),
+                    Action::IncrementOctave => self.octave += 1,
+                    Action::DecrementOctave => self.octave -= 1,
+                    Action::PlayFromStart => self.player.play_from(0, &self.module),
+                    Action::PlayFromCursor => self.player.play_from(
+                        self.pattern_editor.cursor_tick(), &self.module),
+                    Action::StopPlayback => self.player.stop(),
+                    Action::NewSong => self.new_module(), // TODO: prompt if unsaved
+                    Action::OpenSong=> self.open_module(), // TODO: prompt if unsaved
+                    Action::SaveSong => if shift {
+                        self.save_module_as();
+                    } else {
+                        self.save_module();
+                    }
+                    Action::SaveSongAs => self.save_module_as(),
+                    Action::RenderSong => self.render_and_save(),
+                    Action::Undo => if self.module.undo() {
+                        self.player.update_synths(self.module.drain_track_history());
+                        fix_patch_index(&mut self.patch_index, self.module.patches.len());
+                    } else {
+                        self.ui.report("Nothing to undo");
+                    },
+                    Action::Redo => if self.module.redo() {
+                        self.player.update_synths(self.module.drain_track_history());
+                        fix_patch_index(&mut self.patch_index, self.module.patches.len());
+                    } else {
+                        self.ui.report("Nothing to redo");
+                    },
+                    _ => if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
+                        self.pattern_editor.action(*action, &mut self.module);
+                    },
                 }
             }
             if ctrl {
@@ -193,29 +225,6 @@ impl App {
                 //       things are being undone/redone offscreen. could either provide
                 //       messages describing what's being done, or move view to location
                 //       of changes
-                match key {
-                    KeyCode::E => self.render_and_save(),
-                    KeyCode::N => self.new_module(), // TODO: prompt if unsaved
-                    KeyCode::O => self.open_module(), // TODO: prompt if unsaved
-                    KeyCode::S => if shift {
-                        self.save_module_as();
-                    } else {
-                        self.save_module();
-                    }
-                    KeyCode::Y => if self.module.redo() {
-                        self.player.update_synths(self.module.drain_track_history());
-                        fix_patch_index(&mut self.patch_index, self.module.patches.len());
-                    } else {
-                        self.ui.report("Nothing to redo");
-                    },
-                    KeyCode::Z => if self.module.undo() {
-                        self.player.update_synths(self.module.drain_track_history());
-                        fix_patch_index(&mut self.patch_index, self.module.patches.len());
-                    } else {
-                        self.ui.report("Nothing to undo");
-                    },
-                    _ => (),
-                }
             } else if let Some(note) = input::note_from_key(key, &self.module.tuning, self.octave) {
                 self.ui.note_queue.push(EventData::Pitch(note));
                 if !self.ui.accepting_note_input()
@@ -238,12 +247,6 @@ impl App {
                     KeyCode::F2 => self.ui.set_tab(MAIN_TAB_ID, 1),
                     KeyCode::F3 => self.ui.set_tab(MAIN_TAB_ID, 2),
                     KeyCode::F4 => self.ui.set_tab(MAIN_TAB_ID, 3),
-                    KeyCode::F5 => self.player.play_from(0, &self.module),
-                    KeyCode::F7 => self.player.play_from(self.pattern_editor.cursor_tick(),
-                        &self.module),
-                    KeyCode::F8 => self.player.stop(),
-                    KeyCode::KpDivide => self.octave -= 1,
-                    KeyCode::KpMultiply => self.octave += 1,
                     _ => (),
                 }
             }
@@ -415,7 +418,8 @@ impl App {
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.patch_index, &mut self.instruments_scroll, &mut self.config),
-            TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config),
+            TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config,
+                &mut self.settings_scroll),
             _ => panic!("bad tab value"),
         }
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, error::Error, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, env, error::Error, path::PathBuf};
 
 use macroquad::input::KeyCode;
 use serde::{Deserialize, Serialize};
@@ -47,6 +47,12 @@ impl Config {
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let s = std::fs::read_to_string(config_path()?)?;
         let mut c: Self = toml::from_str(&s)?;
+        let actions: HashSet<Action> = c.keys.iter().map(|x| x.1).collect();
+        for (k, a) in default_keys() {
+            if !actions.contains(&a) {
+                c.keys.push((k, a));
+            }
+        }
         c.key_map = c.keys.iter().cloned().collect();
         Ok(c)
     }
@@ -80,5 +86,34 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Ctrl, KeyCode::Minus), Action::DecrementDivision),
         (Hotkey::new(Modifiers::Alt, KeyCode::Equal), Action::DoubleDivision),
         (Hotkey::new(Modifiers::Alt, KeyCode::Minus), Action::HalveDivision),
+        (Hotkey::new(Modifiers::None, KeyCode::KpMultiply), Action::IncrementOctave),
+        (Hotkey::new(Modifiers::None, KeyCode::KpDivide), Action::DecrementOctave),
+        (Hotkey::new(Modifiers::None, KeyCode::F5), Action::PlayFromStart),
+        (Hotkey::new(Modifiers::None, KeyCode::F7), Action::PlayFromCursor),
+        (Hotkey::new(Modifiers::None, KeyCode::F8), Action::StopPlayback),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::N), Action::NewSong),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::O), Action::OpenSong),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::S), Action::SaveSong),
+        (Hotkey::new(Modifiers::CtrlAlt, KeyCode::S), Action::SaveSongAs),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::E), Action::RenderSong),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::Z), Action::Undo),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::Y), Action::Redo),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::X), Action::Cut),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::C), Action::Copy),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::V), Action::Paste),
+        (Hotkey::new(Modifiers::None, KeyCode::Down), Action::NextRow),
+        (Hotkey::new(Modifiers::None, KeyCode::Up), Action::PrevRow),
+        (Hotkey::new(Modifiers::None, KeyCode::Right), Action::NextColumn),
+        (Hotkey::new(Modifiers::None, KeyCode::Left), Action::PrevColumn),
+        (Hotkey::new(Modifiers::None, KeyCode::Tab), Action::NextChannel),
+        (Hotkey::new(Modifiers::Shift, KeyCode::Tab), Action::PrevChannel),
+        (Hotkey::new(Modifiers::None, KeyCode::Delete), Action::Delete),
+        (Hotkey::new(Modifiers::None, KeyCode::GraveAccent), Action::NoteOff),
+        (Hotkey::new(Modifiers::None, KeyCode::E), Action::End),
+        (Hotkey::new(Modifiers::None, KeyCode::L), Action::Loop),
+        (Hotkey::new(Modifiers::None, KeyCode::T), Action::TapTempo),
+        (Hotkey::new(Modifiers::None, KeyCode::R), Action::RationalTempo),
+        (Hotkey::new(Modifiers::None, KeyCode::Insert), Action::InsertRows),
+        (Hotkey::new(Modifiers::None, KeyCode::Backspace), Action::DeleteRows),
     ]
 }

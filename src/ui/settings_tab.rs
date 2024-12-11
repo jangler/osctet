@@ -2,15 +2,20 @@ use palette::Lchuv;
 
 use crate::config::Config;
 
-use super::{theme::Theme, Layout, UI};
+use super::{theme::Theme, Layout, MARGIN, UI};
 
-pub fn draw(ui: &mut UI, cfg: &mut Config) {
-    ui.layout = Layout::Vertical;
+pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
+    ui.layout = Layout::Horizontal;
+    let old_y = ui.cursor_y;
+    ui.cursor_y -= *scroll;
+    ui.cursor_z -= 1;
+    ui.start_group();
 
     if ui.button("Save settings") {
         cfg.theme = Some(ui.style.theme.clone());
-        if let Err(e) = cfg.save() {
-            ui.report(e);
+        match cfg.save() {
+            Ok(()) => ui.notify(String::from("Saved settings.")),
+            Err(e) => ui.report(e),
         }
     }
 
@@ -19,7 +24,6 @@ pub fn draw(ui: &mut UI, cfg: &mut Config) {
 
     // TODO: currently accent 2 isn't used on this page, so there's no way to
     //       see the effects of adjusting it
-
     ui.start_group();
     color_controls(ui, "Foreground", false, |t| &mut t.fg);
     color_controls(ui, "Background", false, |t| &mut t.bg);
@@ -38,6 +42,12 @@ pub fn draw(ui: &mut UI, cfg: &mut Config) {
 
     ui.space(2.0);
     hotkey_controls(ui, cfg);
+
+    // TODO: duplication with instruments tab scroll code
+    let scroll_h = ui.end_group().unwrap().h + MARGIN;
+    ui.cursor_z += 1;
+    ui.cursor_y = old_y;
+    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y);
 }
 
 fn color_controls(ui: &mut UI, label: &str, accent: bool,
@@ -67,21 +77,30 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
 
 fn hotkey_controls(ui: &mut UI, cfg: &mut Config) {
     ui.header("KEYS");
+    ui.start_group();
     
     let mut id = 0;
     let mut changed = false;
-    
-    for (hotkey, action) in cfg.iter_keymap() {
-        ui.start_group();
+    let keymap: Vec<&mut _> = cfg.iter_keymap().collect();
+
+    ui.start_group();
+    for (_, action) in &keymap {
+        ui.offset_label(action.name());
+    }
+    ui.end_group();
+
+    ui.start_group();
+    for (hotkey, _) in keymap {
         if ui.hotkey_input(id, hotkey) {
             changed = true;
         }
-        ui.offset_label(action.name());
-        ui.end_group();
         id += 1;
     }
+    ui.end_group();
 
     if changed {
         cfg.update_hotkeys();
     }
+
+    ui.end_group();
 }
