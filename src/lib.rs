@@ -105,7 +105,6 @@ struct App {
     fx: GlobalFX,
     patch_index: Option<usize>, // if None, kit is selected
     ui: ui::UI,
-    fullscreen: bool,
     pattern_editor: PatternEditor,
     instruments_scroll: f32,
     save_path: Option<PathBuf>,
@@ -133,7 +132,6 @@ impl App {
             module,
             fx: global_fx,
             patch_index: Some(0),
-            fullscreen: false,
             pattern_editor: PatternEditor::new(),
             instruments_scroll: 0.0,
             save_path: None,
@@ -235,10 +233,6 @@ impl App {
                     KeyCode::F7 => self.player.play_from(self.pattern_editor.cursor_tick(),
                         &self.module),
                     KeyCode::F8 => self.player.stop(),
-                    KeyCode::F11 => {
-                        self.fullscreen = !self.fullscreen;
-                        set_fullscreen(self.fullscreen);
-                    },
                     KeyCode::KpDivide => self.octave -= 1,
                     KeyCode::KpMultiply => self.octave += 1,
                     _ => (),
@@ -477,6 +471,7 @@ impl App {
                     Err(e) => self.ui.report(e),
                 }
             }
+
         } else {
             self.ui.report("Module must have END event to export")
         }
