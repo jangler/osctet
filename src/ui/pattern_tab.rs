@@ -21,6 +21,7 @@ pub struct PatternEditor {
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
     clipboard: Option<PatternClip>,
+    follow: bool,
 }
 
 struct PatternClip {
@@ -51,6 +52,7 @@ impl PatternEditor {
             tap_tempo_intervals: Vec::new(),
             pending_interval: None,
             clipboard: None,
+            follow: false,
         }
     }
 
@@ -204,6 +206,7 @@ impl PatternEditor {
                 | Action::NudgeOctaveUp | Action::NudgeOctaveDown
                 | Action::NudgeEnharmonic =>
                     nudge_notes(module, self.selection_corners(), cfg),
+            Action::ToggleFollow => self.follow = !self.follow,
             _ => (),
         }
     }
@@ -345,11 +348,18 @@ impl PatternEditor {
 
     /// Returns scroll in pixels instead of in beats.
     fn scroll(&self, ui: &UI) -> f32 {
-        self.beat_scroll * self.beat_height(ui)
+        self.beat_scroll * self.beat_height(ui) as f32
     }
 
     fn set_scroll(&mut self, scroll: f32, ui: &UI) {
         self.beat_scroll = scroll / self.beat_height(ui)
+    }
+
+    /// Scroll to a position that centers the given tick.
+    fn scroll_to(&mut self, tick: u32, ui: &UI, viewport_h: f32) {
+        let line_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
+        self.beat_scroll = tick as f32 / TICKS_PER_BEAT as f32
+            - (viewport_h - line_height) / self.beat_height(ui) * 0.5
     }
 
     /// Inserts rows into the pattern, shifting events.
@@ -438,6 +448,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.style.theme.border_unfocused());
+    if pe.follow && player.is_playing() {
+        pe.scroll_to(player.get_tick(), ui, viewport_h);
+    }
     let mut scroll = pe.scroll(ui);
     ui.vertical_scrollbar(&mut scroll, end_y, viewport_h);
     pe.set_scroll(scroll, ui);

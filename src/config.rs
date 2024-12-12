@@ -131,5 +131,6 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::Slash), Action::NudgeOctaveUp),
         (Hotkey::new(Modifiers::None, KeyCode::Backslash), Action::NudgeOctaveDown),
         (Hotkey::new(Modifiers::None, KeyCode::Space), Action::NudgeEnharmonic),
+        (Hotkey::new(Modifiers::None, KeyCode::ScrollLock), Action::ToggleFollow),
     ]
 }

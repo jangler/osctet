@@ -434,6 +434,7 @@ pub enum Action {
     NudgeOctaveUp,
     NudgeOctaveDown,
     NudgeEnharmonic,
+    ToggleFollow,
 }
 
 impl Action {
@@ -479,6 +480,7 @@ impl Action {
             Self::NudgeOctaveUp => "Octave up",
             Self::NudgeOctaveDown => "Octave down",
             Self::NudgeEnharmonic => "Enharmonic swap",
+            Self::ToggleFollow => "Toggle pattern follow",
         }
     }
 }
