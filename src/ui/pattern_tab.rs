@@ -446,10 +446,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     ui.cursor_z -= 1;
     ui.push_rect(viewport, ui.style.theme.content_bg(), None);
-    ui.cursor_z += 1;
-
-    draw_playhead(ui, player.get_tick(), left_x);
     draw_beats(ui, left_x);
+    ui.cursor_z += 1;
+    draw_playhead(ui, player.get_tick(), left_x);
     pe.draw_cursor(ui, &track_xs);
 
     // draw channel data
@@ -465,11 +464,19 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     pe.draw_channel_line(ui);
 }
 
+/// Draws beat numbers and lines.
 fn draw_beats(ui: &mut UI, x: f32) {
     let mut beat = 1;
     let mut y = ui.cursor_y;
+    let line_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
     while y < ui.bounds.y + ui.bounds.h {
         if y >= 0.0 {
+            ui.push_rect(Rect {
+                x: ui.bounds.x,
+                y,
+                w: ui.bounds.w,
+                h: line_height,
+            }, ui.style.theme.panel_bg(), None);
             ui.push_text(x, y, beat.to_string(), ui.style.theme.fg());
         }
         beat += 1;
