@@ -563,7 +563,7 @@ pub struct Link {
     pub duration: u32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Position {
     pub tick: u32,
     pub track: usize,

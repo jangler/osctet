@@ -110,6 +110,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Ctrl, KeyCode::X), Action::Cut),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::C), Action::Copy),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::V), Action::Paste),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::M), Action::MixPaste),
         (Hotkey::new(Modifiers::None, KeyCode::Down), Action::NextRow),
         (Hotkey::new(Modifiers::None, KeyCode::Up), Action::PrevRow),
         (Hotkey::new(Modifiers::None, KeyCode::Right), Action::NextColumn),

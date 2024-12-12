@@ -179,7 +179,8 @@ impl PatternEditor {
         match action {
             Action::Cut => self.cut(module),
             Action::Copy => self.copy(module),
-            Action::Paste => self.paste(module, is_shift_down()),
+            Action::Paste => self.paste(module, false),
+            Action::MixPaste => self.paste(module, true),
             Action::PrevRow => translate_cursor(self,
                 (TICKS_PER_BEAT / self.beat_division as u32) as i64 * -1),
             Action::NextRow => translate_cursor(self,
@@ -278,11 +279,31 @@ impl PatternEditor {
     fn paste(&self, module: &mut Module, mix: bool) {
         if let Some(clip) = &self.clipboard {
             let tick_offset = self.edit_start.tick as i32 - clip.start.tick as i32;
+            let channel_offset = module.channels_between(clip.start, clip.end);
+            let end = Position {
+                tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
+                column: clip.end.column,
+                ..self.edit_start.add_channels(channel_offset, &module.tracks)
+                    .unwrap_or(Position {
+                        track: module.tracks.len(),
+                        channel: module.tracks.last().unwrap().channels.len() - 1,
+                        tick: 0,
+                        column: 0,
+                    })
+            };
+            let existing_events = module.scan_events(self.edit_start, end);
+            let position_free = |pos| existing_events.iter()
+                .find(|x| x.position() == pos)
+                .is_none();
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
                 self.edit_start.add_channels(x.channel_offset, &module.tracks)
                     .map(|pos| {
-                        if x.event.data.is_ctrl() == (pos.track == 0) {
+                        if x.event.data.is_ctrl() == (pos.track == 0) 
+                            && (!mix || position_free(Position {
+                                tick: (x.event.tick as i32 + tick_offset) as u32,
+                                ..pos
+                            })) {
                             Some(LocatedEvent {
                                 track: pos.track,
                                 channel: pos.channel,
@@ -300,20 +321,7 @@ impl PatternEditor {
             let remove = if mix {
                 add.iter().map(|x| x.position()).collect()
             } else {
-                let channel_offset = module.channels_between(clip.start, clip.end);
-                let end = Position {
-                    tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
-                    column: clip.end.column,
-                    ..self.edit_start.add_channels(channel_offset, &module.tracks)
-                        .unwrap_or(Position {
-                            track: module.tracks.len(),
-                            channel: module.tracks.last().unwrap().channels.len() - 1,
-                            tick: 0,
-                            column: 0,
-                        })
-                };
-                module.scan_events(self.edit_start, end)
-                    .iter().map(|x| x.position()).collect()
+                existing_events.iter().map(|x| x.position()).collect()
             };
 
             if !add.is_empty() {
