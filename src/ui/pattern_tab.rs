@@ -291,16 +291,14 @@ impl PatternEditor {
                         column: 0,
                     })
             };
-            let existing_events = module.scan_events(self.edit_start, end);
-            let position_free = |pos| existing_events.iter()
-                .find(|x| x.position() == pos)
-                .is_none();
+            let event_positions: Vec<_> = module.scan_events(self.edit_start, end)
+                .iter().map(|x| x.position()).collect();
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
                 self.edit_start.add_channels(x.channel_offset, &module.tracks)
                     .map(|pos| {
                         if x.event.data.is_ctrl() == (pos.track == 0) 
-                            && (!mix || position_free(Position {
+                            && (!mix || !event_positions.contains(&Position {
                                 tick: (x.event.tick as i32 + tick_offset) as u32,
                                 ..pos
                             })) {
@@ -321,7 +319,7 @@ impl PatternEditor {
             let remove = if mix {
                 add.iter().map(|x| x.position()).collect()
             } else {
-                existing_events.iter().map(|x| x.position()).collect()
+                event_positions
             };
 
             if !add.is_empty() {
