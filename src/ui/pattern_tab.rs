@@ -4,9 +4,6 @@ use crate::{config::Config, input::{self, Action}, module::*, playback::Player, 
 
 use super::*;
 
-/// Visual height of a pattern beat.
-const BEAT_HEIGHT: f32 = 100.0;
-
 fn is_shift_down() -> bool {
     is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
@@ -20,7 +17,7 @@ pub struct PatternEditor {
     edit_start: Position,
     edit_end: Position,
     pub beat_division: u8,
-    scroll: f32,
+    beat_scroll: f32, // measured in beats
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
     clipboard: Option<PatternClip>,
@@ -50,7 +47,7 @@ impl PatternEditor {
             edit_start: edit_cursor,
             edit_end: edit_cursor,
             beat_division: 4,
-            scroll: 0.0,
+            beat_scroll: 0.0,
             tap_tempo_intervals: Vec::new(),
             pending_interval: None,
             clipboard: None,
@@ -91,6 +88,11 @@ impl PatternEditor {
             && self.edit_start.track == 0
     }
 
+    fn beat_height(&self, ui: &UI) -> f32 {
+        let line_h = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
+        line_h * self.beat_division as f32
+    }
+
     /// Convert mouse coordinates to a Position.
     fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();
@@ -98,9 +100,10 @@ impl PatternEditor {
         let params = ui.style.text_params();
         let cell_height = cap_height(&params) + MARGIN * 2.0;
         let char_width = text_width("x", &params);
+        let beat_height = self.beat_height(ui);
         let mut pos = Position {
             tick: ((y - cell_height * 0.5) as f32
-                / BEAT_HEIGHT * self.beat_division as f32).round() as u32
+                / beat_height * self.beat_division as f32).round() as u32
                 * TICKS_PER_BEAT / self.beat_division as u32,
             track: 0,
             channel: 0,
@@ -156,8 +159,9 @@ impl PatternEditor {
     fn draw_cursor(&self, ui: &mut UI, track_xs: &[f32]) {
         let params = &ui.style.text_params();
         let (tl, br) = self.selection_corners();
-        let start = position_coords(tl, &params, track_xs, false);
-        let end = position_coords(br, &params, track_xs, true);
+        let beat_height = self.beat_height(ui);
+        let start = position_coords(tl, &params, track_xs, false, beat_height);
+        let end = position_coords(br, &params, track_xs, true, beat_height);
 
         let selection_rect = Rect {
             x: MARGIN + start.x,
@@ -321,20 +325,31 @@ impl PatternEditor {
 
     fn draw_channel(&self, ui: &mut UI, channel: &Channel) {
         let char_width = text_width("x", &ui.style.text_params());
+        let beat_height = self.beat_height(ui);
         self.draw_channel_line(ui);
 
         // draw events
         for event in &channel.events {
-            draw_event(ui, event, char_width);
+            draw_event(ui, event, char_width, beat_height);
         }
     }
 
     fn draw_channel_line(&self, ui: &mut UI) {
+        let scroll = self.scroll(ui);
         ui.cursor_z -= 1;
-        ui.push_line(ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + self.scroll,
-            ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + self.scroll + ui.bounds.h,
+        ui.push_line(ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll,
+            ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll + ui.bounds.h,
             ui.style.theme.control_bg());
         ui.cursor_z += 1;
+    }
+
+    /// Returns scroll in pixels instead of in beats.
+    fn scroll(&self, ui: &UI) -> f32 {
+        self.beat_scroll * self.beat_height(ui)
+    }
+
+    fn set_scroll(&mut self, scroll: f32, ui: &UI) {
+        self.beat_scroll = scroll / self.beat_height(ui)
     }
 
     /// Inserts rows into the pattern, shifting events.
@@ -415,14 +430,17 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.push_rect(rect, ui.style.theme.panel_bg(), None);
     ui.cursor_x = track_xs[0];
 
+    let beat_height = pe.beat_height(ui);
     let end_y = ui.bounds.h - ui.cursor_y
         + module.last_event_tick().unwrap_or(0) as f32
-        * BEAT_HEIGHT / TICKS_PER_BEAT as f32;
+        * beat_height / TICKS_PER_BEAT as f32;
     let viewport_h = ui.bounds.h + ui.bounds.y - ui.cursor_y;
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.style.theme.border_unfocused());
-    ui.vertical_scrollbar(&mut pe.scroll, end_y, viewport_h);
+    let mut scroll = pe.scroll(ui);
+    ui.vertical_scrollbar(&mut scroll, end_y, viewport_h);
+    pe.set_scroll(scroll, ui);
     let viewport = Rect {
         x: ui.bounds.x,
         y: ui.cursor_y,
@@ -430,7 +448,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         h: viewport_h,
     };
     ui.cursor_z -= 1;
-    ui.cursor_y -= pe.scroll;
+    ui.cursor_y -= scroll;
 
     if viewport.contains(mouse_position_vec2()) {
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -446,9 +464,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     ui.cursor_z -= 1;
     ui.push_rect(viewport, ui.style.theme.content_bg(), None);
-    draw_beats(ui, left_x);
+    draw_beats(ui, left_x, beat_height);
     ui.cursor_z += 1;
-    draw_playhead(ui, player.get_tick(), left_x);
+    draw_playhead(ui, player.get_tick(), left_x, beat_height);
     pe.draw_cursor(ui, &track_xs);
 
     // draw channel data
@@ -465,7 +483,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 }
 
 /// Draws beat numbers and lines.
-fn draw_beats(ui: &mut UI, x: f32) {
+fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
     let mut beat = 1;
     let mut y = ui.cursor_y;
     let line_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
@@ -480,7 +498,7 @@ fn draw_beats(ui: &mut UI, x: f32) {
             ui.push_text(x, y, beat.to_string(), ui.style.theme.fg());
         }
         beat += 1;
-        y += BEAT_HEIGHT;
+        y += beat_height;
     }
 }
 
@@ -610,10 +628,10 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
     v
 }
 
-fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
+fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
     let rect = Rect {
         x,
-        y: ui.cursor_y + tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT,
+        y: ui.cursor_y + tick as f32 / TICKS_PER_BEAT as f32 * beat_height,
         w: ui.bounds.w,
         h: cap_height(&ui.style.text_params()) + MARGIN * 2.0,
     };
@@ -621,8 +639,8 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32) {
     ui.push_rect(rect, color, None);
 }
 
-fn draw_event(ui: &mut UI, evt: &Event, char_width: f32) {
-    let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * BEAT_HEIGHT;
+fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
+    let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
     if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
         return
     }
@@ -757,7 +775,7 @@ fn fix_cursors(pe: &mut PatternEditor, tracks: &[Track]) {
 /// Returns the visual coordinates of a Position. Uses the top-left corner of
 /// the cell by default.
 fn position_coords(pos: Position, params: &TextParams, track_xs: &[f32],
-    bottom_left: bool
+    bottom_left: bool, beat_height: f32
 ) -> Vec2 {
     let char_width = text_width("x", &params);
     let x = track_xs[pos.track] + channel_width(pos.track, char_width) * pos.channel as f32
@@ -766,7 +784,7 @@ fn position_coords(pos: Position, params: &TextParams, track_xs: &[f32],
         } else {
             column_x(pos.column, char_width)
         };
-    let y = pos.beat() * BEAT_HEIGHT + if bottom_left {
+    let y = pos.beat() * beat_height + if bottom_left {
         cap_height(&params) + MARGIN * 2.0
     } else {
         0.0
