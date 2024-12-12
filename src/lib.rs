@@ -548,6 +548,8 @@ impl App {
 
     fn load_module(&mut self, module: Module) {
         self.module = module;
+        self.pattern_editor = PatternEditor::new();
+        self.patch_index = None;
         self.player.reinit(self.module.tracks.len());
         self.fx.reinit(&self.module.fx);
     }
