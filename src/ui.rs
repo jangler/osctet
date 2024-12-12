@@ -10,7 +10,7 @@ use macroquad::prelude::*;
 use textedit::TextEditState;
 use theme::Theme;
 
-use crate::{input::{Hotkey, Modifiers}, module::EventData, pitch::Note, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{input::{Hotkey, Modifiers}, module::EventData, pitch::Note, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -165,7 +165,7 @@ pub struct UI {
     dialog: Option<Dialog>,
     group_rects: Vec<Rect>,
     focused_note: Option<String>,
-    pub note_queue: Vec<EventData>,
+    pub note_queue: Vec<(Key, EventData)>,
     instrument_edit_index: Option<usize>,
     mouse_consumed: bool,
     scrollbar_grabbed: bool,
@@ -418,10 +418,6 @@ impl UI {
     pub fn vertical_scrollbar(&mut self,
         current_y: &mut f32, max_y: f32, viewport_h: f32
     ) {
-        if viewport_h >= max_y {
-            return // no need for a scrollbar
-        }
-
         let (_, y_scroll) = mouse_wheel();
         let actual_increment = MARGIN * 6.0 + cap_height(&self.style.text_params()) * 3.0;
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
@@ -440,6 +436,10 @@ impl UI {
         }
 
         *current_y = (*current_y).min(max_y - viewport_h).max(0.0);
+
+        if viewport_h >= max_y {
+            return // no need to draw scrollbar
+        }
 
         let w = MARGIN * 2.0;
         let trough = Rect {
@@ -1116,7 +1116,7 @@ impl UI {
 
         if focused {
             for evt in self.note_queue.iter() {
-                if let EventData::Pitch(input_note) = evt {
+                if let (_, EventData::Pitch(input_note)) = evt {
                     *note = *input_note;
                     self.focused_note = None;
                 }

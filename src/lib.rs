@@ -175,6 +175,7 @@ impl App {
                     channel: 0,
                     key: input::u8_from_key(key),
                 };
+                self.ui.note_queue.push((key.clone(), EventData::NoteOff));
                 self.player.note_off(self.keyjazz_track(), key);
             }
         }
@@ -217,7 +218,8 @@ impl App {
                         self.ui.report("Nothing to redo");
                     },
                     _ => if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
-                        self.pattern_editor.action(*action, &mut self.module, &self.config);
+                        self.pattern_editor.action(*action,
+                            &mut self.module, &self.config, &mut self.player);
                     },
                 }
             }
@@ -228,17 +230,17 @@ impl App {
                 //       of changes
             } else if let Some(note) = input::note_from_key(
                 key, &self.module.tuning, self.octave, &self.config) {
-                self.ui.note_queue.push(EventData::Pitch(note));
+                let key = Key {
+                    origin: KeyOrigin::Keyboard,
+                    channel: 0,
+                    key: input::u8_from_key(key),
+                };
+                self.ui.note_queue.push((key.clone(), EventData::Pitch(note)));
                 if !self.ui.accepting_note_input()
                     && !self.pattern_editor.in_digit_column(&self.ui)
                     && !self.pattern_editor.in_global_track(&self.ui) {
                     if let Some((patch, note)) =
                         self.module.map_input(self.keyjazz_patch_index(), note) {
-                        let key = Key {
-                            origin: KeyOrigin::Keyboard,
-                            channel: 0,
-                            key: input::u8_from_key(key),
-                        };
                         let pitch = self.module.tuning.midi_pitch(&note);
                         self.player.note_on(self.keyjazz_track(), key, pitch, None, patch);
                     }
@@ -286,86 +288,93 @@ impl App {
         if let Some(rx) = &self.midi.rx {
             while let Ok(v) = rx.try_recv() {
                 if let Some(evt) = MidiEvent::parse(&v) {
-                    if let MidiEvent::NoteOn { key, velocity, .. } = evt {
-                        self.ui.note_queue.push(EventData::Pitch(
-                            input::note_from_midi(key, &self.module.tuning, &self.config)));
-                        let v = (velocity as f32 * 9.0 / 127.0).round() as u8;
-                        self.ui.note_queue.push(EventData::Pressure(v));
-                    }
-                    if !self.ui.accepting_note_input() {
-                        match evt {
-                            MidiEvent::NoteOff { channel, key, .. } => {
+                    match evt {
+                        MidiEvent::NoteOff { channel, key, .. } => {
+                            let key = Key {
+                                origin: KeyOrigin::Midi,
+                                channel,
+                                key,
+                            };
+                            self.player.note_off(self.keyjazz_track(), key.clone());
+                            self.ui.note_queue.push((key, EventData::NoteOff));
+                        },
+                        MidiEvent::NoteOn { channel, key, velocity } => {
+                            let key = Key {
+                                origin: KeyOrigin::Midi,
+                                channel,
+                                key,
+                            };
+                            if velocity != 0 {
+                                let note = input::note_from_midi(
+                                    key.key, &self.module.tuning, &self.config);
+                                if let Some((patch, note)) =
+                                    self.module.map_input(self.keyjazz_patch_index(), note) {
+                                    let pitch = self.module.tuning.midi_pitch(&note);
+                                    let pressure = velocity as f32 / 127.0;
+                                    if !self.ui.accepting_note_input() {
+                                        self.player.note_on(self.keyjazz_track(),
+                                            key.clone(), pitch, Some(pressure), patch);
+                                    }
+                                    self.ui.note_queue.push((key.clone(),
+                                        EventData::Pitch(note)));
+                                    let v = (velocity as f32 * 9.0 / 127.0).round() as u8;
+                                    self.ui.note_queue.push((key, EventData::Pressure(v)));
+                                }
+                            } else {
+                                self.player.note_off(self.keyjazz_track(), key.clone());
+                                self.ui.note_queue.push((key, EventData::NoteOff));
+                            }
+                        },
+                        MidiEvent::PolyPressure { channel, key, pressure } => {
+                            if self.config.midi_send_pressure == Some(true) {
                                 let key = Key {
                                     origin: KeyOrigin::Midi,
                                     channel,
                                     key,
                                 };
-                                self.player.note_off(self.keyjazz_track(), key);
-                            },
-                            MidiEvent::NoteOn { channel, key, velocity } => {
-                                if velocity != 0 {
-                                    let note = input::note_from_midi(
-                                        key, &self.module.tuning, &self.config);
-                                    if let Some((patch, note)) =
-                                        self.module.map_input(self.keyjazz_patch_index(), note) {
-                                        let key = Key {
-                                            origin: KeyOrigin::Midi,
-                                            channel,
-                                            key,
-                                        };
-                                        let pitch = self.module.tuning.midi_pitch(&note);
-                                        let pressure = velocity as f32 / 127.0;
-                                        self.player.note_on(self.keyjazz_track(),
-                                            key, pitch, Some(pressure), patch);
-                                    }
-                                } else {
-                                    let key = Key {
-                                        origin: KeyOrigin::Midi,
-                                        channel,
-                                        key,
-                                    };
-                                    self.player.note_off(self.keyjazz_track(), key);
-                                }
-                            },
-                            MidiEvent::PolyPressure { channel, key, pressure } => {
-                                if self.config.midi_send_pressure == Some(true) {
-                                    self.player.poly_pressure(self.keyjazz_track(), Key {
-                                        origin: KeyOrigin::Midi,
-                                        channel,
-                                        key,
-                                    }, pressure as f32 / 127.0);
-                                }
-                            },
-                            MidiEvent::Controller { channel, controller, value } => {
-                                match controller {
-                                    input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                                        self.player.modulate(self.keyjazz_track(),
-                                            channel, value as f32 / 127.0);
-                                    },
-                                    input::CC_RPN_MSB => self.midi.rpn.0 = value,
-                                    input::CC_RPN_LSB => self.midi.rpn.1 = value,
-                                    input::CC_DATA_ENTRY_MSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
-                                        // set semitones
-                                        self.midi.bend_range = self.midi.bend_range % 1.0 + value as f32;
-                                    },
-                                    input:: CC_DATA_ENTRY_LSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
-                                        // set cents
-                                        self.midi.bend_range = self.midi.bend_range.round() + value as f32 / 100.0;
-                                    },
-                                    _ => (),
-                                }
-                            },
-                            MidiEvent::ChannelPressure { channel, pressure } => {
-                                if self.config.midi_send_pressure == Some(true) {
-                                    self.player.channel_pressure(self.keyjazz_track(),
-                                        channel, pressure as f32 / 127.0);
-                                }
-                            },
-                            MidiEvent::Pitch { channel, bend } => {
-                                self.player.pitch_bend(self.keyjazz_track(),
-                                    channel, bend * self.midi.bend_range);
-                            },
-                        }
+                                self.player.poly_pressure(self.keyjazz_track(), key.clone(),
+                                    pressure as f32 / 127.0);
+                                let v = (pressure as f32 * 9.0 / 127.0).round() as u8;
+                                self.ui.note_queue.push((key, EventData::Pressure(v)));
+                            }
+                        },
+                        MidiEvent::Controller { channel, controller, value } => {
+                            match controller {
+                                input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
+                                    self.player.modulate(self.keyjazz_track(),
+                                        channel, value as f32 / 127.0);
+                                },
+                                input::CC_RPN_MSB => self.midi.rpn.0 = value,
+                                input::CC_RPN_LSB => self.midi.rpn.1 = value,
+                                input::CC_DATA_ENTRY_MSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
+                                    // set semitones
+                                    self.midi.bend_range = self.midi.bend_range % 1.0 + value as f32;
+                                },
+                                input:: CC_DATA_ENTRY_LSB => if self.midi.rpn == input::RPN_PITCH_BEND_SENSITIVITY {
+                                    // set cents
+                                    self.midi.bend_range = self.midi.bend_range.round() + value as f32 / 100.0;
+                                },
+                                _ => (),
+                            }
+                        },
+                        MidiEvent::ChannelPressure { channel, pressure } => {
+                            if self.config.midi_send_pressure == Some(true) {
+                                self.player.channel_pressure(self.keyjazz_track(),
+                                    channel, pressure as f32 / 127.0);
+                                let key = Key {
+                                    origin: KeyOrigin::Midi,
+                                    channel,
+                                    key: 0,
+                                };
+                                let v = (pressure as f32 * 9.0 / 127.0).round() as u8;
+                                self.ui.note_queue.push((key, EventData::Pressure(v)));
+                            }
+                        },
+                        // TODO: send event on note queue
+                        MidiEvent::Pitch { channel, bend } => {
+                            self.player.pitch_bend(self.keyjazz_track(),
+                                channel, bend * self.midi.bend_range);
+                        },
                     }
                 }
             }

@@ -19,6 +19,7 @@ pub struct Player {
     playtime: f64,
     tempo: f32,
     looped: bool,
+    metronome: bool,
 }
 
 impl Player {
@@ -31,6 +32,7 @@ impl Player {
             playtime: 0.0, // not total playtime!
             tempo: DEFAULT_TEMPO,
             looped: false,
+            metronome: false,
         }
     }
 
@@ -56,6 +58,7 @@ impl Player {
 
     pub fn stop(&mut self) {
         self.playing = false;
+        self.metronome = false;
         self.clear_notes_with_origin(KeyOrigin::Pattern);
     }
 
@@ -69,6 +72,11 @@ impl Player {
         self.simulate_events(tick, module);
         self.tick = tick;
         self.play();
+    }
+
+    pub fn record_from(&mut self, tick: u32, module: &Module) {
+        self.metronome = true;
+        self.play_from(tick, module);
     }
 
     pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
@@ -142,6 +150,12 @@ impl Player {
                     }
                 }
             }
+        }
+
+        if self.metronome && (self.tick as f32 / TICKS_PER_BEAT as f32).ceil()
+            != (prev_tick as f32 / TICKS_PER_BEAT as f32).ceil() {
+            self.seq.push_relative(0.0, 0.01, Fade::Smooth, 0.01, 0.01,
+                Box::new(square_hz(440.0 * 8.0) >> split::<U4>()));
         }
     }
 

@@ -22,6 +22,7 @@ pub struct PatternEditor {
     pending_interval: Option<f32>,
     clipboard: Option<PatternClip>,
     follow: bool,
+    record: bool,
 }
 
 struct PatternClip {
@@ -53,6 +54,7 @@ impl PatternEditor {
             pending_interval: None,
             clipboard: None,
             follow: false,
+            record: false,
         }
     }
 
@@ -175,7 +177,9 @@ impl PatternEditor {
         ui.push_rect(selection_rect, color, None);
     }
 
-    pub fn action(&mut self, action: Action, module: &mut Module, cfg: &Config) {
+    pub fn action(&mut self, action: Action, module: &mut Module, cfg: &Config,
+        player: &mut Player
+    ) {
         match action {
             Action::Cut => self.cut(module),
             Action::Copy => self.copy(module),
@@ -208,6 +212,13 @@ impl PatternEditor {
                 | Action::NudgeEnharmonic =>
                     nudge_notes(module, self.selection_corners(), cfg),
             Action::ToggleFollow => self.follow = !self.follow,
+            Action::ToggleRecord => if self.record {
+                player.stop();
+                self.record = false;
+            } else {
+                player.record_from(self.cursor_tick(), module);
+                self.record = true;
+            },
             _ => (),
         }
     }
@@ -415,11 +426,37 @@ impl PatternEditor {
             add,
         });
     }
+
+    fn record_event(&mut self, key: Key, data: EventData, module: &mut Module) {
+        let cursor = self.edit_start;
+        if data.is_ctrl() != (cursor.track == 0) {
+            return
+        }
+
+        // skip to next open row
+        let mut pos = Position {
+            track: cursor.track,
+            tick: cursor.tick,
+            channel: cursor.channel,
+            column: data.column(),
+        };
+        if module.event_at(pos).is_some_and(|e| e.data != EventData::NoteOff) {
+            pos.tick += TICKS_PER_BEAT / self.beat_division as u32;
+        }
+
+        module.insert_event(cursor.track, cursor.channel, Event {
+            tick: pos.tick,
+            data,
+        });
+    }
 }
 
 pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut PatternEditor) {
     if let Some(interval) = pe.pending_interval.as_mut() {
         *interval += get_frame_time();
+    }
+    if pe.record && !player.is_playing() {
+        pe.record = false;
     }
 
     if !ui.accepting_keyboard_input() {
@@ -429,9 +466,18 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     }
 
     let cursor = pe.edit_start;
-    if !ui.accepting_note_input() && cursor.column == NOTE_COLUMN {
-        while let Some(data) = ui.note_queue.pop() {
-            insert_event_at_cursor(module, &cursor, data);
+    if pe.record {
+        while let Some((key, data)) = ui.note_queue.pop() {
+            pe.record_event(key, data, module);
+        }
+    } else {
+        if !ui.accepting_note_input() && cursor.column == NOTE_COLUMN {
+            while let Some((_, data)) = ui.note_queue.pop() {
+                match data {
+                    EventData::NoteOff => (),
+                    _ => insert_event_at_cursor(module, &cursor, data),
+                }
+            }
         }
     }
 
@@ -454,12 +500,21 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.style.theme.border_unfocused());
-    if pe.follow && player.is_playing() {
+    if (pe.follow || pe.record) && player.is_playing() {
         pe.scroll_to(player.get_tick(), ui, viewport_h);
     }
+    if pe.record {
+        let ticks_per_row = TICKS_PER_BEAT / pe.beat_division as u32;
+        let tick = (player.get_tick() as f32 / ticks_per_row as f32)
+            .round() as u32 * ticks_per_row;
+        pe.edit_start.tick = tick;
+        pe.edit_end.tick = tick;
+    }
     let mut scroll = pe.scroll(ui);
-    ui.vertical_scrollbar(&mut scroll, end_y, viewport_h);
-    pe.set_scroll(scroll, ui);
+    if !(pe.follow || pe.record) {
+        ui.vertical_scrollbar(&mut scroll, end_y, viewport_h);
+        pe.set_scroll(scroll, ui);
+    }
     let viewport = Rect {
         x: ui.bounds.x,
         y: ui.cursor_y,
