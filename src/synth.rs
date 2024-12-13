@@ -126,12 +126,11 @@ impl Waveform {
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(|x| clamp01(x));
 
-        // have to compensate for different volumes. the sine is so loud!
         let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(base >> saw().phase(random())),
-            Self::Pulse => Box::new((base | tone * 0.5 + 0.5) >> pulse().phase(random())),
-            Self::Triangle => Box::new(base >> triangle().phase(random())),
-            Self::Sine => Box::new(base >> sine().phase(random())),
+            Self::Sawtooth => Box::new(base >> saw().phase(0.0)),
+            Self::Pulse => Box::new((base | tone * 0.5 + 0.5) >> pulse().phase(0.0)),
+            Self::Triangle => Box::new(base >> triangle().phase(0.0)),
+            Self::Sine => Box::new(base >> sine().phase(0.0)),
             Self::Hold => Box::new((noise().seed(random()) | base) >> hold(0.0)),
             Self::Noise => Box::new(noise().seed(random())
                 >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
@@ -493,10 +492,12 @@ impl Patch {
                     osc.output = OscOutput::Mix(0);
                 } else {
                     match osc.output {
-                        OscOutput::Mix(n) | OscOutput::AM(n) | OscOutput::FM(n) if n == i =>
+                        OscOutput::Mix(n) | OscOutput::AM(n)
+                            | OscOutput::FM(n) | OscOutput::FM(n) if n == i =>
                             osc.output = OscOutput::Mix(0),
                         OscOutput::Mix(n) if n > i => osc.output = OscOutput::Mix(n - 1),
                         OscOutput::AM(n) if n > i => osc.output = OscOutput::AM(n - 1),
+                        OscOutput::RM(n) if n > i => osc.output = OscOutput::RM(n - 1),
                         OscOutput::FM(n) if n > i => osc.output = OscOutput::FM(n - 1),
                         _ => (),
                     }
@@ -599,6 +600,8 @@ impl Patch {
                 if osc.output == OscOutput::Mix(i) {
                     mixed_oscs = mixed_oscs + self.make_osc(j, vars);
                 } else if osc.output == OscOutput::AM(i) {
+                    am_oscs = am_oscs * (1.0 + self.make_osc(j, vars));
+                } else if osc.output == OscOutput::RM(i) {
                     am_oscs = am_oscs * self.make_osc(j, vars);
                 } else if osc.output == OscOutput::FM(i) {
                     fm_oscs = fm_oscs + self.make_osc(j, vars);
@@ -684,6 +687,7 @@ impl Oscillator {
 pub enum OscOutput {
     Mix(usize),
     AM(usize),
+    RM(usize),
     FM(usize),
 }
 
@@ -693,8 +697,9 @@ impl OscOutput {
             vec![OscOutput::Mix(0)]
         } else {
             (0..index).flat_map(|i| if i + 1 == index {
-                // only allow modulating the oscillator directly to the left
-                vec![OscOutput::Mix(i), OscOutput::AM(i), OscOutput::FM(i)]
+                // only allow modulating the previous oscillator in the list
+                vec![OscOutput::Mix(i), OscOutput::AM(i),
+                    OscOutput::RM(i), OscOutput::FM(i)]
             } else {
                 vec![OscOutput::Mix(i)]
             }).collect()
@@ -705,9 +710,10 @@ impl OscOutput {
 impl Display for OscOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Self::Mix(i) if *i == 0 => "Mix",
+            Self::Mix(0) => "Mix",
             Self::Mix(i) => &format!("Mix to osc {}", i + 1),
-            Self::AM(i) => &format!("RM to osc {}", i + 1),
+            Self::AM(i) => &format!("AM to osc {}", i + 1),
+            Self::RM(i) => &format!("RM to osc {}", i + 1),
             Self::FM(i) => &format!("FM to osc {}", i + 1),
         };
         f.write_str(s)
