@@ -224,8 +224,16 @@ impl PatternEditor {
                 player.record_from(self.cursor_tick(), module);
                 self.record = true;
             },
+            Action::SelectAllChannels => self.select_all_channels(module),
             _ => (),
         }
+    }
+
+    fn select_all_channels(&mut self, module: &Module) {
+        self.edit_start.track = 0;
+        self.edit_start.channel = 0;
+        self.edit_end.track = module.tracks.len() - 1;
+        self.edit_end.channel = module.tracks[self.edit_end.track].channels.len() - 1;
     }
     
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
