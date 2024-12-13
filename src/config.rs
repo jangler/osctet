@@ -138,6 +138,12 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::CtrlShift, KeyCode::Tab), Action::PrevTab),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::A), Action::SelectAllChannels),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::P), Action::PlaceEvenly),
+        (Hotkey::new(Modifiers::None, KeyCode::PageUp), Action::PrevBeat),
+        (Hotkey::new(Modifiers::None, KeyCode::PageDown), Action::NextBeat),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::Up), Action::PrevEvent),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::Down), Action::NextEvent),
+        (Hotkey::new(Modifiers::None, KeyCode::Home), Action::PatternStart),
+        (Hotkey::new(Modifiers::None, KeyCode::End), Action::PatternEnd),
         // (Hotkey::new(Modifiers::Ctrl, KeyCode::R), Action::ToggleRecord),
     ]
 }

@@ -442,6 +442,12 @@ pub enum Action {
     PrevTab,
     SelectAllChannels,
     PlaceEvenly,
+    NextBeat,
+    PrevBeat,
+    NextEvent,
+    PrevEvent,
+    PatternStart,
+    PatternEnd,
 }
 
 impl Action {
@@ -495,6 +501,12 @@ impl Action {
             Self::PrevTab => "Previous tab",
             Self::SelectAllChannels => "Select all channels",
             Self::PlaceEvenly => "Place events evenly",
+            Self::NextBeat => "Next beat",
+            Self::PrevBeat => "Prev beat",
+            Self::NextEvent => "Next event",
+            Self::PrevEvent => "Prev event",
+            Self::PatternStart => "Go to pattern start",
+            Self::PatternEnd => "Go to pattern end",
         }
     }
 }

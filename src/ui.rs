@@ -416,14 +416,14 @@ impl UI {
 
     /// Draws a scrollbar on the right edge of the current bounds.
     pub fn vertical_scrollbar(&mut self,
-        current_y: &mut f32, max_y: f32, viewport_h: f32
+        current_y: &mut f32, max_y: f32, viewport_h: f32, keys: bool
     ) {
         let (_, y_scroll) = mouse_wheel();
         let actual_increment = MARGIN * 6.0 + cap_height(&self.style.text_params()) * 3.0;
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
         *current_y += dy;
 
-        if !self.accepting_keyboard_input() {
+        if keys && !self.accepting_keyboard_input() {
             if is_key_pressed(KeyCode::Home) {
                 *current_y = 0.0;
             } else if is_key_pressed(KeyCode::End) {

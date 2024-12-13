@@ -194,7 +194,7 @@ impl App {
                     Action::DecrementOctave => self.octave -= 1,
                     Action::PlayFromStart => self.player.play_from(0, &self.module),
                     Action::PlayFromScreen => self.player.play_from(
-                        self.pattern_editor.screen_tick, &self.module),
+                        self.pattern_editor.screen_beat_tick(), &self.module),
                     Action::PlayFromCursor => self.player.play_from(
                         self.pattern_editor.cursor_tick(), &self.module),
                     Action::StopPlayback => self.player.stop(),

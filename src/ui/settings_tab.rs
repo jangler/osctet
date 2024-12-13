@@ -47,7 +47,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     let scroll_h = ui.end_group().unwrap().h + MARGIN;
     ui.cursor_z += 1;
     ui.cursor_y = old_y;
-    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y);
+    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn color_controls(ui: &mut UI, label: &str, accent: bool,

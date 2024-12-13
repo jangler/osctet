@@ -34,7 +34,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     ui.cursor_y += *scroll;
     let scroll_h = ui.end_group().unwrap().h + MARGIN;
     ui.cursor_y = old_y;
-    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y);
+    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
