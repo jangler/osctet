@@ -401,6 +401,7 @@ pub enum Action {
     IncrementOctave,
     DecrementOctave,
     PlayFromStart,
+    PlayFromScreen,
     PlayFromCursor,
     StopPlayback,
     NewSong,
@@ -437,6 +438,10 @@ pub enum Action {
     NudgeEnharmonic,
     ToggleFollow,
     ToggleRecord,
+    NextTab,
+    PrevTab,
+    SelectAllChannels,
+    PlaceEvenly,
 }
 
 impl Action {
@@ -449,6 +454,7 @@ impl Action {
             Self::IncrementOctave => "Increment octave",
             Self::DecrementOctave => "Decrement octave",
             Self::PlayFromStart => "Play from start",
+            Self::PlayFromScreen => "Play from screen",
             Self::PlayFromCursor => "Play from cursor",
             Self::StopPlayback => "Stop playback",
             Self::NewSong => "New song",
@@ -485,6 +491,10 @@ impl Action {
             Self::NudgeEnharmonic => "Enharmonic swap",
             Self::ToggleFollow => "Toggle pattern follow",
             Self::ToggleRecord => "Record",
+            Self::NextTab => "Next tab",
+            Self::PrevTab => "Previous tab",
+            Self::SelectAllChannels => "Select all channels",
+            Self::PlaceEvenly => "Place events evenly",
         }
     }
 }

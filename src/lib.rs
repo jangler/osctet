@@ -193,6 +193,8 @@ impl App {
                     Action::IncrementOctave => self.octave += 1,
                     Action::DecrementOctave => self.octave -= 1,
                     Action::PlayFromStart => self.player.play_from(0, &self.module),
+                    Action::PlayFromScreen => self.player.play_from(
+                        self.pattern_editor.screen_tick, &self.module),
                     Action::PlayFromCursor => self.player.play_from(
                         self.pattern_editor.cursor_tick(), &self.module),
                     Action::StopPlayback => self.player.stop(),
@@ -244,14 +246,6 @@ impl App {
                         let pitch = self.module.tuning.midi_pitch(&note);
                         self.player.note_on(self.keyjazz_track(), key, pitch, None, patch);
                     }
-                }
-            } else {
-                match key {
-                    KeyCode::F1 => self.ui.set_tab(MAIN_TAB_ID, 0),
-                    KeyCode::F2 => self.ui.set_tab(MAIN_TAB_ID, 1),
-                    KeyCode::F3 => self.ui.set_tab(MAIN_TAB_ID, 2),
-                    KeyCode::F4 => self.ui.set_tab(MAIN_TAB_ID, 3),
-                    _ => (),
                 }
             }
         }

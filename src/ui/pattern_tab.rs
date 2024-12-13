@@ -23,6 +23,7 @@ pub struct PatternEditor {
     clipboard: Option<PatternClip>,
     follow: bool,
     record: bool,
+    pub screen_tick: u32,
 }
 
 struct PatternClip {
@@ -55,6 +56,7 @@ impl PatternEditor {
             clipboard: None,
             follow: false,
             record: false,
+            screen_tick: 0,
         }
     }
 
@@ -100,15 +102,10 @@ impl PatternEditor {
     /// Convert mouse coordinates to a Position.
     fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();
-        let y = y - ui.cursor_y;
         let params = ui.style.text_params();
-        let cell_height = cap_height(&params) + MARGIN * 2.0;
         let char_width = text_width("x", &params);
-        let beat_height = self.beat_height(ui);
         let mut pos = Position {
-            tick: ((y - cell_height * 0.5) as f32
-                / beat_height * self.beat_division as f32).round() as u32
-                * TICKS_PER_BEAT / self.beat_division as u32,
+            tick: self.y_tick(y, ui),
             track: 0,
             channel: 0,
             column: 0,
@@ -136,6 +133,14 @@ impl PatternEditor {
         }
 
         pos
+    }
+
+    fn y_tick(&self, y: f32, ui: &UI) -> u32 {
+        let cell_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
+        let beat_height = self.beat_height(ui);
+        ((y - ui.cursor_y - cell_height * 0.5) as f32
+            / beat_height * self.beat_division as f32).round() as u32
+            * TICKS_PER_BEAT / self.beat_division as u32
     }
 
     /// Returns the top-left and bottom-right corners of the pattern selection.
@@ -523,6 +528,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     };
     ui.cursor_z -= 1;
     ui.cursor_y -= scroll;
+
+    let y_beat = pe.y_tick(viewport.y, ui) as f32 / TICKS_PER_BEAT as f32;
+    pe.screen_tick = y_beat.ceil() as u32 * TICKS_PER_BEAT;
 
     if viewport.contains(mouse_position_vec2()) {
         if is_mouse_button_pressed(MouseButton::Left) {
