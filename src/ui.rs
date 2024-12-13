@@ -695,6 +695,10 @@ impl UI {
 
     /// Draws a tab menu. Returns the index of the selected tab.
     pub fn tab_menu(&mut self, id: &str, labels: &[&str]) -> usize {
+        if !self.tabs.contains_key(id) {
+            self.tabs.insert(id.to_owned(), 0);
+        }
+
         let params = self.style.text_params();
         let mut selected_index = self.tabs.get(id).cloned().unwrap_or_default();
         let mut x = self.cursor_x;
@@ -753,6 +757,18 @@ impl UI {
 
     pub fn set_tab(&mut self, id: &str, index: usize) {
         self.tabs.insert(id.to_owned(), index);
+    }
+
+    pub fn next_tab(&mut self, id: &str, n: usize) {
+        if let Some(i) = self.tabs.get_mut(id) {
+            *i = (*i + 1) % n;
+        }
+    }
+    
+    pub fn prev_tab(&mut self, id: &str, n: usize) {
+        if let Some(i) = self.tabs.get_mut(id) {
+            *i = (*i as isize - 1).rem_euclid(n as isize) as usize;
+        }
     }
 
     /// Draws a slider and returns true if the value was changed.
