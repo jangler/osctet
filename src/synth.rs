@@ -109,19 +109,24 @@ fn empty_wave() -> Arc<Wave> {
     Arc::new(Wave::new(1, 44100.0))
 }
 
+// TODO: costly clones here
 impl PcmData {
     pub fn load(path: impl AsRef<Path>) -> Result<PcmData, Box<dyn Error>> {
         let data = fs::read(path)?;
+        let mut wave = Wave::load_slice(data.clone())?;
+        wave.normalize();
+
         Ok(PcmData {
-            // TODO: costly clone here
-            wave: Arc::new(Wave::load_slice(data.clone())?),
+            wave: Arc::new(wave),
             data,
             loop_point: None,
         })
     }
 
     pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
-        self.wave = Arc::new(Wave::load_slice(self.data.clone())?);
+        let mut wave = Wave::load_slice(self.data.clone())?;
+        wave.normalize();
+        self.wave = Arc::new(wave);
         Ok(())
     }
 }
@@ -176,7 +181,8 @@ impl Waveform {
                 >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
                 >> join::<U2>()),
             Self::Pcm(data) => if let Some(data) = data {
-                Box::new(wavech(&data.wave, 0, data.loop_point))
+                Box::new(base * (1.0/KEY_TRACKING_REF_FREQ) >>
+                    resample(wavech(&data.wave, 0, data.loop_point)))
             } else {
                 Box::new(zero())
             },
