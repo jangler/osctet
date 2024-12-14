@@ -133,6 +133,10 @@ impl PcmData {
 
     /// Adjust loop point to be smoother.
     pub fn fix_loop_point(&mut self) {
+        // TODO: this algorithm should be improved -- we should be looking
+        // for a sample after a sample that's like the last sample, not a
+        // sample that's liek the sample before the last sample
+
         // look for a sample that's similar to the sample before the last
         // sample in the wave. "similar" means moving in the same direction
         // and crossing the same midpoint.
@@ -913,7 +917,7 @@ pub struct ADSR {
 impl ADSR {
     pub fn new() -> Self {
         Self {
-            attack: 0.01,
+            attack: 0.0,
             decay: 1.0,
             sustain: 1.0,
             release: 0.01,
