@@ -546,6 +546,8 @@ pub enum EventData {
 }
 
 impl EventData {
+    pub const DIGIT_MAX: u8 = 0xf;
+    
     pub fn column(&self) -> u8 {
         match *self {
             Self::Pressure(_) => VEL_COLUMN,

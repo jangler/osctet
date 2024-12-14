@@ -330,6 +330,12 @@ impl PatternEditor {
                 KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
                 KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
                 KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
+                KeyCode::A => input_digit(module, &self.edit_start, 0xa),
+                KeyCode::B => input_digit(module, &self.edit_start, 0xb),
+                KeyCode::C => input_digit(module, &self.edit_start, 0xc),
+                KeyCode::D => input_digit(module, &self.edit_start, 0xd),
+                KeyCode::E => input_digit(module, &self.edit_start, 0xe),
+                KeyCode::F => input_digit(module, &self.edit_start, 0xf),
                 _ => (),
             }
         }
@@ -847,8 +853,8 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
     let text = match evt.data {
         EventData::Pitch(note) => note.to_string(),
         EventData::NoteOff => String::from("---"),
-        EventData::Pressure(v) => v.to_string(),
-        EventData::Modulation(v) => v.to_string(),
+        EventData::Pressure(v) => format!("{:X}", v),
+        EventData::Modulation(v) => format!("{:X}", v),
         EventData::End => String::from("END"),
         EventData::Loop => String::from("LP"),
         EventData::Tempo(t) => t.round().to_string(),

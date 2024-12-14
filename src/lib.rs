@@ -313,7 +313,8 @@ impl App {
                                     }
                                     self.ui.note_queue.push((key.clone(),
                                         EventData::Pitch(note)));
-                                    let v = (velocity as f32 * 9.0 / 127.0).round() as u8;
+                                    let v = (velocity as f32 * EventData::DIGIT_MAX as f32
+                                        / 127.0).round() as u8;
                                     self.ui.note_queue.push((key, EventData::Pressure(v)));
                                 }
                             } else {
@@ -330,7 +331,8 @@ impl App {
                                 };
                                 self.player.poly_pressure(self.keyjazz_track(), key.clone(),
                                     pressure as f32 / 127.0);
-                                let v = (pressure as f32 * 9.0 / 127.0).round() as u8;
+                                let v = (pressure as f32 * EventData::DIGIT_MAX as f32
+                                    / 127.0).round() as u8;
                                 self.ui.note_queue.push((key, EventData::Pressure(v)));
                             }
                         },
@@ -362,7 +364,8 @@ impl App {
                                     channel,
                                     key: 0,
                                 };
-                                let v = (pressure as f32 * 9.0 / 127.0).round() as u8;
+                                let v = (pressure as f32 * EventData::DIGIT_MAX as f32
+                                    / 127.0).round() as u8;
                                 self.ui.note_queue.push((key, EventData::Pressure(v)));
                             }
                         },

@@ -7,7 +7,7 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::adsr::adsr_scalable;
+use crate::{adsr::adsr_scalable, module::EventData};
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
@@ -247,7 +247,7 @@ impl FilterType {
     }
 }
 
-const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to a 6 in pattern
+const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to A in column
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {
@@ -685,7 +685,7 @@ impl Patch {
         }
 
         let level = (var(&self.oscs[i].level.0) >> follow(0.01))
-            * self.dsp_component(&vars, ModTarget::Level(i), &[]);
+            * self.dsp_component(&vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x);
 
         (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
             * level
@@ -871,7 +871,7 @@ impl ADSR {
             decay: 1.0,
             sustain: 1.0,
             release: 0.01,
-            power: 2.0,
+            power: 1.0,
         }
     }
 
@@ -949,7 +949,8 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             }
         };
-        let d = var(&self.depth.0) >> follow(SMOOTH_TIME) + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
+        let d = var(&self.depth.0) >> follow(SMOOTH_TIME)
+            + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
         if self.target.is_additive() {
             net * d
         } else if self.source.is_bipolar() {
@@ -975,7 +976,7 @@ impl Display for ModSource {
         let s = match self {
             Self::Pitch => "Pitch",
             Self::Pressure => "Pressure",
-            Self::Modulation => "Mod wheel",
+            Self::Modulation => "Modulation",
             Self::Random => "Random",
             Self::Envelope(i) => &format!("Envelope {}", i + 1),
             Self::LFO(i) => &format!("LFO {}", i + 1),
@@ -1072,7 +1073,7 @@ impl Voice {
             prev_freq,
         };
         let gain = (var(&settings.gain.0) >> follow(SMOOTH_TIME))
-            * settings.dsp_component(&vars, ModTarget::Gain, &[])
+            * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x))
             * VOICE_GAIN;
         let filter_net = settings.make_filter_net(&vars);
 

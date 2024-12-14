@@ -5,10 +5,6 @@ use crate::{fx::GlobalFX, module::{EventData, Module, TrackEdit, TICKS_PER_BEAT}
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f32 = 10.0;
 
-// maximum values as written to pattern
-const MAX_PRESSURE: u8 = 9;
-const MAX_MODULATION: u8 = 9;
-
 /// Handles module playback. In methods that take a `track` argument, 0 can
 /// safely be used for keyjazz events (since track 0 will never sequence).
 pub struct Player {
@@ -186,11 +182,11 @@ impl Player {
                         }
                         EventData::Pressure(v) => {
                             self.channel_pressure(track_i, channel_i as u8,
-                                v as f32 / MAX_PRESSURE as f32);
+                                v as f32 / EventData::DIGIT_MAX as f32);
                         }
                         EventData::Modulation(v) => {
                             self.modulate(track_i, channel_i as u8,
-                                v as f32 / MAX_MODULATION as f32);
+                                v as f32 / EventData::DIGIT_MAX as f32);
                         }
                         EventData::NoteOff => active_note = None,
                         EventData::Tempo(t) => self.tempo = t,
@@ -229,10 +225,12 @@ impl Player {
                 }
             }
             EventData::Pressure(v) => {
-                self.channel_pressure(track, channel as u8, v as f32 / MAX_PRESSURE as f32);
+                self.channel_pressure(track, channel as u8,
+                    v as f32 / EventData::DIGIT_MAX as f32);
             }
             EventData::Modulation(v) => {
-                self.modulate(track, channel as u8, v as f32 / MAX_MODULATION as f32);
+                self.modulate(track, channel as u8,
+                    v as f32 / EventData::DIGIT_MAX as f32);
             }
             EventData::NoteOff => {
                 self.note_off(track, key);
