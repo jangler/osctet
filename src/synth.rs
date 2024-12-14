@@ -781,10 +781,10 @@ impl Display for OscOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::Mix(0) => "Mix",
-            Self::Mix(i) => &format!("Mix to osc {}", i + 1),
-            Self::AM(i) => &format!("AM to osc {}", i + 1),
-            Self::RM(i) => &format!("RM to osc {}", i + 1),
-            Self::FM(i) => &format!("FM to osc {}", i + 1),
+            Self::Mix(i) => &format!("Mix to gen {}", i + 1),
+            Self::AM(i) => &format!("AM to gen {}", i + 1),
+            Self::RM(i) => &format!("RM to gen {}", i + 1),
+            Self::FM(i) => &format!("FM to gen {}", i + 1),
         };
         f.write_str(s)
     }
@@ -1030,10 +1030,10 @@ impl Display for ModTarget {
             Self::Pan => "Pan",
             Self::Pitch => "Pitch",
             Self::FinePitch => "Fine pitch",
-            Self::Level(n) => &format!("Osc {} level", n + 1),
-            Self::OscPitch(n) => &format!("Osc {} pitch", n + 1),
-            Self::OscFinePitch(n) => &format!("Osc {} fine pitch", n + 1),
-            Self::Tone(n) => &format!("Osc {} tone", n + 1),
+            Self::Level(n) => &format!("Gen {} level", n + 1),
+            Self::OscPitch(n) => &format!("Gen {} pitch", n + 1),
+            Self::OscFinePitch(n) => &format!("Gen {} fine pitch", n + 1),
+            Self::Tone(n) => &format!("Gen {} tone", n + 1),
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
             Self::EnvScale(n) => &format!("Env {} scale", n + 1),

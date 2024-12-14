@@ -218,7 +218,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 }
 
 fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
-    ui.header("OSCILLATORS");
+    ui.header("GENERATORS");
 
     ui.start_group();
     let mut removed_osc = None;
