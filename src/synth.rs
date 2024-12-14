@@ -525,7 +525,13 @@ impl Patch {
     }
 
     pub fn mod_targets(&self) -> Vec<ModTarget> {
-        let mut v = vec![ModTarget::Gain, ModTarget::Pan, ModTarget::Pitch, ModTarget::FinePitch];
+        let mut v = vec![
+            ModTarget::Gain,
+            ModTarget::Pan,
+            ModTarget::Pitch,
+            ModTarget::FinePitch,
+            ModTarget::ClipGain,
+        ];
         for (i, osc) in self.oscs.iter().enumerate() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::OscPitch(i));
@@ -533,7 +539,6 @@ impl Patch {
             if osc.waveform.has_tone_control() {
                 v.push(ModTarget::Tone(i));
             }
-            v.push(ModTarget::ClipGain);
         }
         for i in 0..self.filters.len() {
             v.push(ModTarget::FilterCutoff(i));
