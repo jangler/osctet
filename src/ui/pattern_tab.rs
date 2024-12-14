@@ -525,7 +525,7 @@ impl PatternEditor {
         });
     }
 
-    fn record_event(&mut self, key: Key, data: EventData, module: &mut Module) {
+    fn record_event(&mut self, _key: Key, data: EventData, module: &mut Module) {
         let cursor = self.edit_start;
         if data.is_ctrl() != (cursor.track == 0) {
             return

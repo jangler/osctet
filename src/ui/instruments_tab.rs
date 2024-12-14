@@ -219,12 +219,29 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     ui.start_group();
     let mut removed_osc = None;
 
-    index_group(ui, patch.oscs.len());
+    // the code for these controls is a little hairier because the PCM
+    // controls use an extra line.
+
+    labeled_group(ui, "#", |ui| {
+        for (i, osc) in patch.oscs.iter().enumerate() {
+            ui.offset_label(&(i + 1).to_string());
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
+            }
+        }
+    });
 
     labeled_group(ui, "Level", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_level", i),
                 "", &osc.level.0, 0.0..=1.0, None, 2);
+
+            if let Waveform::Pcm(data) = &mut osc.waveform {
+                if ui.button("Load sample") {
+                    load_pcm(data, ui, cfg);
+                }
+            }
         }
     });
     
@@ -232,6 +249,21 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tone", i),
                 "", &osc.tone.0, 0.0..=1.0, None, 1);
+
+            if let Waveform::Pcm(data) = &mut osc.waveform {
+                if let Some(data) = data {
+                    let mut on = data.loop_point.is_some();
+                    if ui.checkbox("Loop", &mut on) {
+                        data.loop_point = if on {
+                            Some(0)
+                        } else {
+                            None
+                        };
+                    }
+                } else {
+                    ui.offset_label("");
+                }
+            }
         }
     });
     
@@ -239,6 +271,20 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_ratio", i),
                 "", &osc.freq_ratio.0, 0.5..=16.0, None, 1);
+
+            if let Waveform::Pcm(data) = &mut osc.waveform {
+                if let Some(PcmData { wave, loop_point: Some(pt), .. }) = data {
+                    let sr = wave.sample_rate() as f32;
+                    let mut pt2 = *pt as f32 / sr;
+                    if ui.slider(&format!("osc_{}_loop", i), "",
+                        &mut pt2, 0.0..=wave.duration() as f32, Some("s"), 1) {
+                        *pt = (pt2 * sr).round() as usize;
+                        data.as_mut().unwrap().fix_loop_point();
+                    }
+                } else {
+                    ui.offset_label("");
+                }
+            }
         }
     });
     
@@ -246,6 +292,10 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tune", i),
                 "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1);
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
+            }
         }
     });
     
@@ -255,6 +305,10 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 "", osc.waveform.name(),
                 || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                 osc.waveform = Waveform::VARIANTS[i].clone();
+            }
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
             }
         }
     });
@@ -267,25 +321,22 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 || outputs.iter().map(|x| x.to_string()).collect()) {
                 osc.output = outputs[i];
             }
-        }
-    });
 
-    labeled_group(ui, "", |ui| {
-        ui.offset_label(""); // can't delete first osc!
-        for i in 1..patch.oscs.len() {
-            if ui.button("X") {
-                removed_osc = Some(i);
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
             }
         }
     });
 
     labeled_group(ui, "", |ui| {
-        for osc in patch.oscs.iter_mut() {
-            if let Waveform::Pcm(data) = &mut osc.waveform {
-                if ui.button("Load") {
-                    load_pcm(data, ui, cfg);
-                }
-            } else {
+        for (i, osc) in patch.oscs.iter().enumerate() {
+            if i == 0 {
+                ui.offset_label(""); // can't delete first osc
+            } else if ui.button("X") {
+                removed_osc = Some(i);
+            }
+
+            if let Waveform::Pcm(_) = osc.waveform {
                 ui.offset_label("");
             }
         }

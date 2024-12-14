@@ -101,8 +101,8 @@ pub struct PcmData {
     data: Vec<u8>, // for serialization
     #[serde(skip)]
     #[serde(default = "empty_wave")]
-    wave: Arc<Wave>,
-    loop_point: Option<usize>,
+    pub wave: Arc<Wave>,
+    pub loop_point: Option<usize>,
 }
 
 fn empty_wave() -> Arc<Wave> {
@@ -123,11 +123,55 @@ impl PcmData {
         })
     }
 
+    /// Deserialized PcmData needs to be initialized before use.
     pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
         let mut wave = Wave::load_slice(self.data.clone())?;
         wave.normalize();
         self.wave = Arc::new(wave);
         Ok(())
+    }
+
+    /// Adjust loop point to be smoother.
+    pub fn fix_loop_point(&mut self) {
+        // look for a sample that's similar to the sample before the last
+        // sample in the wave. "similar" means moving in the same direction
+        // and crossing the same midpoint.
+        if let Some(pt) = &mut self.loop_point {
+            // don't mess with the loop point if it's zero -- it might be a
+            // single-cycle wave
+            if *pt == 0 {
+                return
+            }
+
+            // don't move the point by more than 10 ms
+            let max_distance = (self.wave.sample_rate() as f32 * 0.01) as usize;
+            let window_start = pt.saturating_sub(max_distance);
+            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 1);
+            
+            let last_sample = self.wave.at(0, self.wave.len() - 1);
+            let second_last_sample = self.wave.at(0, self.wave.len() - 2);
+            let delta = last_sample - second_last_sample;
+            let midpoint = (last_sample + second_last_sample) / 2.0;
+            let mut matches = Vec::new();
+
+            for i in window_start..window_end {
+                let s1 = self.wave.at(0, i);
+                let s2 = self.wave.at(0, i + 1);
+                let test_delta = s2 - s1;
+
+                if test_delta.signum() == delta.signum()
+                    && s1.min(s2) <= midpoint && s1.max(s2) >= midpoint {
+                    matches.push(i);
+                }
+            }
+
+            if let Some(i) = matches.into_iter()
+                .min_by_key(|i| (*i as isize - *pt as isize).abs()) {
+                *pt = i;
+            }
+
+            // TODO: backup strategy if the above fails?
+        }
     }
 }
 
