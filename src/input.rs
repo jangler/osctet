@@ -49,6 +49,11 @@ pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8, cfg: &Config) -> Option
         KeyCode::N => f(Nominal::A, 0, -1),
         KeyCode::J => f(Nominal::A, 1, -1),
         KeyCode::M => f(Nominal::B, 0, -1),
+        KeyCode::Comma => f(Nominal::C, 0, 0),
+        KeyCode::L => f(Nominal::C, 1, 0),
+        KeyCode::Period => f(Nominal::D, 0, 0),
+        KeyCode::Semicolon => f(Nominal::D, 1, 0),
+        KeyCode::Slash => f(Nominal::E, 0, 0),
         KeyCode::Q => f(Nominal::C, 0, 0),
         KeyCode::Key2 => f(Nominal::C, 1, 0),
         KeyCode::W => f(Nominal::D, 0, 0),
@@ -66,6 +71,9 @@ pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8, cfg: &Config) -> Option
         KeyCode::O => f(Nominal::D, 0, 1),
         KeyCode::Key0 => f(Nominal::D, 1, 1),
         KeyCode::P => f(Nominal::E, 0, 1),
+        KeyCode::LeftBracket => f(Nominal::F, 0, 1),
+        KeyCode::Equal => f(Nominal::F, 1, 1),
+        KeyCode::RightBracket => f(Nominal::G, 0, 1),
         _ => None
     }
 }
