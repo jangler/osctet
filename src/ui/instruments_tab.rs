@@ -190,7 +190,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     ui.header("GENERAL");
-    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 1);
+    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 2);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"), 2);
     if let Some(i) = ui.combo_box("play_mode",
@@ -228,7 +228,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "Level", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_level", i),
-                "", &osc.level.0, 0.0..=1.0, None, 1);
+                "", &osc.level.0, 0.0..=1.0, None, 2);
         }
     });
     

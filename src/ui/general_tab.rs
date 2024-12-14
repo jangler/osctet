@@ -21,9 +21,9 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.space(2.0);
     ui.header("FX");
     ui.shared_slider("gain",
-        "Global volume", &settings.gain.0, 0.0..=2.0, None, 1);
+        "Global volume", &settings.gain.0, 0.0..=2.0, None, 2);
     ui.shared_slider("reverb_level",
-        "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None, 1);
+        "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None, 2);
 
     if ui.slider("predelay",
         "Predelay time", &mut settings.predelay_time, 0.0..=0.1, Some("s"), 2) {
