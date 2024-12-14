@@ -1,7 +1,7 @@
 //! Subtractive/FM synth engine.
 
 use core::f64;
-use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path, u64};
+use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path, sync::Arc, u64};
 
 use rand::prelude::*;
 use fundsp::hacker32::*;
@@ -85,7 +85,7 @@ impl PlayMode {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum Waveform {
     Sawtooth,
     Pulse,
@@ -93,10 +93,49 @@ pub enum Waveform {
     Sine,
     Hold,
     Noise,
+    Pcm(Option<PcmData>),
+}
+
+#[derive(Clone,Serialize, Deserialize)]
+pub struct PcmData {
+    data: Vec<u8>, // for serialization
+    #[serde(skip)]
+    #[serde(default = "empty_wave")]
+    wave: Arc<Wave>,
+    loop_point: Option<usize>,
+}
+
+fn empty_wave() -> Arc<Wave> {
+    Arc::new(Wave::new(1, 44100.0))
+}
+
+impl PcmData {
+    pub fn load(path: impl AsRef<Path>) -> Result<PcmData, Box<dyn Error>> {
+        let data = fs::read(path)?;
+        Ok(PcmData {
+            // TODO: costly clone here
+            wave: Arc::new(Wave::load_slice(data.clone())?),
+            data,
+            loop_point: None,
+        })
+    }
+
+    pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
+        self.wave = Arc::new(Wave::load_slice(self.data.clone())?);
+        Ok(())
+    }
 }
 
 impl Waveform {
-    pub const VARIANTS: [Waveform; 6] = [Self::Sawtooth, Self::Pulse, Self::Triangle, Self::Sine, Self::Hold, Self::Noise];
+    pub const VARIANTS: [Waveform; 7] = [
+        Self::Sawtooth,
+        Self::Pulse,
+        Self::Triangle,
+        Self::Sine,
+        Self::Hold,
+        Self::Noise,
+        Self::Pcm(None),
+    ];
 
     pub fn name(&self) -> &str {
         match self {
@@ -106,6 +145,7 @@ impl Waveform {
             Self::Sine => "Sine",
             Self::Hold => "S&H",
             Self::Noise => "Noise",
+            Self::Pcm(_) => "PCM",
         }
     }
 
@@ -135,6 +175,11 @@ impl Waveform {
             Self::Noise => Box::new(noise().seed(random())
                 >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
                 >> join::<U2>()),
+            Self::Pcm(data) => if let Some(data) = data {
+                Box::new(wavech(&data.wave, 0, data.loop_point))
+            } else {
+                Box::new(zero())
+            },
         };
         Net::wrap(au)
     }
@@ -155,6 +200,11 @@ impl Waveform {
             Self::Sine => Box::new(f >> sine().phase(p) * d),
             Self::Hold => Box::new((noise().seed((p * u64::MAX as f32) as u64) | f) >> hold(0.0) * d >> follow(0.01)),
             Self::Noise => Box::new(pink().seed((p * u64::MAX as f32) as u64) * d),
+            Self::Pcm(data) => if let Some(data) = data {
+                Box::new(wavech(&data.wave, 0, data.loop_point))
+            } else {
+                Box::new(zero())
+            }, 
         };
         Net::wrap(au)
     }
@@ -412,9 +462,23 @@ impl Patch {
         }
     }
 
+    pub fn init_pcm(&mut self) {
+        for osc in self.oscs.iter_mut() {
+            if let Waveform::Pcm(data) = &mut osc.waveform {
+                if let Some(data) = data {
+                    if let Err(e) = data.init() {
+                        eprintln!("{}", e);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
-        Ok(rmp_serde::from_slice::<Self>(&input)?)
+        let mut patch = rmp_serde::from_slice::<Self>(&input)?;
+        patch.init_pcm();
+        Ok(patch)
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {

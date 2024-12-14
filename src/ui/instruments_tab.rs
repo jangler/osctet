@@ -25,7 +25,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     ui.start_group();
     if let Some(index) = patch_index {
         if let Some(patch) = module.patches.get_mut(*index) {
-            patch_controls(ui, patch);
+            patch_controls(ui, patch, cfg);
         }
     } else {
         kit_controls(ui, module);
@@ -188,7 +188,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
     }
 }
 
-fn patch_controls(ui: &mut UI, patch: &mut Patch) {
+fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     ui.header("GENERAL");
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 1);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1);
@@ -205,7 +205,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch) {
         &patch.reverb_send.0, 0.0..=1.0, None, 1);
 
     ui.space(2.0);
-    oscillator_controls(ui, patch);
+    oscillator_controls(ui, patch, cfg);
     ui.space(2.0);
     filter_controls(ui, patch);
     ui.space(2.0);
@@ -217,7 +217,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch) {
     ui.space(2.0);
 }
 
-fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
+fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     ui.header("OSCILLATORS");
 
     ui.start_group();
@@ -258,7 +258,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
             if let Some(i) = ui.combo_box(&format!("osc_{}_wave", i),
                 "", osc.waveform.name(),
                 || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
-                osc.waveform = Waveform::VARIANTS[i];
+                osc.waveform = Waveform::VARIANTS[i].clone();
             }
         }
     });
@@ -283,6 +283,18 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
         }
     });
 
+    labeled_group(ui, "", |ui| {
+        for osc in patch.oscs.iter_mut() {
+            if let Waveform::Pcm(data) = &mut osc.waveform {
+                if ui.button("Load") {
+                    load_pcm(data, ui, cfg);
+                }
+            } else {
+                ui.offset_label("");
+            }
+        }
+    });
+
     if let Some(i) = removed_osc {
         patch.remove_osc(i);
     }
@@ -290,6 +302,22 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch) {
 
     if ui.button("+") {
         patch.oscs.push(Oscillator::new());
+    }
+}
+
+fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config) {
+    if let Some(path) = FileDialog::new()
+        .add_filter("Audio file",&["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4",
+            "ogg", "wav", "webm"])
+        .set_directory(cfg.sample_folder.clone()
+            .unwrap_or(String::from(".")))
+        .pick_file() {
+        cfg.sample_folder = config::dir_as_string(&path);
+        let _ = cfg.save();
+        match PcmData::load(path) {
+            Ok(result) => *data = Some(result),
+            Err(e) => ui.report(e),
+        }
     }
 }
 
@@ -434,7 +462,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
                 if let Some(i) = ui.combo_box(&format!("lfo_{}_wave", i),
                     "", lfo.waveform.name(),
                     || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
-                    lfo.waveform = Waveform::VARIANTS[i];
+                    lfo.waveform = Waveform::VARIANTS[i].clone();
                 }
             }
         });

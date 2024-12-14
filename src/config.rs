@@ -23,6 +23,7 @@ pub struct Config {
     pub patch_folder: Option<String>,
     pub render_folder: Option<String>,
     pub scale_folder: Option<String>,
+    pub sample_folder: Option<String>,
     #[serde(default = "default_keys")]
     keys: Vec<(Hotkey, Action)>, // for serialization
     #[serde(skip)]
@@ -39,6 +40,7 @@ impl Config {
             patch_folder: None,
             render_folder: None,
             scale_folder: None,
+            sample_folder: None,
             keys: default_keys(),
             key_map: HashMap::new(),
         }

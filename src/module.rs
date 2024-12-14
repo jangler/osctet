@@ -55,7 +55,15 @@ impl Module {
 
     pub fn load(path: &PathBuf) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
-        Ok(rmp_serde::from_slice::<Self>(&input)?)
+        let mut module = rmp_serde::from_slice::<Self>(&input)?;
+        module.init_pcm();
+        Ok(module)
+    }
+
+    fn init_pcm(&mut self) {
+        for patch in &mut self.patches {
+            patch.init_pcm();
+        }
     }
 
     pub fn save(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
