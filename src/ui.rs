@@ -7,6 +7,7 @@ use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
+use rfd::FileDialog;
 use textedit::TextEditState;
 use theme::Theme;
 
@@ -27,6 +28,18 @@ const MOUSE_WHEEL_INCREMENT: f32 = 120.0;
 const PANEL_Z_OFFSET: i8 = 10;
 const COMBO_Z_OFFSET: i8 = 20;
 const TOOLTIP_Z_OFFSET: i8 = 30;
+
+/// Return a new file dialog. Use this instead of using `rfd` directly.
+pub fn new_file_dialog() -> FileDialog {
+    // macroquad currently doesn't handle focus lost events, which means that
+    // whatever keys were pressed to open the file dialog will be considered
+    // to be down until they're released *when the macroquad window has focus*.
+    // the workaround here is just to clear the input state when opening a
+    // dialog.
+    reset_input_state();
+
+    rfd::FileDialog::new()
+}
 
 enum Dialog {
     Alert(String),

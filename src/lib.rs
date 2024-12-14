@@ -11,7 +11,6 @@ use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use module::{EventData, Module, TrackTarget};
 use playback::Player;
-use rfd::FileDialog;
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
 
@@ -482,7 +481,7 @@ impl App {
     
     fn render_and_save(&mut self) {
         if self.module.ends() {
-            if let Some(path) = FileDialog::new()
+            if let Some(path) = ui::new_file_dialog()
                 .add_filter("WAV file", &["wav"])
                 .set_directory(self.config.render_folder.clone()
                     .unwrap_or(String::from(".")))
@@ -519,7 +518,7 @@ impl App {
     }
 
     fn save_module_as(&mut self) {
-        if let Some(path) = FileDialog::new()
+        if let Some(path) = ui::new_file_dialog()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .set_directory(self.config.module_folder.clone()
                 .unwrap_or(String::from(".")))
@@ -537,7 +536,7 @@ impl App {
     }
 
     fn open_module(&mut self) {
-        if let Some(path) = FileDialog::new()
+        if let Some(path) = ui::new_file_dialog()
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .set_directory(self.config.module_folder.clone()
                 .unwrap_or(String::from(".")))

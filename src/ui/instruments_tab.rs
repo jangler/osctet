@@ -1,5 +1,3 @@
-use rfd::FileDialog;
-
 use crate::{config::{self, Config}, module::{Edit, Module}, synth::*};
 
 use super::{Layout, MARGIN, UI};
@@ -77,7 +75,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     let patches = &mut module.patches;
     if ui.button("Save") {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
-            if let Some(path) = FileDialog::new()
+            if let Some(path) = super::new_file_dialog()
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
                 .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
                 .set_file_name(patch.name.clone())
@@ -91,7 +89,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
         }
     }
     if ui.button("Load") {
-        if let Some(path) = FileDialog::new()
+        if let Some(path) = super::new_file_dialog()
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
             .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
             .pick_file() {
@@ -304,7 +302,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 }
 
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config) {
-    if let Some(path) = FileDialog::new()
+    if let Some(path) = super::new_file_dialog()
         .add_filter("Audio file",&["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4",
             "ogg", "wav", "webm"])
         .set_directory(cfg.sample_folder.clone()

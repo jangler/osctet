@@ -1,5 +1,3 @@
-use rfd::FileDialog;
-
 use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX}, module::Module, pitch::Tuning};
 
 use super::*;
@@ -68,7 +66,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
     }
     ui.layout = Layout::Horizontal;
     if ui.button("Load scale") {
-        if let Some(path) = FileDialog::new()
+        if let Some(path) = super::new_file_dialog()
             .add_filter("Scala scale file", &["scl"])
             .set_directory(cfg.scale_folder.clone().unwrap_or(String::from(".")))
             .pick_file() {

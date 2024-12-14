@@ -854,11 +854,11 @@ checksum = "f81ec6369c545a7d40e4589b5597581fa1c441fe1cce96dd1de43159910a36a2"
 
 [[package]]
 name = "fontdue"
-version = "0.7.3"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0793f5137567643cf65ea42043a538804ff0fbf288649e2141442b602d81f9bc"
+checksum = "efe23d02309319171d00d794c9ff48d4f903c0e481375b1b04b017470838af04"
 dependencies = [
- "hashbrown 0.13.2",
+ "hashbrown 0.14.5",
  "ttf-parser",
 ]
 
@@ -1041,15 +1041,6 @@ checksum = "6dd08c532ae367adf81c312a4580bc67f1d0fe8bc9c460520283f4c0ff277888"
 dependencies = [
  "cfg-if",
  "crunchy",
-]
-
-[[package]]
-name = "hashbrown"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
-dependencies = [
- "ahash",
 ]
 
 [[package]]
@@ -1390,8 +1381,7 @@ dependencies = [
 [[package]]
 name = "macroquad"
 version = "0.4.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fef16b2d4de22ac372b5d7d76273c0ead0a31f9de9bc649af8f816816db8a8"
+source = "git+https://github.com/jangler/macroquad.git#33a4593293af5aaeef538cb616bffe5c18274b7b"
 dependencies = [
  "fontdue",
  "glam 0.27.0",
@@ -1399,14 +1389,12 @@ dependencies = [
  "macroquad_macro",
  "miniquad",
  "quad-rand",
- "slotmap",
 ]
 
 [[package]]
 name = "macroquad_macro"
 version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64b1d96218903768c1ce078b657c0d5965465c95a60d2682fd97443c9d2483dd"
+source = "git+https://github.com/jangler/macroquad.git#33a4593293af5aaeef538cb616bffe5c18274b7b"
 
 [[package]]
 name = "malloc_buf"
@@ -1468,9 +1456,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniquad"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2124e5e6bab86d96f263d78dc763c29e0da4c4f7ff0e1bb33f1d3905d1121262"
+checksum = "df742c016aff7c852d639e93a87846c098ca4c7d95b9da11e61b58423cd363d0"
 dependencies = [
  "libc",
  "ndk-sys 0.2.2",
@@ -2294,15 +2282,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "slotmap"
-version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbff4acf519f630b3a3ddcfaea6c06b42174d9a44bc70c620e9ed1649d58b82a"
-dependencies = [
- "version_check",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2681,9 +2660,9 @@ dependencies = [
 
 [[package]]
 name = "ttf-parser"
-version = "0.15.2"
+version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b3e06c9b9d80ed6b745c7159c40b311ad2916abb34a49e9be2653b90db0d8dd"
+checksum = "2c591d83f69777866b9126b24c6dd9a18351f177e49d625920d19f989fd31cf8"
 
 [[package]]
 name = "typenum"
