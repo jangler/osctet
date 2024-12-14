@@ -8,8 +8,6 @@ use super::{Layout, MARGIN, UI};
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "oscins";
 
-const CURVES: [&str; 3] = ["Linear", "Quadratic", "Cubic"];
-
 pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     scroll: &mut f32, cfg: &mut Config
 ) {
@@ -417,15 +415,6 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0,
                     Some("s"), 2);
-            }
-        });
-        
-        labeled_group(ui, "Curve", |ui| {
-            for (i, env) in patch.envs.iter_mut().enumerate() {
-                if let Some(i) = ui.combo_box(&format!("env_{}_curve", i), "",
-                    &env.curve_name(), || CURVES.map(|x| x.to_string()).to_vec()) {
-                    env.power = (i + 1) as f32;
-                }
             }
         });
     

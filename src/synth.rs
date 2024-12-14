@@ -7,7 +7,7 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{adsr::adsr_scalable, module::EventData};
+use crate::adsr::adsr_scalable;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
@@ -861,7 +861,9 @@ pub struct ADSR {
     pub decay: f32,
     pub sustain: f32,
     pub release: f32,
-    pub power: f32,
+
+    #[serde(rename = "power")]
+    _power: f32 // legacy
 }
 
 impl ADSR {
@@ -871,31 +873,18 @@ impl ADSR {
             decay: 1.0,
             sustain: 1.0,
             release: 0.01,
-            power: 1.0,
+            _power: 0.0,
         }
     }
 
-    fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
-        let attack = self.attack;
-        let power = self.power;
+    fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize,
+        path: &[ModSource]
+    ) -> Net {
         let scale = settings.dsp_component(vars, ModTarget::EnvScale(index), path)
             >> shape_fn(|x| pow(MAX_ENV_SCALE, -x));
         Net::wrap(Box::new(
-            (var(&vars.gate) | scale) >> adsr_scalable(self.attack, self.decay, self.sustain, self.release)
-                >> envelope2(move |t, x| if t < attack {
-                    pow(x, 1.0/power)
-                } else {
-                    pow(x, power)
-                })))
-    }
-
-    pub fn curve_name(&self) -> &'static str {
-        match self.power {
-            1.0 => "Linear",
-            2.0 => "Quadratic",
-            3.0 => "Cubic",
-            _ => "Unknown",
-        }
+            (var(&vars.gate) | scale)
+            >> adsr_scalable(self.attack, self.decay, self.sustain, self.release)))
     }
 }
 
