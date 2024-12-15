@@ -1,6 +1,6 @@
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{EventData, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{EventData, LocatedEvent, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f32 = 10.0;
@@ -138,13 +138,25 @@ impl Player {
         self.tick += interval_ticks(self.playtime, self.tempo);
         self.playtime -= tick_interval(self.tick - prev_tick, self.tempo);
 
+        let mut events = Vec::new();
+
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
                 for event in &channel.events {
-                    if event.tick >= prev_tick && event.tick < self.tick {
-                        self.handle_event(&event.data, module, track_i, channel_i);
-                    }
+                    events.push(LocatedEvent {
+                        event: event.clone(),
+                        track: track_i,
+                        channel: channel_i,
+                    });
                 }
+            }
+        }
+
+        events.sort_by_key(|e| (e.event.tick, e.event.data.column()));
+
+        for event in events {
+            if event.event.tick >= prev_tick && event.event.tick < self.tick {
+                self.handle_event(&event.event.data, module, event.track, event.channel);
             }
         }
 
@@ -167,7 +179,7 @@ impl Player {
                 let mut events: Vec<_> = channel.events.iter()
                     .filter(|e| e.tick < tick)
                     .collect();
-                events.sort_by_key(|e| e.tick);
+                events.sort_by_key(|e| (e.tick, e.data.column()));
 
                 let mut active_note = None;
 
