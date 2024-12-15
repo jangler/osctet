@@ -250,8 +250,38 @@ impl PatternEditor {
             Action::PatternEnd => if let Some(tick) = module.last_event_tick() {
                 self.translate_cursor(tick as i64 - self.cursor_tick() as i64);
             }
+            Action::IncrementValues => self.shift_values(1, module),
+            Action::DecrementValues => self.shift_values(-1, module),
             _ => (),
         }
+    }
+
+    fn shift_values(&self, offset: i8, module: &mut Module) {
+        let (start, end) = self.selection_corners();
+
+        let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
+            match evt.event.data {
+                EventData::Pressure(v) => Some(LocatedEvent {
+                    event: Event {
+                        data: EventData::Pressure(
+                            v.saturating_add_signed(offset).min(EventData::DIGIT_MAX)),
+                        ..evt.event
+                    },
+                    ..evt.clone()
+                }),
+                EventData::Modulation(v) => Some(LocatedEvent {
+                    event: Event {
+                        data: EventData::Modulation(
+                            v.saturating_add_signed(offset).min(EventData::DIGIT_MAX)),
+                        ..evt.event
+                    },
+                    ..evt.clone()
+                }),
+                _ => None,
+            }
+        }).collect();
+
+        module.push_edit(Edit::ReplaceEvents(replacements));
     }
 
     fn next_event(&mut self, module: &Module) {

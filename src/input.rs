@@ -458,6 +458,8 @@ pub enum Action {
     PrevEvent,
     PatternStart,
     PatternEnd,
+    IncrementValues,
+    DecrementValues,
 }
 
 impl Action {
@@ -517,6 +519,8 @@ impl Action {
             Self::PrevEvent => "Prev event",
             Self::PatternStart => "Go to pattern start",
             Self::PatternEnd => "Go to pattern end",
+            Self::IncrementValues => "Increment values",
+            Self::DecrementValues => "Decrement values",
         }
     }
 }
