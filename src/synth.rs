@@ -3,6 +3,7 @@
 use core::f64;
 use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path, sync::Arc, u64};
 
+use ordered_float::OrderedFloat;
 use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
@@ -133,13 +134,8 @@ impl PcmData {
 
     /// Adjust loop point to be smoother.
     pub fn fix_loop_point(&mut self) {
-        // TODO: this algorithm should be improved -- we should be looking
-        // for a sample after a sample that's like the last sample, not a
-        // sample that's liek the sample before the last sample
-
-        // look for a sample that's similar to the sample before the last
-        // sample in the wave. "similar" means moving in the same direction
-        // and crossing the same midpoint.
+        // look for a sample that's after a similar sample to the last sample
+        // in the file, in terms of position and slope.
         if let Some(pt) = &mut self.loop_point {
             // don't mess with the loop point if it's zero -- it might be a
             // single-cycle wave
@@ -147,15 +143,15 @@ impl PcmData {
                 return
             }
 
-            // don't move the point by more than 10 ms
-            let max_distance = (self.wave.sample_rate() as f32 * 0.01) as usize;
+            // don't move the point by more than 1 ms
+            let max_distance = (self.wave.sample_rate() as f32 * 0.001) as usize;
             let window_start = pt.saturating_sub(max_distance);
-            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 1);
+            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 2);
             
             let last_sample = self.wave.at(0, self.wave.len() - 1);
             let second_last_sample = self.wave.at(0, self.wave.len() - 2);
             let delta = last_sample - second_last_sample;
-            let midpoint = (last_sample + second_last_sample) / 2.0;
+            let target_value = second_last_sample + delta;
             let mut matches = Vec::new();
 
             for i in window_start..window_end {
@@ -163,18 +159,15 @@ impl PcmData {
                 let s2 = self.wave.at(0, i + 1);
                 let test_delta = s2 - s1;
 
-                if test_delta.signum() == delta.signum()
-                    && s1.min(s2) <= midpoint && s1.max(s2) >= midpoint {
-                    matches.push(i);
+                if test_delta.signum() == delta.signum() {
+                    matches.push((i + 1, s2));
                 }
             }
 
-            if let Some(i) = matches.into_iter()
-                .min_by_key(|i| (*i as isize - *pt as isize).abs()) {
+            if let Some((i, _)) = matches.into_iter()
+                .min_by_key(|(_, s)| OrderedFloat((target_value - s).abs())) {
                 *pt = i;
             }
-
-            // TODO: backup strategy if the above fails?
         }
     }
 }
