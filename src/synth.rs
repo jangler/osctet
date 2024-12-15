@@ -965,6 +965,7 @@ impl Modulation {
     fn dsp_component(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let mut path = path.to_vec();
         path.push(self.source);
+
         let net = match self.source {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(PITCH_FLOOR, PITCH_CEILING, f)))),
             ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(SMOOTH_TIME))),
@@ -979,14 +980,18 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             }
         };
-        let d = var(&self.depth.0) >> follow(SMOOTH_TIME)
+        let depth = var(&self.depth.0) >> follow(SMOOTH_TIME)
             + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
+
         if self.target.is_additive() {
-            net * d
+            // zero depth = +0 for additive targets
+            net * depth
         } else if self.source.is_bipolar() {
-            1.0 - d * (1.0 - 0.5 * (net + 1.0))
+            // a bipolar source oscillates in [-1, 1] -- map that onto [0, 1]
+            1.0 - (depth * (1.0 - 0.5 * (net + 1.0)) >> shape_fn(abs))
         } else {
-            1.0 - d * (1.0 - net)
+            // keep this in [0, 1] using `abs`
+            1.0 - (depth * (1.0 - net) >> shape_fn(abs))
         }
     }
 }
@@ -1043,6 +1048,7 @@ pub enum ModTarget {
 }
 
 impl ModTarget {
+    /// Returns true if modulations should be summed rather than multiplied.
     pub fn is_additive(&self) -> bool {
         match *self  {
             ModTarget::Gain | ModTarget::Level(_) => false,
@@ -1050,6 +1056,7 @@ impl ModTarget {
         }
     }
 
+    /// Returns the target generator, if any.
     fn osc(&self) -> Option<usize> {
         match *self {
             ModTarget::Level(n) | ModTarget::OscPitch(n) |
