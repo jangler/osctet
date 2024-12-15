@@ -77,10 +77,7 @@ impl GlobalFX {
         Self {
             net: Net::wrap(Box::new(backend))
                 * gain
-                >> (highpass_hz(1.0, 0.1)
-                    | highpass_hz(1.0, 0.1)
-                    | highpass_hz(1.0, 0.1)
-                    | highpass_hz(1.0, 0.1))
+                >> (dcblock() | dcblock() | dcblock() | dcblock())
                 >> (shape(Tanh(1.0))
                     | shape(Tanh(1.0))
                     | shape(Tanh(1.0))
