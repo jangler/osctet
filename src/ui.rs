@@ -1117,7 +1117,8 @@ impl UI {
         self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
-    pub fn note_input(&mut self, id: &str, note: &mut Note) {
+    /// Returns the key that set the new note value.
+    pub fn note_input(&mut self, id: &str, note: &mut Note) -> Option<Key> {
         let params = self.style.text_params();
         let label = note.to_string();
 
@@ -1143,11 +1144,13 @@ impl UI {
             (self.style.theme.control_bg(), self.style.theme.border_unfocused())
         };
 
+        let mut key = None;
         if focused {
             for evt in self.note_queue.iter() {
-                if let (_, EventData::Pitch(input_note)) = evt {
+                if let (k, EventData::Pitch(input_note)) = evt {
                     *note = *input_note;
                     self.focused_note = None;
+                    key = Some(k.clone());
                 }
             }
         }
@@ -1156,6 +1159,8 @@ impl UI {
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
         self.end_widget();
+
+        key
     }
 
     // TODO: code duplication with note_input

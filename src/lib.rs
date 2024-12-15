@@ -427,7 +427,8 @@ impl App {
             TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
-                &mut self.patch_index, &mut self.instruments_scroll, &mut self.config),
+                &mut self.patch_index, &mut self.instruments_scroll, &mut self.config,
+                &mut self.player), // so, basically everything
             TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config,
                 &mut self.settings_scroll),
             _ => panic!("bad tab value"),

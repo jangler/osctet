@@ -1,4 +1,4 @@
-use crate::{config::{self, Config}, module::{Edit, Module}, synth::*};
+use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
 
 use super::{Layout, MARGIN, UI};
 
@@ -7,7 +7,7 @@ const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "oscins";
 
 pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
-    scroll: &mut f32, cfg: &mut Config
+    scroll: &mut f32, cfg: &mut Config, player: &mut Player
 ) {
     ui.layout = Layout::Horizontal;
     ui.start_group();
@@ -24,7 +24,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
             patch_controls(ui, patch, cfg);
         }
     } else {
-        kit_controls(ui, module);
+        kit_controls(ui, module, player);
     }
     ui.cursor_z += 1;
     ui.cursor_y += *scroll;
@@ -138,14 +138,15 @@ pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
     }
 }
 
-fn kit_controls(ui: &mut UI, module: &mut Module) {
+fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
     if !module.kit.is_empty() {
         ui.start_group();
         let mut removed_index = None;
     
         labeled_group(ui, "Note in", |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
-                ui.note_input(&format!("kit_{}_input", i), &mut entry.input_note);
+                let label = format!("kit_{}_input", i);
+                ui.note_input(&label, &mut entry.input_note);
             }
         });
         
@@ -163,7 +164,13 @@ fn kit_controls(ui: &mut UI, module: &mut Module) {
         
         labeled_group(ui, "Note out", |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
-                ui.note_input(&format!("kit_{}_output", i), &mut entry.patch_note);
+                let label = format!("kit_{}_output", i);
+                if let Some(key) = ui.note_input(&label, &mut entry.patch_note) {
+                    if let Some(patch) = module.patches.get(entry.patch_index) {
+                        let pitch = module.tuning.midi_pitch(&entry.patch_note);
+                        player.note_on(0, key, pitch, None, patch);
+                    }
+                }
             }
         });
         
