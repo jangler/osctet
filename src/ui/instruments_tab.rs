@@ -36,7 +36,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     cfg: &mut Config
 ) {
-    let mut edit = None;
+    let mut edits = Vec::new();
     let patches = &mut module.patches;
 
     let mut names = vec![String::from("Kit")];
@@ -60,13 +60,13 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 
     ui.start_group();
     if ui.button("Add") {
-        edit = Some(Edit::InsertPatch(patches.len(), Patch::new()));
+        edits.push(Edit::InsertPatch(patches.len(), Patch::new()));
         *patch_index = Some(patches.len());
     }
 
     if ui.button("Remove") {
         if let Some(index) = patch_index {
-            edit = Some(Edit::RemovePatch(*index));
+            edits.push(Edit::RemovePatch(*index));
         }
     }
     ui.end_group();
@@ -89,24 +89,26 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
         }
     }
     if ui.button("Load") {
-        if let Some(path) = super::new_file_dialog()
+        if let Some(paths) = super::new_file_dialog()
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
             .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
-            .pick_file() {
-            cfg.patch_folder = config::dir_as_string(&path);
-            let _ = cfg.save();
-            match Patch::load(&path) {
-                Ok(mut p) => {
-                    if let Some(s) = path.file_stem() {
-                        if let Some(s) = s.to_str() {
-                            p.name = s.to_owned();
+            .pick_files() {
+            for (i, path) in paths.iter().enumerate() {
+                cfg.patch_folder = config::dir_as_string(&path);
+                match Patch::load(&path) {
+                    Ok(mut p) => {
+                        if let Some(s) = path.file_stem() {
+                            if let Some(s) = s.to_str() {
+                                p.name = s.to_owned();
+                            }
                         }
-                    }
-                    edit = Some(Edit::InsertPatch(patches.len(), p));
-                    *patch_index = Some(patches.len());
-                },
-                Err(e) => ui.report(e),
+                        edits.push(Edit::InsertPatch(patches.len() + i, p));
+                        *patch_index = Some(patches.len() + i);
+                    },
+                    Err(e) => ui.report(e),
+                }
             }
+            let _ = cfg.save();
         }
     }
     ui.end_group();
@@ -114,13 +116,13 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     if ui.button("Duplicate") {
         if let Some(index) = patch_index {
             if let Some(p) = patches.get(*index).map(|p| p.duplicate().ok()).flatten() {
-                edit = Some(Edit::InsertPatch(patches.len(), p));
+                edits.push(Edit::InsertPatch(patches.len(), p));
                 *patch_index = Some(patches.len());
             }
         }
     }
 
-    if let Some(edit) = edit {
+    for edit in edits {
         module.push_edit(edit);
         fix_patch_index(patch_index, module.patches.len());
     }
