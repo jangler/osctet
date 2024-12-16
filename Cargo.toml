@@ -17,6 +17,7 @@ macroquad = { git = "https://github.com/jangler/macroquad.git" }
 gcd = "2.3.0"
 palette = { version = "0.7.6", default-features = false, features = ["std", "serializing"] }
 ordered-float = "4.5.0"
+pitch-detector = "0.3.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

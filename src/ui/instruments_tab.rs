@@ -1,3 +1,5 @@
+use fundsp::math::midi_hz;
+
 use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
 
 use super::{Layout, MARGIN, UI};
@@ -302,8 +304,20 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
             ui.shared_slider(&format!("osc_{}_tune", i),
                 "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1);
 
-            if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+            if let Waveform::Pcm(data) = &osc.waveform {
+                if let Some(data) = data {
+                    if ui.button("Detect pitch") {
+                        match data.detect_pitch() {
+                            Some(freq) => {
+                                osc.freq_ratio.0.set(midi_hz(60.0) / freq as f32);
+                                osc.fine_pitch.0.set(0.0);
+                            },
+                            None => ui.report("Could not detect pitch"),
+                        }
+                    }    
+                } else {
+                    ui.offset_label("");
+                }
             }
         }
     });

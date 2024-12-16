@@ -111,7 +111,9 @@ struct App {
 }
 
 impl App {
-    fn new(seq: Sequencer, global_fx: GlobalFX, fx_settings: FXSettings) -> Self {
+    fn new(seq: Sequencer, global_fx: GlobalFX, fx_settings: FXSettings,
+        sample_rate: f32
+    ) -> Self {
         let mut err: Option<Box<dyn Error>> = None;
         let config = match Config::load() {
             Ok(c) => c,
@@ -124,7 +126,7 @@ impl App {
         midi.port_selection = config.default_midi_input.clone();
         let module = Module::new(fx_settings);
         let mut app = App {
-            player: Player::new(seq, module.tracks.len()),
+            player: Player::new(seq, module.tracks.len(), sample_rate),
             octave: 4,
             midi,
             ui: ui::UI::new(config.theme.clone()),
@@ -608,7 +610,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     )?;
     stream.play()?;
 
-    let mut app = App::new(seq, global_fx, fx_settings);
+    let mut app = App::new(seq, global_fx, fx_settings, config.sample_rate.0 as f32);
 
     if let Some(arg) = arg {
         match Module::load(&arg.into()) {

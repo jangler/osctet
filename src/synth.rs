@@ -4,6 +4,7 @@ use core::f64;
 use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path, sync::Arc, u64};
 
 use ordered_float::OrderedFloat;
+use pitch_detector::pitch::{HannedFftDetector, PitchDetector};
 use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
@@ -120,7 +121,9 @@ impl Waveform {
         }
     }
 
-    fn make_osc_net(&self, settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net) -> Net {
+    fn make_osc_net(&self,
+        settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net
+    ) -> Net {
         let prev_freq = vars.prev_freq.unwrap_or(vars.freq.value());
         let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
@@ -147,7 +150,8 @@ impl Waveform {
                 >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
                 >> join::<U2>()),
             Self::Pcm(data) => if let Some(data) = data {
-                Box::new(base * (1.0/KEY_TRACKING_REF_FREQ) >>
+                let f = data.wave.sample_rate() as f32 / vars.rate / midi_hz::<f32>(60.0);
+                Box::new(base * f >>
                     resample(wavech(&data.wave, 0, data.loop_point)))
             } else {
                 Box::new(zero())
@@ -262,6 +266,24 @@ impl PcmData {
             }
         }
     }
+
+    /// Attempts to detect the fundamental frequency of the sample.
+    pub fn detect_pitch(&self) -> Option<f64> {
+        // the pitch detector can get confused by harmonic-rich waveforms,
+        // so filter to attempt to improve accuracy
+        let wave = if self.wave.channels() == 1 {
+            &self.wave.filter(self.wave.duration(), &mut lowpass_hz(1000.0, 0.1))
+        } else {
+            self.wave.as_ref()
+        };
+
+        let signal: Vec<_> = (0..wave.len())
+            .map(|i| wave.at(0, i) as f64)
+            .collect();
+        let rate = wave.sample_rate();
+        
+        HannedFftDetector::default().detect_pitch(&signal, rate)
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -298,10 +320,11 @@ pub struct Synth {
     mod_memory: Vec<f32>,
     pressure_memory: Vec<f32>,
     prev_freq: Option<f32>,
+    sample_rate: f32,
 }
 
 impl Synth {
-    pub fn new() -> Self {
+    pub fn new(sample_rate: f32) -> Self {
         Self {
             active_voices: HashMap::new(),
             released_voices: vec![VecDeque::new()],
@@ -309,6 +332,7 @@ impl Synth {
             mod_memory: vec![0.0],
             pressure_memory: vec![DEFAULT_PRESSURE],
             prev_freq: None,
+            sample_rate,
         }
     }
 
@@ -389,7 +413,7 @@ impl Synth {
                 self.pressure_memory[channel]
             };
             self.active_voices.insert(key, Voice::new(pitch, bend, pressure,
-                self.mod_memory[channel], self.prev_freq, &patch, seq));
+                self.mod_memory[channel], self.prev_freq, &patch, seq, self.sample_rate));
             self.check_truncate_voices(channel, seq);
             self.prev_freq = Some(midi_hz(pitch));
         }
@@ -1097,7 +1121,7 @@ struct Voice {
 
 impl Voice {
     fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, prev_freq: Option<f32>,
-        settings: &Patch, seq: &mut Sequencer
+        settings: &Patch, seq: &mut Sequencer, rate: f32,
     ) -> Self {
         let gate = shared(1.0);
         let vars = VoiceVars {
@@ -1108,6 +1132,7 @@ impl Voice {
             random_values: settings.mod_matrix.iter().map(|_| random()).collect(),
             lfo_phases: settings.lfos.iter().map(|_| random()).collect(),
             prev_freq,
+            rate,
         };
         let gain = (var(&settings.gain.0) >> follow(SMOOTH_TIME))
             * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x))
@@ -1159,4 +1184,5 @@ struct VoiceVars {
     random_values: Vec<f32>,
     lfo_phases: Vec<f32>,
     prev_freq: Option<f32>,
+    rate: f32,
 }

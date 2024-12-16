@@ -16,19 +16,21 @@ pub struct Player {
     tempo: f32,
     looped: bool,
     metronome: bool,
+    sample_rate: f32,
 }
 
 impl Player {
-    pub fn new(seq: Sequencer, num_tracks: usize) -> Self {
+    pub fn new(seq: Sequencer, num_tracks: usize, sample_rate: f32) -> Self {
         Self {
             seq,
-            synths: (0..=num_tracks).map(|_| Synth::new()).collect(),
+            synths: (0..=num_tracks).map(|_| Synth::new(sample_rate)).collect(),
             playing: false,
             tick: 0,
             playtime: 0.0, // not total playtime!
             tempo: DEFAULT_TEMPO,
             looped: false,
             metronome: false,
+            sample_rate,
         }
     }
 
@@ -36,7 +38,7 @@ impl Player {
         for synth in &mut self.synths {
             synth.clear_all_notes(&mut self.seq);
         }
-        self.synths = (0..=num_tracks).map(|_| Synth::new()).collect();
+        self.synths = (0..=num_tracks).map(|_| Synth::new(self.sample_rate)).collect();
         self.playing = false;
         self.tick = 0;
         self.playtime = 0.0;
@@ -78,7 +80,8 @@ impl Player {
     pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
         for edit in edits {
             match edit {
-                TrackEdit::Insert(i) => self.synths.insert(i, Synth::new()),
+                TrackEdit::Insert(i) =>
+                    self.synths.insert(i, Synth::new(self.sample_rate)),
                 TrackEdit::Remove(i) => { self.synths.remove(i); }
             }
         }
@@ -282,7 +285,7 @@ pub fn render(module: &Module) -> Wave {
     let fadeout_gain = shared(1.0);
     fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
     fx.net.set_sample_rate(sample_rate as f64);
-    let mut player = Player::new(seq, module.tracks.len());
+    let mut player = Player::new(seq, module.tracks.len(), sample_rate as f32);
     let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
     let block_size = 64;
     let dt = block_size as f32 / sample_rate as f32;
