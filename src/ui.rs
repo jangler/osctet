@@ -512,8 +512,8 @@ impl UI {
             }
         }
 
-        // occlusion by bottom panel
-        if self.cursor_z < 1 && screen_height() - self.bottom_panel_height() < pt.y {
+        // occlusion by bottom panel, tab menu, etc.
+        if self.cursor_z < 1 && !self.bounds.contains(pt) {
             return false
         }
 
@@ -772,7 +772,10 @@ impl UI {
                     self.style.theme.panel_bg()));
             }
         }
-        self.cursor_y += cap_height(&params) + MARGIN * 2.0 + LINE_THICKNESS;
+        let h = cap_height(&params) + MARGIN * 2.0 + LINE_THICKNESS;
+        self.cursor_y += h;
+        self.bounds.y += h;
+        self.bounds.h -= h;
         self.push_graphics(gfx);
         selected_index
     }
