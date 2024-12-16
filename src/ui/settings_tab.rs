@@ -41,7 +41,10 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.end_group();
 
     ui.space(2.0);
-    hotkey_controls(ui, cfg);
+    let id = hotkey_controls(ui, cfg);
+
+    ui.space(2.0);
+    note_key_controls(ui, cfg, id);
 
     // TODO: duplication with instruments tab scroll code
     let scroll_h = ui.end_group().unwrap().h + MARGIN;
@@ -75,8 +78,8 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
     ui.end_group();
 }
 
-fn hotkey_controls(ui: &mut UI, cfg: &mut Config) {
-    ui.header("KEYS");
+fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
+    ui.header("KEY COMMANDS");
     ui.start_group();
     
     let mut id = 0;
@@ -85,9 +88,7 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) {
 
     // column heuristric
     let max_action_length = keymap.iter().map(|(_, a)| a.name().len()).max().unwrap();
-    let char_width = text_width("x", &ui.style.text_params());
-    let cols = (ui.bounds.w / (max_action_length as f32 * char_width * 2.0)) as usize;
-    let entries_per_col = (keymap.len() as f32 / cols as f32).ceil() as usize;
+    let entries_per_col = entries_per_col(ui, max_action_length * 2, keymap.len());
 
     for chunk in keymap.chunks_mut(entries_per_col) {
         ui.start_group();
@@ -112,4 +113,39 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) {
     }
 
     ui.end_group();
+    id
+}
+
+fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
+    ui.header("NOTE LAYOUT");
+    ui.start_group();
+
+    let mut hotkey_input_id = hotkey_input_id;
+    let max_chars = cfg.note_keys.iter().map(|(k, _)| k.to_string().len()).max().unwrap();
+    let entries_per_col = entries_per_col(ui, max_chars * 2, cfg.note_keys.len());
+
+    for chunk in cfg.note_keys.chunks_mut(entries_per_col) {
+        // TODO: duplication with hotkey_controls
+        ui.start_group();
+        for (_, note) in chunk.iter() {
+            ui.offset_label(&note.to_string());
+        }
+        ui.align_right(chunk.len());
+        ui.end_group();
+
+        ui.start_group();
+        for (hotkey, _) in chunk.iter_mut() {
+            ui.hotkey_input(hotkey_input_id, hotkey);
+            hotkey_input_id += 1;
+        }
+        ui.end_group();
+    }
+
+    ui.end_group();
+}
+
+fn entries_per_col(ui: &UI, max_chars: usize, len: usize) -> usize {
+    let char_width = text_width("x", &ui.style.text_params());
+    let cols = (ui.bounds.w / (max_chars as f32 * char_width)) as usize;
+    (len as f32 / cols as f32).ceil() as usize
 }

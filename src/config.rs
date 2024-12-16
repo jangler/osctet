@@ -3,7 +3,7 @@ use std::{collections::{HashMap, HashSet}, env, error::Error, path::PathBuf};
 use macroquad::input::KeyCode;
 use serde::{Deserialize, Serialize};
 
-use crate::{input::{Action, Hotkey, Modifiers}, ui::theme::Theme};
+use crate::{input::{self, Action, Hotkey, Modifiers}, pitch::Note, ui::theme::Theme};
 
 const CONFIG_FILENAME: &str = "config.toml";
 
@@ -28,6 +28,8 @@ pub struct Config {
     keys: Vec<(Hotkey, Action)>, // for serialization
     #[serde(skip)]
     key_map: HashMap<Hotkey, Action>, // for use
+    #[serde(default = "input::default_note_keys")]
+    pub note_keys: Vec<(Hotkey, Note)>,
 }
 
 impl Config {
@@ -43,6 +45,7 @@ impl Config {
             sample_folder: None,
             keys: default_keys(),
             key_map: HashMap::new(),
+            note_keys: input::default_note_keys(),
         }
     }
 

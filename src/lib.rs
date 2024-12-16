@@ -167,10 +167,12 @@ impl App {
     // TODO: use most current vel/mod setting when keyjazzing in pattern
     fn handle_keys(&mut self) {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
+        let mods = Modifiers::current();
 
         for key in released {
+            let hk = Hotkey::new(mods, key);
             if let Some(_) = input::note_from_key(
-                key, &self.module.tuning, self.octave, &self.config) {
+                hk, &self.module.tuning, self.octave, &self.config) {
                 let key = Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
@@ -181,9 +183,6 @@ impl App {
             }
         }
 
-        let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
-        let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-        let mods = Modifiers::current();
         for key in pressed {
             let hk = Hotkey::new(mods, key);
             if let Some(action) = self.config.hotkey_action(&hk) {
@@ -202,13 +201,13 @@ impl App {
                     Action::StopPlayback => self.player.stop(),
                     Action::NewSong => self.new_module(), // TODO: prompt if unsaved
                     Action::OpenSong=> self.open_module(), // TODO: prompt if unsaved
-                    Action::SaveSong => if shift {
-                        self.save_module_as();
-                    } else {
-                        self.save_module();
-                    }
+                    Action::SaveSong => self.save_module(),
                     Action::SaveSongAs => self.save_module_as(),
                     Action::RenderSong => self.render_and_save(),
+                    // TODO: undo/redo are silent right now, which could be confusing when
+                    //       things are being undone/redone offscreen. could either provide
+                    //       messages describing what's being done, or move view to location
+                    //       of changes
                     Action::Undo => if self.module.undo() {
                         self.player.update_synths(self.module.drain_track_history());
                         fix_patch_index(&mut self.patch_index, self.module.patches.len());
@@ -240,14 +239,9 @@ impl App {
                     _ => (),
                 }
             }
-
-            if ctrl {
-                // TODO: undo/redo are silent right now, which could be confusing when
-                //       things are being undone/redone offscreen. could either provide
-                //       messages describing what's being done, or move view to location
-                //       of changes
-            } else if let Some(note) = input::note_from_key(
-                key, &self.module.tuning, self.octave, &self.config) {
+            
+            if let Some(note) = input::note_from_key(
+                hk, &self.module.tuning, self.octave, &self.config) {
                 let key = Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,

@@ -14,6 +14,8 @@ pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
 
+const DEFAULT_EQUAVE: i8 = 4;
+
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
 }
@@ -27,55 +29,75 @@ fn use_sharps(t: &Tuning) -> bool {
         t.midi_pitch(&ds4) != t.midi_pitch(&Note { nominal: Nominal::E, ..d4 })
 }
 
-pub fn note_from_key(k: KeyCode, t: &Tuning, equave: i8, cfg: &Config) -> Option<Note> {
-    let f = |nominal, accidentals, offset| {
-        Some(adjust_note_for_modifier_keys(Note {
-            arrows: if use_sharps(t) { 0 } else { accidentals },
-            nominal,
-            demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
-            equave: equave + offset,
-        }, cfg))
+pub fn note_from_key(key: Hotkey, t: &Tuning, equave: i8, cfg: &Config) -> Option<Note> {
+    cfg.note_keys.iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, n)| {
+            let n = if use_sharps(t) { *n } else {
+                Note {
+                    demisharps: 0,
+                    arrows: n.demisharps / 2,
+                    ..*n
+                }
+            };
+            let n = adjust_note_for_modifier_keys(n, cfg);
+            Note {
+                equave: n.equave + equave - DEFAULT_EQUAVE,
+                ..n
+            }
+        })
+}
+
+pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
+    let f1 = |key| Hotkey {
+        key,
+        mods: Modifiers::None,
     };
-    match k {
-        KeyCode::Z => f(Nominal::C, 0, -1),
-        KeyCode::S => f(Nominal::C, 1, -1),
-        KeyCode::X => f(Nominal::D, 0, -1),
-        KeyCode::D => f(Nominal::D, 1, -1),
-        KeyCode::C => f(Nominal::E, 0, -1),
-        KeyCode::V => f(Nominal::F, 0, -1),
-        KeyCode::G => f(Nominal::F, 1, -1),
-        KeyCode::B => f(Nominal::G, 0, -1),
-        KeyCode::H => f(Nominal::G, 1, -1),
-        KeyCode::N => f(Nominal::A, 0, -1),
-        KeyCode::J => f(Nominal::A, 1, -1),
-        KeyCode::M => f(Nominal::B, 0, -1),
-        KeyCode::Comma => f(Nominal::C, 0, 0),
-        KeyCode::L => f(Nominal::C, 1, 0),
-        KeyCode::Period => f(Nominal::D, 0, 0),
-        KeyCode::Semicolon => f(Nominal::D, 1, 0),
-        KeyCode::Slash => f(Nominal::E, 0, 0),
-        KeyCode::Q => f(Nominal::C, 0, 0),
-        KeyCode::Key2 => f(Nominal::C, 1, 0),
-        KeyCode::W => f(Nominal::D, 0, 0),
-        KeyCode::Key3 => f(Nominal::D, 1, 0),
-        KeyCode::E => f(Nominal::E, 0, 0),
-        KeyCode::R => f(Nominal::F, 0, 0),
-        KeyCode::Key5 => f(Nominal::F, 1, 0),
-        KeyCode::T => f(Nominal::G, 0, 0),
-        KeyCode::Key6 => f(Nominal::G, 1, 0),
-        KeyCode::Y => f(Nominal::A, 0, 0),
-        KeyCode::Key7 => f(Nominal::A, 1, 0),
-        KeyCode::U => f(Nominal::B, 0, 0),
-        KeyCode::I => f(Nominal::C, 0, 1),
-        KeyCode::Key9 => f(Nominal::C, 1, 1),
-        KeyCode::O => f(Nominal::D, 0, 1),
-        KeyCode::Key0 => f(Nominal::D, 1, 1),
-        KeyCode::P => f(Nominal::E, 0, 1),
-        KeyCode::LeftBracket => f(Nominal::F, 0, 1),
-        KeyCode::Equal => f(Nominal::F, 1, 1),
-        KeyCode::RightBracket => f(Nominal::G, 0, 1),
-        _ => None
-    }
+    let f2 = |nominal, accidentals: i8, offset: i8| Note {
+        arrows: 0,
+        nominal,
+        demisharps: accidentals * 2,
+        equave: DEFAULT_EQUAVE + offset,
+    };
+    vec![
+        (f1(KeyCode::Z), f2(Nominal::C, 0, -1)),
+        (f1(KeyCode::S), f2(Nominal::C, 1, -1)),
+        (f1(KeyCode::X), f2(Nominal::D, 0, -1)),
+        (f1(KeyCode::D), f2(Nominal::D, 1, -1)),
+        (f1(KeyCode::C), f2(Nominal::E, 0, -1)),
+        (f1(KeyCode::V), f2(Nominal::F, 0, -1)),
+        (f1(KeyCode::G), f2(Nominal::F, 1, -1)),
+        (f1(KeyCode::B), f2(Nominal::G, 0, -1)),
+        (f1(KeyCode::H), f2(Nominal::G, 1, -1)),
+        (f1(KeyCode::N), f2(Nominal::A, 0, -1)),
+        (f1(KeyCode::J), f2(Nominal::A, 1, -1)),
+        (f1(KeyCode::M), f2(Nominal::B, 0, -1)),
+        (f1(KeyCode::Comma), f2(Nominal::C, 0, 0)),
+        (f1(KeyCode::L), f2(Nominal::C, 1, 0)),
+        (f1(KeyCode::Period), f2(Nominal::D, 0, 0)),
+        (f1(KeyCode::Semicolon), f2(Nominal::D, 1, 0)),
+        (f1(KeyCode::Slash), f2(Nominal::E, 0, 0)),
+        (f1(KeyCode::Q), f2(Nominal::C, 0, 0)),
+        (f1(KeyCode::Key2), f2(Nominal::C, 1, 0)),
+        (f1(KeyCode::W), f2(Nominal::D, 0, 0)),
+        (f1(KeyCode::Key3), f2(Nominal::D, 1, 0)),
+        (f1(KeyCode::E), f2(Nominal::E, 0, 0)),
+        (f1(KeyCode::R), f2(Nominal::F, 0, 0)),
+        (f1(KeyCode::Key5), f2(Nominal::F, 1, 0)),
+        (f1(KeyCode::T), f2(Nominal::G, 0, 0)),
+        (f1(KeyCode::Key6), f2(Nominal::G, 1, 0)),
+        (f1(KeyCode::Y), f2(Nominal::A, 0, 0)),
+        (f1(KeyCode::Key7), f2(Nominal::A, 1, 0)),
+        (f1(KeyCode::U), f2(Nominal::B, 0, 0)),
+        (f1(KeyCode::I), f2(Nominal::C, 0, 1)),
+        (f1(KeyCode::Key9), f2(Nominal::C, 1, 1)),
+        (f1(KeyCode::O), f2(Nominal::D, 0, 1)),
+        (f1(KeyCode::Key0), f2(Nominal::D, 1, 1)),
+        (f1(KeyCode::P), f2(Nominal::E, 0, 1)),
+        (f1(KeyCode::LeftBracket), f2(Nominal::F, 0, 1)),
+        (f1(KeyCode::Equal), f2(Nominal::F, 1, 1)),
+        (f1(KeyCode::RightBracket), f2(Nominal::G, 0, 1)),
+    ]
 }
 
 pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
