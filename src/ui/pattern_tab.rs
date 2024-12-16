@@ -110,8 +110,9 @@ impl PatternEditor {
         let (x, y) = mouse_position();
         let params = ui.style.text_params();
         let char_width = text_width("x", &params);
+        let tpr = self.ticks_per_row();
         let mut pos = Position {
-            tick: self.y_tick(y, ui),
+            tick: (self.y_tick(y, ui) as f32 / tpr as f32).round() as u32 * tpr,
             track: 0,
             channel: 0,
             column: 0,
