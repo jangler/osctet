@@ -302,7 +302,9 @@ impl PatternEditor {
             .min_by_key(|t| (*t as i32 - cursor.tick as i32).abs());
         
         if let Some(tick) = tick {
-            self.edit_start.tick = tick;
+            if !is_shift_down() {
+                self.edit_start.tick = tick;
+            }
             self.edit_end.tick = tick;
             self.division_to_cursor();
             self.scroll_to_cursor();

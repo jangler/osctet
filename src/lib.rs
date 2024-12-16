@@ -185,7 +185,8 @@ impl App {
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         let mods = Modifiers::current();
         for key in pressed {
-            if let Some(action) = self.config.hotkey_action(&Hotkey::new(mods, key)) {
+            let hk = Hotkey::new(mods, key);
+            if let Some(action) = self.config.hotkey_action(&hk) {
                 match action {
                     Action::IncrementDivision => self.pattern_editor.inc_division(),
                     Action::DecrementDivision => self.pattern_editor.dec_division(),
@@ -227,7 +228,19 @@ impl App {
                             &mut self.module, &self.config, &mut self.player);
                     },
                 }
+            } else if let Some(action) = self.config.hotkey_action(&hk.without_shift()) {
+                match action {
+                    Action::NextRow | Action::PrevRow
+                        | Action::NextColumn | Action::PrevColumn
+                        | Action::NextBeat | Action::PrevBeat
+                        | Action::NextEvent | Action::PrevEvent
+                        | Action::PatternStart | Action::PatternEnd =>
+                            self.pattern_editor.action(*action,
+                                &mut self.module, &self.config, &mut self.player),
+                    _ => (),
+                }
             }
+
             if ctrl {
                 // TODO: undo/redo are silent right now, which could be confusing when
                 //       things are being undone/redone offscreen. could either provide

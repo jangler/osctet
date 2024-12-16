@@ -373,6 +373,16 @@ impl Modifiers {
             (true, true, true) => Self::CtrlAltShift,
         }
     }
+
+    pub fn without_shift(&self) -> Self {
+        match self {
+            Self::Shift => Self::None,
+            Self::CtrlShift => Self::Ctrl,
+            Self::AltShift => Self::Alt,
+            Self::CtrlAltShift => Self::CtrlAlt,
+            _ => *self,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -389,6 +399,10 @@ impl Hotkey {
 
     pub fn is_down(&self) -> bool {
         is_key_down(self.key) && self.mods == Modifiers::current()
+    }
+
+    pub fn without_shift(&self) -> Self {
+        Self { mods: self.mods.without_shift(), key: self.key }
     }
 }
 
