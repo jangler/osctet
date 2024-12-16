@@ -249,62 +249,14 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 "", &osc.level.0, 0.0..=1.0, None, 2);
 
             if let Waveform::Pcm(data) = &mut osc.waveform {
+                ui.start_group();
+
                 if ui.button("Load sample") {
                     load_pcm(data, ui, cfg);
                 }
-            }
-        }
-    });
-    
-    labeled_group(ui, "Tone", |ui| {
-        for (i, osc) in patch.oscs.iter_mut().enumerate() {
-            ui.shared_slider(&format!("osc_{}_tone", i),
-                "", &osc.tone.0, 0.0..=1.0, None, 1);
 
-            if let Waveform::Pcm(data) = &mut osc.waveform {
-                if let Some(data) = data {
-                    let mut on = data.loop_point.is_some();
-                    if ui.checkbox("Loop", &mut on) {
-                        data.loop_point = if on {
-                            Some(0)
-                        } else {
-                            None
-                        };
-                    }
-                } else {
-                    ui.offset_label("");
-                }
-            }
-        }
-    });
-    
-    labeled_group(ui, "Freq. ratio", |ui| {
-        for (i, osc) in patch.oscs.iter_mut().enumerate() {
-            ui.shared_slider(&format!("osc_{}_ratio", i),
-                "", &osc.freq_ratio.0, MIN_FREQ_RATIO..=MAX_FREQ_RATIO, None, 2);
+                ui.group_ignores_geometry = true;
 
-            if let Waveform::Pcm(data) = &mut osc.waveform {
-                if let Some(PcmData { wave, loop_point: Some(pt), .. }) = data {
-                    let sr = wave.sample_rate() as f32;
-                    let mut pt2 = *pt as f32 / sr;
-                    if ui.slider(&format!("osc_{}_loop", i), "",
-                        &mut pt2, 0.0..=wave.duration() as f32, Some("s"), 1) {
-                        *pt = (pt2 * sr).round() as usize;
-                        data.as_mut().unwrap().fix_loop_point();
-                    }
-                } else {
-                    ui.offset_label("");
-                }
-            }
-        }
-    });
-    
-    labeled_group(ui, "Finetune", |ui| {
-        for (i, osc) in patch.oscs.iter_mut().enumerate() {
-            ui.shared_slider(&format!("osc_{}_tune", i),
-                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1);
-
-            if let Waveform::Pcm(data) = &osc.waveform {
                 if let Some(data) = data {
                     if ui.button("Detect pitch") {
                         match data.detect_pitch() {
@@ -314,10 +266,63 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                             },
                             None => ui.report("Could not detect pitch"),
                         }
-                    }    
-                } else {
-                    ui.offset_label("");
+                    }
+
+                    let mut on = data.loop_point.is_some();
+                    if ui.checkbox("Loop", &mut on) {
+                        data.loop_point = if on {
+                            Some(0)
+                        } else {
+                            None
+                        };
+                    }
+
+                    if let Some(pt) = &mut data.loop_point {                   
+                        let sr = data.wave.sample_rate() as f32;
+                        let mut pt2 = *pt as f32 / sr;
+                        if ui.slider(&format!("osc_{}_loop", i), "Loop point",
+                            &mut pt2, 0.0..=data.wave.duration() as f32, Some("s"), 1) {
+                            *pt = (pt2 * sr).round() as usize;
+                            data.fix_loop_point();
+                        }
+                    }
                 }
+
+                ui.group_ignores_geometry = false;
+                ui.end_group();
+            }
+        }
+    });
+    
+    labeled_group(ui, "Tone", |ui| {
+        for (i, osc) in patch.oscs.iter_mut().enumerate() {
+            ui.shared_slider(&format!("osc_{}_tone", i),
+                "", &osc.tone.0, 0.0..=1.0, None, 1);
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
+            }
+        }
+    });
+    
+    labeled_group(ui, "Freq. ratio", |ui| {
+        for (i, osc) in patch.oscs.iter_mut().enumerate() {
+            ui.shared_slider(&format!("osc_{}_ratio", i),
+                "", &osc.freq_ratio.0, MIN_FREQ_RATIO..=MAX_FREQ_RATIO, None, 2);
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
+            }
+        }
+    });
+    
+    labeled_group(ui, "Finetune", |ui| {
+        for (i, osc) in patch.oscs.iter_mut().enumerate() {
+            ui.shared_slider(&format!("osc_{}_tune", i),
+                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1);
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("");
             }
         }
     });

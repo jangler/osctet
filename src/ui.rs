@@ -184,6 +184,8 @@ pub struct UI {
     scrollbar_grabbed: bool,
     notification: Option<Notification>,
     text_clipboard: Option<String>,
+    group_ignores_geometry: bool,
+    widget_on_stack: bool,
 }
 
 impl UI {
@@ -214,6 +216,8 @@ impl UI {
             scrollbar_grabbed: false,
             notification: None,
             text_clipboard: None,
+            group_ignores_geometry: false,
+            widget_on_stack: false,
         }
     }
 
@@ -280,6 +284,7 @@ impl UI {
 
     /// A widget is just like a group, but doesn't change the layout axis.
     fn start_widget(&mut self) {
+        self.widget_on_stack = true;
         self.group_rects.push(Rect {
             x: self.cursor_x,
             y: self.cursor_y,
@@ -299,6 +304,7 @@ impl UI {
 
     /// A widget is just like a group, but doesn't change the layout axis.
     pub fn end_widget(&mut self) -> Option<Rect> {
+        self.widget_on_stack = false;
         let rect = self.group_rects.pop();
         if let Some(rect) = rect {
             match self.layout {
@@ -373,9 +379,12 @@ impl UI {
 
     fn expand_groups(&mut self, x: f32, y: f32) {
         if self.cursor_z < 15 {
-            for rect in self.group_rects.iter_mut() {
-                rect.w = rect.w.max(x - rect.x);
-                rect.h = rect.h.max(y - rect.y);
+            let n = self.group_rects.len();
+            for (i, rect) in self.group_rects.iter_mut().enumerate() {
+                if !self.group_ignores_geometry || (self.widget_on_stack && i == n - 1) {
+                    rect.w = rect.w.max(x - rect.x);
+                    rect.h = rect.h.max(y - rect.y);
+                }
             }
         }
     }
