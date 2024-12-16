@@ -144,9 +144,9 @@ impl PatternEditor {
     fn y_tick(&self, y: f32, ui: &UI) -> u32 {
         let cell_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
         let beat_height = self.beat_height(ui);
-        ((y - ui.cursor_y - cell_height * 0.5) as f32
-            / beat_height * self.beat_division as f32).round() as u32
-            * TICKS_PER_BEAT / self.beat_division as u32
+        ((y - ui.cursor_y - cell_height * 0.5)
+            / beat_height * self.beat_division as f32
+            * TICKS_PER_BEAT as f32 / self.beat_division as f32).round() as u32
     }
 
     /// Returns the tick of the first beat on-screen.
@@ -506,6 +506,7 @@ impl PatternEditor {
 
     /// Scroll to a position that centers the given tick.
     fn scroll_to(&mut self, tick: u32) {
+        // TODO: this should also be offset by half of the line height, or something
         let offset = (self.screen_tick_max - self.screen_tick) / 2;
         self.beat_scroll = tick.saturating_sub(offset) as f32 / TICKS_PER_BEAT as f32;
     }
