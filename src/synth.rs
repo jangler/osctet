@@ -18,6 +18,9 @@ const VOICES_PER_CHANNEL: usize = 3;
 
 const MAX_ENV_SCALE: f32 = 16.0;
 
+pub const MIN_FREQ_RATIO: f32 = 0.25;
+pub const MAX_FREQ_RATIO: f32 = 16.0;
+
 pub const MIN_LFO_RATE: f32 = 0.1;
 pub const MAX_LFO_RATE: f32 = 20.0;
 
@@ -269,20 +272,17 @@ impl PcmData {
 
     /// Attempts to detect the fundamental frequency of the sample.
     pub fn detect_pitch(&self) -> Option<f64> {
-        // the pitch detector can get confused by harmonic-rich waveforms,
-        // so filter to attempt to improve accuracy
-        let wave = if self.wave.channels() == 1 {
-            &self.wave.filter(self.wave.duration(), &mut lowpass_hz(1000.0, 0.1))
-        } else {
-            self.wave.as_ref()
-        };
+        // limit search to what can be set in the UI
+        let ref_pitch = midi_hz(60.0);
+        let range = (ref_pitch / MAX_FREQ_RATIO as f64).max(20.0)
+            ..(ref_pitch / MIN_FREQ_RATIO as f64);
 
-        let signal: Vec<_> = (0..wave.len())
-            .map(|i| wave.at(0, i) as f64)
+        let signal: Vec<_> = (0..self.wave.len())
+            .map(|i| self.wave.at(0, i) as f64)
             .collect();
-        let rate = wave.sample_rate();
-        
-        HannedFftDetector::default().detect_pitch(&signal, rate)
+        let rate = self.wave.sample_rate();
+
+        HannedFftDetector::default().detect_pitch_in_range(&signal, rate, range)
     }
 }
 

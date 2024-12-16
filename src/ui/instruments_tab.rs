@@ -281,7 +281,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "Freq. ratio", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_ratio", i),
-                "", &osc.freq_ratio.0, 0.25..=16.0, None, 2);
+                "", &osc.freq_ratio.0, MIN_FREQ_RATIO..=MAX_FREQ_RATIO, None, 2);
 
             if let Waveform::Pcm(data) = &mut osc.waveform {
                 if let Some(PcmData { wave, loop_point: Some(pt), .. }) = data {
