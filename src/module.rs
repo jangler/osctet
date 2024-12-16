@@ -31,6 +31,9 @@ pub struct Module {
     redo_stack: Vec<Edit>,
     #[serde(skip)]
     track_history: Vec<TrackEdit>,
+    
+    #[serde(skip)]
+    pub has_unsaved_changes: bool,
 }
 
 impl Module {
@@ -50,6 +53,7 @@ impl Module {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             track_history: Vec::new(),
+            has_unsaved_changes: false,
         }
     }
 
@@ -66,9 +70,11 @@ impl Module {
         }
     }
 
-    pub fn save(&self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    pub fn save(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
-        Ok(fs::write(path, contents)?)
+        fs::write(path, contents)?; 
+        self.has_unsaved_changes = false;
+        Ok(())
     }
 
     pub fn map_input(&self,
@@ -264,6 +270,7 @@ impl Module {
 
     /// Performs an edit operation and returns its inverse.
     fn flip_edit(&mut self, edit: Edit) -> Edit {
+        self.has_unsaved_changes = true;
         match edit {
             Edit::InsertTrack(index, track) => {
                 self.tracks.insert(index, track);
