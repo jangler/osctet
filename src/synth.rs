@@ -97,81 +97,6 @@ pub enum Waveform {
     Pcm(Option<PcmData>),
 }
 
-#[derive(Clone,Serialize, Deserialize)]
-pub struct PcmData {
-    data: Vec<u8>, // for serialization
-    #[serde(skip)]
-    #[serde(default = "empty_wave")]
-    pub wave: Arc<Wave>,
-    pub loop_point: Option<usize>,
-}
-
-fn empty_wave() -> Arc<Wave> {
-    Arc::new(Wave::new(1, 44100.0))
-}
-
-// TODO: costly clones here
-impl PcmData {
-    pub fn load(path: impl AsRef<Path>) -> Result<PcmData, Box<dyn Error>> {
-        let data = fs::read(path)?;
-        let mut wave = Wave::load_slice(data.clone())?;
-        wave.normalize();
-
-        Ok(PcmData {
-            wave: Arc::new(wave),
-            data,
-            loop_point: None,
-        })
-    }
-
-    /// Deserialized PcmData needs to be initialized before use.
-    pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
-        let mut wave = Wave::load_slice(self.data.clone())?;
-        wave.normalize();
-        self.wave = Arc::new(wave);
-        Ok(())
-    }
-
-    /// Adjust loop point to be smoother.
-    pub fn fix_loop_point(&mut self) {
-        // look for a sample that's after a similar sample to the last sample
-        // in the file, in terms of position and slope.
-        if let Some(pt) = &mut self.loop_point {
-            // don't mess with the loop point if it's zero -- it might be a
-            // single-cycle wave
-            if *pt == 0 {
-                return
-            }
-
-            // don't move the point by more than 1 ms
-            let max_distance = (self.wave.sample_rate() as f32 * 0.001) as usize;
-            let window_start = pt.saturating_sub(max_distance);
-            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 2);
-            
-            let last_sample = self.wave.at(0, self.wave.len() - 1);
-            let second_last_sample = self.wave.at(0, self.wave.len() - 2);
-            let delta = last_sample - second_last_sample;
-            let target_value = second_last_sample + delta;
-            let mut matches = Vec::new();
-
-            for i in window_start..window_end {
-                let s1 = self.wave.at(0, i);
-                let s2 = self.wave.at(0, i + 1);
-                let test_delta = s2 - s1;
-
-                if test_delta.signum() == delta.signum() {
-                    matches.push((i + 1, s2));
-                }
-            }
-
-            if let Some((i, _)) = matches.into_iter()
-                .min_by_key(|(_, s)| OrderedFloat((target_value - s).abs())) {
-                *pt = i;
-            }
-        }
-    }
-}
-
 impl Waveform {
     pub const VARIANTS: [Waveform; 7] = [
         Self::Sawtooth,
@@ -260,6 +185,81 @@ impl Waveform {
         match *self {
             Waveform::Pulse | Waveform::Noise => true,
             _ => false,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PcmData {
+    data: Vec<u8>, // for serialization
+    #[serde(skip)]
+    #[serde(default = "empty_wave")]
+    pub wave: Arc<Wave>,
+    pub loop_point: Option<usize>,
+}
+
+fn empty_wave() -> Arc<Wave> {
+    Arc::new(Wave::new(1, 44100.0))
+}
+
+// TODO: costly clones here
+impl PcmData {
+    pub fn load(path: impl AsRef<Path>) -> Result<PcmData, Box<dyn Error>> {
+        let data = fs::read(path)?;
+        let mut wave = Wave::load_slice(data.clone())?;
+        wave.normalize();
+
+        Ok(PcmData {
+            wave: Arc::new(wave),
+            data,
+            loop_point: None,
+        })
+    }
+
+    /// Deserialized PcmData needs to be initialized before use.
+    pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut wave = Wave::load_slice(self.data.clone())?;
+        wave.normalize();
+        self.wave = Arc::new(wave);
+        Ok(())
+    }
+
+    /// Adjust loop point to be smoother.
+    pub fn fix_loop_point(&mut self) {
+        // look for a sample that's after a similar sample to the last sample
+        // in the file, in terms of position and slope.
+        if let Some(pt) = &mut self.loop_point {
+            // don't mess with the loop point if it's zero -- it might be a
+            // single-cycle wave
+            if *pt == 0 {
+                return
+            }
+
+            // don't move the point by more than 1 ms
+            let max_distance = (self.wave.sample_rate() as f32 * 0.001) as usize;
+            let window_start = pt.saturating_sub(max_distance);
+            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 2);
+            
+            let last_sample = self.wave.at(0, self.wave.len() - 1);
+            let second_last_sample = self.wave.at(0, self.wave.len() - 2);
+            let delta = last_sample - second_last_sample;
+            let target_value = second_last_sample + delta;
+            let mut matches = Vec::new();
+
+            for i in window_start..window_end {
+                let s1 = self.wave.at(0, i);
+                let s2 = self.wave.at(0, i + 1);
+                let test_delta = s2 - s1;
+
+                if test_delta.signum() == delta.signum() {
+                    matches.push((i + 1, s2));
+                }
+            }
+
+            if let Some((i, _)) = matches.into_iter()
+                .min_by_key(|(_, s)| OrderedFloat((target_value - s).abs())) {
+                *pt = i;
+            }
         }
     }
 }
