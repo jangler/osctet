@@ -840,10 +840,28 @@ fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventDat
     if data.is_ctrl() != (cursor.track == 0) {
         return
     }
-    module.insert_event(cursor.track, cursor.channel, Event {
-        tick: cursor.tick,
-        data,
-    });
+
+    let n = module.tracks[cursor.track].channels.len();
+    if is_shift_down() && n > 1 {
+        // hold shift to insert events into all track channels
+        let add: Vec<_> = (0..n).map(|i| LocatedEvent {
+            track: cursor.track,
+            channel: i,
+            event: Event {
+                tick: cursor.tick,
+                data: data.clone(),
+            },
+        }).collect();
+        module.push_edit(Edit::PatternData {
+            remove: add.iter().map(|e| e.position()).collect(),
+            add,
+        });
+    } else {
+        module.insert_event(cursor.track, cursor.channel, Event {
+            tick: cursor.tick,
+            data,
+        });
+    }
 }
 
 fn track_name(target: TrackTarget, patches: &[Patch]) -> &str {
