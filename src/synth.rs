@@ -1,7 +1,7 @@
 //! Subtractive/FM synth engine.
 
 use core::f64;
-use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path, sync::Arc, u64};
+use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::{Path, PathBuf}, sync::Arc, u64};
 
 use ordered_float::OrderedFloat;
 use pitch_detector::pitch::{HannedFftDetector, PitchDetector};
@@ -203,6 +203,8 @@ pub struct PcmData {
     #[serde(default = "empty_wave")]
     pub wave: Arc<Wave>,
     pub loop_point: Option<usize>,
+    #[serde(skip)]
+    pub path: Option<PathBuf>,
 }
 
 fn empty_wave() -> Arc<Wave> {
@@ -211,16 +213,43 @@ fn empty_wave() -> Arc<Wave> {
 
 // TODO: costly clones here
 impl PcmData {
-    pub fn load(path: impl AsRef<Path>) -> Result<PcmData, Box<dyn Error>> {
-        let data = fs::read(path)?;
+    pub const FILE_EXTENSIONS: [&str; 11] =
+        ["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4", "ogg", "wav", "webm"];
+
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+        let data = fs::read(&path)?;
         let mut wave = Wave::load_slice(data.clone())?;
         wave.normalize();
 
-        Ok(PcmData {
+        Ok(Self {
             wave: Arc::new(wave),
             data,
             loop_point: None,
+            path: Some(path.as_ref().to_path_buf()),
         })
+    }
+
+    pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
+        Self::load(Self::next_file(path, offset))
+    }
+    
+    /// Return the next/previous PCM file path in the path's directory.
+    fn next_file(path: &PathBuf, offset: isize) -> PathBuf {
+        path.parent().map(|p| {
+            fs::read_dir(p).map(|entries| {
+                // TODO: files ending in ex. .WAV instead of .wav won't match
+                let entries: Vec<_> = entries.flatten()
+                    .filter(|e| Self::FILE_EXTENSIONS.contains(
+                        &&e.path().extension().unwrap_or_default()
+                            .to_str().unwrap_or_default()))
+                    .collect();
+                entries.iter().position(|e| e.path() == *path).map(|i| {
+                    let i = (i as isize + offset)
+                        .rem_euclid(entries.len() as isize) as usize;
+                    entries[i].path()
+                })
+            }).ok()
+        }).flatten().flatten().unwrap_or(path.to_owned())
     }
 
     /// Deserialized PcmData needs to be initialized before use.

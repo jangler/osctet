@@ -258,6 +258,14 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 ui.group_ignores_geometry = true;
 
                 if let Some(data) = data {
+                    // these are two separate if-lets for ownership reasons
+                    if data.path.is_some() && ui.button("Prev") {
+                        load_pcm_offset(data, -1, ui);
+                    }
+                    if data.path.is_some() && ui.button("Next") {
+                        load_pcm_offset(data, 1, ui);
+                    }
+
                     if ui.button("Detect pitch") {
                         match data.detect_pitch() {
                             Some(freq) => {
@@ -382,8 +390,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config) {
     if let Some(path) = super::new_file_dialog()
-        .add_filter("Audio file",&["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4",
-            "ogg", "wav", "webm"])
+        .add_filter("Audio file", &PcmData::FILE_EXTENSIONS)
         .set_directory(cfg.sample_folder.clone()
             .unwrap_or(String::from(".")))
         .pick_file() {
@@ -391,6 +398,21 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config) {
         let _ = cfg.save();
         match PcmData::load(path) {
             Ok(result) => *data = Some(result),
+            Err(e) => ui.report(e),
+        }
+    }
+}
+
+fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) {
+    if let Some(path) = &data.path {
+        match PcmData::load_offset(path, offset) {
+            Ok(result) => {
+                *data = result;
+                data.path.as_ref()
+                    .map(|p| p.file_name()).flatten()
+                    .map(|s| s.to_str()).flatten()
+                    .map(|s| ui.notify(format!("Loaded {}", s)));
+            }
             Err(e) => ui.report(e),
         }
     }
