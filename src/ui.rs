@@ -489,7 +489,7 @@ impl UI {
             let (_, y) = mouse_position();
             let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
                 .min(1.0).max(0.0);
-            *current_y = (max_y - viewport_h) * offset;
+            *current_y = ((max_y - viewport_h) * offset).round();
         } else {
             self.scrollbar_grabbed = false;
         }
