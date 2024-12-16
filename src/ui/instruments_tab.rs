@@ -197,9 +197,10 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     ui.header("GENERAL");
-    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 2);
-    ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1);
-    ui.slider("glide_time", "Glide time", &mut patch.glide_time, 0.0..=0.5, Some("s"), 2);
+    ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 2, true);
+    ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1, true);
+    ui.slider("glide_time", "Glide time", &mut patch.glide_time,
+        0.0..=0.5, Some("s"), 2, true);
     if let Some(i) = ui.combo_box("play_mode",
         "Play mode", patch.play_mode.name(),
         || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
@@ -207,9 +208,9 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         patch.play_mode = PlayMode::VARIANTS[i];
     }
     ui.shared_slider("distortion", "Distortion",
-        &patch.clip_gain.0, 1.0..=MAX_CLIP_GAIN, None, 1);
+        &patch.clip_gain.0, 1.0..=MAX_CLIP_GAIN, None, 1, true);
     ui.shared_slider("reverb_send", "Reverb send",
-        &patch.reverb_send.0, 0.0..=1.0, None, 1);
+        &patch.reverb_send.0, 0.0..=1.0, None, 1, true);
 
     ui.space(2.0);
     oscillator_controls(ui, patch, cfg);
@@ -246,7 +247,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "Level", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_level", i),
-                "", &osc.level.0, 0.0..=1.0, None, 2);
+                "", &osc.level.0, 0.0..=1.0, None, 2, true);
 
             if let Waveform::Pcm(data) = &mut osc.waveform {
                 ui.start_group();
@@ -288,8 +289,8 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                     if let Some(pt) = &mut data.loop_point {                   
                         let sr = data.wave.sample_rate() as f32;
                         let mut pt2 = *pt as f32 / sr;
-                        if ui.slider(&format!("osc_{}_loop", i), "Loop point",
-                            &mut pt2, 0.0..=data.wave.duration() as f32, Some("s"), 1) {
+                        if ui.slider(&format!("osc_{}_loop", i), "Loop point", &mut pt2,
+                            0.0..=data.wave.duration() as f32, Some("s"), 1, true) {
                             *pt = (pt2 * sr).round() as usize;
                             data.fix_loop_point();
                         }
@@ -305,7 +306,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "Tone", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tone", i),
-                "", &osc.tone.0, 0.0..=1.0, None, 1);
+                "", &osc.tone.0, 0.0..=1.0, None, 1, osc.waveform.uses_tone());
 
             if let Waveform::Pcm(_) = osc.waveform {
                 ui.offset_label("");
@@ -316,7 +317,8 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "Freq. ratio", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_ratio", i),
-                "", &osc.freq_ratio.0, MIN_FREQ_RATIO..=MAX_FREQ_RATIO, None, 2);
+                "", &osc.freq_ratio.0, MIN_FREQ_RATIO..=MAX_FREQ_RATIO, None, 2,
+                osc.waveform.uses_freq());
 
             if let Waveform::Pcm(_) = osc.waveform {
                 ui.offset_label("");
@@ -327,7 +329,8 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "Finetune", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tune", i),
-                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1);
+                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1,
+                osc.waveform.uses_freq());
 
             if let Waveform::Pcm(_) = osc.waveform {
                 ui.offset_label("");
@@ -439,15 +442,15 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         
         labeled_group(ui, "Cutoff", |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
-                ui.shared_slider(&format!("filter_{}_cutoff", i), "",
-                    &filter.cutoff.0, MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"), 2);
+                ui.shared_slider(&format!("filter_{}_cutoff", i), "", &filter.cutoff.0,
+                    MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"), 2, true);
             }
         });
 
         labeled_group(ui, "Resonance", |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 ui.shared_slider(&format!("filter_{}_q", i), "",
-                    &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None, 1);
+                    &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None, 1, true);
             }
         });
 
@@ -492,28 +495,28 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Attack", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_A", i), "", &mut env.attack, 0.0..=10.0,
-                    Some("s"), 2);
+                    Some("s"), 2, true);
             }
         });
     
         labeled_group(ui, "Decay", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_D", i), "", &mut env.decay, 0.01..=10.0,
-                    Some("s"), 2);
+                    Some("s"), 2, true);
             }
         });
     
         labeled_group(ui, "Sustain", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0,
-                    None, 1);
+                    None, 1, true);
             }
         });
     
         labeled_group(ui, "Release", |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0,
-                    Some("s"), 2);
+                    Some("s"), 2, true);
             }
         });
     
@@ -558,14 +561,14 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Rate", |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
-                    MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"), 2);
+                    MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"), 2, lfo.waveform.uses_freq());
             }
         });
     
         labeled_group(ui, "Delay", |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
-                    0.0..=10.0, Some("s"), 2);
+                    0.0..=10.0, Some("s"), 2, true);
             }
         });
     
@@ -623,7 +626,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Depth", |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 ui.shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0, -1.0..=1.0,
-                    None, 1);
+                    None, 1, true);
             }
         });
     

@@ -798,7 +798,7 @@ impl UI {
 
     /// Draws a slider and returns true if the value was changed.
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>, unit: Option<&str>, power: i32,
+        range: RangeInclusive<f32>, unit: Option<&str>, power: i32, enabled: bool
     ) -> bool {
         // are we in text entry mode?
         if self.focused_text.as_ref().is_some_and(|x| x.id == id) {
@@ -821,7 +821,8 @@ impl UI {
             h: h + MARGIN * 2.0,
         };
         let mouse_pos = mouse_position_vec2();
-        if self.mouse_hits(hit_rect) {
+        let hit = enabled && self.mouse_hits(hit_rect);
+        if hit {
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.focused_slider = Some(id.to_string());
                 self.mouse_consumed = true;
@@ -847,10 +848,12 @@ impl UI {
             *val = new_val;
             (self.style.theme.control_bg_click(), self.style.theme.border_focused(),
                 changed)
-        } else if self.mouse_hits(hit_rect) {
+        } else if hit {
             (self.style.theme.control_bg_hover(), self.style.theme.border_focused(), false)
-        } else {
+        } else if enabled {
             (self.style.theme.control_bg(), self.style.theme.border_unfocused(), false)
+        } else {
+            (self.style.theme.panel_bg(), self.style.theme.border_disabled(), false)
         };
         
         // draw groove & handle
@@ -1087,10 +1090,10 @@ impl UI {
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
-        range: RangeInclusive<f32>, unit: Option<&str>, power: i32
+        range: RangeInclusive<f32>, unit: Option<&str>, power: i32, enabled: bool,
     ) {
         let mut val = param.value();
-        if self.slider(id, label, &mut val, range, unit, power) {
+        if self.slider(id, label, &mut val, range, unit, power, enabled) {
             param.set(val);
         }
     }

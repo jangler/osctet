@@ -124,6 +124,22 @@ impl Waveform {
         }
     }
 
+    /// Returns true if this waveform makes use of the `tone` control.
+    pub fn uses_tone(&self) -> bool {
+        match self {
+            Self::Pulse | Self::Noise => true,
+            _ => false,
+        }
+    }
+
+    /// Returns true if this waveform makes uses of frequency controls.
+    pub fn uses_freq(&self) -> bool {
+        match self {
+            Self::Noise => false,
+            _ => true,
+        }
+    }
+
     fn make_osc_net(&self,
         settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net
     ) -> Net {

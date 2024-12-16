@@ -140,6 +140,10 @@ impl Theme {
     pub fn border_focused(&self) -> Color {
         color_from_lchuv(self.fg)
     }
+
+    pub fn border_disabled(&self) -> Color {
+        self.control_bg_click()
+    }
 }
 
 fn color_from_lchuv(lchuv: Lchuv) -> Color {
