@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, Position, TrackEdit, TrackTarget, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f32 = 10.0;
@@ -17,6 +19,7 @@ pub struct Player {
     looped: bool,
     metronome: bool,
     sample_rate: f32,
+    interps: HashMap<Position, Interpolation>, // use 0 for tick
 }
 
 impl Player {
@@ -31,6 +34,7 @@ impl Player {
             looped: false,
             metronome: false,
             sample_rate,
+            interps: HashMap::new(),
         }
     }
 
@@ -44,6 +48,7 @@ impl Player {
         self.playtime = 0.0;
         self.tempo = DEFAULT_TEMPO;
         self.looped = false;
+        self.interps.clear();
     }
 
     pub fn get_tick(&self) -> u32 {
@@ -154,10 +159,28 @@ impl Player {
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
                 for event in &channel.events {
+                    if event.tick >= prev_tick && event.tick < self.tick {
+                        events.push(LocatedEvent {
+                            event: event.clone(),
+                            track: track_i,
+                            channel: channel_i,
+                        });
+                    }
+                }
+            }
+        }
+
+        // generate events from interpolation
+        for (track_i, track) in module.tracks.iter().enumerate() {
+            for (channel_i, channel) in track.channels.iter().enumerate() {
+                if let Some(pitch) = channel.interpolate_pitch(self.tick, &module.tuning) {
                     events.push(LocatedEvent {
-                        event: event.clone(),
                         track: track_i,
                         channel: channel_i,
+                        event: Event {
+                            tick: self.tick,
+                            data: EventData::PitchBend(pitch),
+                        },
                     });
                 }
             }
@@ -166,9 +189,7 @@ impl Player {
         events.sort_by_key(|e| (e.event.tick, e.event.data.column()));
 
         for event in events {
-            if event.event.tick >= prev_tick && event.event.tick < self.tick {
-                self.handle_event(&event.event, module, event.track, event.channel);
-            }
+            self.handle_event(&event.event, module, event.track, event.channel);
         }
 
         if self.metronome && (self.tick as f32 / TICKS_PER_BEAT as f32).ceil()
@@ -215,6 +236,7 @@ impl Player {
                         EventData::Tempo(t) => self.tempo = t,
                         EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
                         EventData::End | EventData::Loop => (),
+                        EventData::PitchBend(_) => panic!("pitch bend event in pattern"),
                     }
                 }
                 
@@ -272,6 +294,13 @@ impl Player {
                 self.stop();
             },
             EventData::Loop => (),
+            EventData::PitchBend(pitch) => {
+                if let TrackTarget::Patch(i) = module.tracks[track].target {
+                    if let Some(patch) = module.patches.get(i) {
+                        self.bend_to(track, key, pitch, patch);
+                    }
+                }
+            },
         }
     }
 

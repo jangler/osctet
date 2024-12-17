@@ -1,7 +1,8 @@
 //! Definitions for all stored module data except patches.
 
-use std::{error::Error, fs, path::PathBuf};
+use std::{collections::HashSet, error::Error, fs, path::PathBuf};
 
+use fundsp::math::{delerp, lerp};
 use serde::{Deserialize, Serialize};
 
 use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::DEFAULT_TEMPO, synth::Patch};
@@ -304,11 +305,16 @@ impl Module {
                         event,
                     })
                 }).collect();
+                let mut modified_channels = HashSet::new();
                 let flip_remove = add.into_iter().map(|e| {
+                    modified_channels.insert((e.track, e.channel));
                     let pos = e.position();
                     self.tracks[e.track].channels[e.channel].events.push(e.event);
                     pos
                 }).collect();
+                for (track, channel) in modified_channels {
+                    self.tracks[track].channels[channel].sort_events();
+                }
                 Edit::PatternData { remove: flip_remove, add: flip_add }
             }
             Edit::InsertPatch(index, patch) => {
@@ -335,8 +341,13 @@ impl Module {
                 }
 
                 // re-insert previously deleted events
+                let mut modified_channels = HashSet::new();
                 for e in insert {
+                    modified_channels.insert((e.track, e.channel));
                     self.tracks[e.track].channels[e.channel].events.push(e.event);
+                }
+                for (track, channel) in modified_channels {
+                    self.tracks[track].channels[channel].sort_events();
                 }
 
                 Edit::ShiftEvents {
@@ -547,7 +558,13 @@ impl Channel {
             }
         }
 
+        self.sort_events();
+
         deleted
+    }
+
+    pub fn sort_events(&mut self) {
+        self.events.sort_by_key(|e| (e.tick, e.data.column()));
     }
 
     pub fn interpolate(&mut self, col: u8, start: u32, end: u32) {
@@ -580,7 +597,44 @@ impl Channel {
 
     pub fn is_interpolated(&self, col: u8, tick: u32) -> bool {
         let interp = self.interp_by_col(col);
-        interp.iter().filter(|x| **x <= tick).count() % 2 == 1
+        interp.iter().filter(|x| **x < tick).count() % 2 == 1
+    }
+
+    /// Returns the interpolated MIDI pitch at a given tick.
+    pub fn interpolate_pitch(&self, tick: u32, tuning: &Tuning) -> Option<f32> {
+        if let Some(i) = self.pitch_interp.iter().position(|t| *t >= tick) {
+            if i % 2 == 1 {
+                let interp_start = self.pitch_interp[i - 1];
+                let interp_end = self.pitch_interp[i];
+
+                let pitch_events: Vec<_> = self.events.iter().filter(|e| match e.data {
+                    EventData::Pitch(_) => true,
+                    _ => false,
+                }).collect();
+
+                if let Some(i) = pitch_events.iter().position(|e| e.tick >= tick) {
+                    if i > 0 {
+                        let prev_event = pitch_events[i - 1];
+                        let next_event = pitch_events[i];
+                        let interp_start = interp_start.max(prev_event.tick);
+                        if next_event.tick <= interp_end {
+                            let interp_end = interp_end.min(next_event.tick);
+                            if let EventData::Pitch(prev_note) = prev_event.data {
+                                if let EventData::Pitch(next_note) = next_event.data {
+                                    let prev_pitch = tuning.midi_pitch(&prev_note);
+                                    let next_pitch = tuning.midi_pitch(&next_note);
+                                    let t = delerp(interp_start as f32, interp_end as f32,
+                                        tick as f32);
+                                    return Some(lerp(prev_pitch, next_pitch, t))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -600,6 +654,7 @@ pub enum EventData {
     RationalTempo(u8, u8),
     End,
     Loop,
+    PitchBend(f32),
 }
 
 impl EventData {

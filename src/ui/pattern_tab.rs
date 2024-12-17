@@ -1003,6 +1003,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
         EventData::Loop => String::from("LP"),
         EventData::Tempo(t) => t.round().to_string(),
         EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
+        EventData::PitchBend(_) => panic!("pitch bend event in pattern"),
     };
     let color = match evt.data {
         EventData::Pressure(x) => Color {
