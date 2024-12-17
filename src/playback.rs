@@ -1,6 +1,6 @@
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{EventData, LocatedEvent, Module, TrackEdit, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f32 = 10.0;
@@ -119,9 +119,17 @@ impl Player {
         }
     }
 
+    /// MIDI-style pitch bend.
     pub fn pitch_bend(&mut self, track: usize, channel: u8, bend: f32) {
         if let Some(synth) = self.synths.get_mut(track) {
             synth.pitch_bend(channel, bend);
+        }
+    }
+
+    /// Interpolation pitch bend.
+    pub fn bend_to(&mut self, track: usize, key: Key, pitch: f32, patch: &Patch) {
+        if let Some(synth) = self.synths.get_mut(track) {
+            synth.bend_to(key, pitch, patch, &mut self.seq);
         }
     }
 
@@ -159,7 +167,7 @@ impl Player {
 
         for event in events {
             if event.event.tick >= prev_tick && event.event.tick < self.tick {
-                self.handle_event(&event.event.data, module, event.track, event.channel);
+                self.handle_event(&event.event, module, event.track, event.channel);
             }
         }
 
@@ -223,7 +231,7 @@ impl Player {
         }
     }
 
-    fn handle_event(&mut self, data: &EventData, module: &Module,
+    fn handle_event(&mut self, event: &Event, module: &Module,
         track: usize, channel: usize
     ) {
         let key = Key {
@@ -232,11 +240,16 @@ impl Player {
             key: 0,
         };
 
-        match *data {
+        match event.data {
             EventData::Pitch(note) => {
                 if let Some((patch, note)) = module.map_note(note, track) {
                     let pitch = module.tuning.midi_pitch(&note);
-                    self.note_on(track, key, pitch, None, patch);
+                    let channel = &module.tracks[track].channels[channel];
+                    if channel.is_interpolated(NOTE_COLUMN, event.tick) {
+                        self.bend_to(track, key, pitch, patch);
+                    } else {
+                        self.note_on(track, key, pitch, None, patch);
+                    }
                 }
             }
             EventData::Pressure(v) => {

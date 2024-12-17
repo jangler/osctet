@@ -510,6 +510,17 @@ impl Synth {
         }
     }
 
+    pub fn bend_to(&mut self, key: Key, pitch: f32, patch: &Patch, seq: &mut Sequencer) {
+        self.prev_freq = Some(midi_hz(pitch));
+
+        if let Some(voice) = self.active_voices.get_mut(&key) {
+            voice.base_pitch = pitch;
+            voice.vars.freq.set(midi_hz(pitch));
+        } else {
+            self.note_on(key, pitch, None, patch, seq);
+        }
+    }
+
     pub fn poly_pressure(&mut self, key: Key, pressure: f32) {
         self.active_voices.get(&key).inspect(|v| v.vars.pressure.set(pressure));
     }

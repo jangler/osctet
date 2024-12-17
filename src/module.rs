@@ -351,6 +351,22 @@ impl Module {
                     self.replace_event(event)
                 }).collect())
             },
+            Edit::Interpolate { start, end } => {
+                let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+
+                for (track_i, track) in self.tracks.iter_mut().enumerate() {
+                    for (channel_i, channel) in track.channels.iter_mut().enumerate() {
+                        for col in if track_i == 0 { 0..1 } else { 0..3 } {
+                            let tuple = (track_i, channel_i, col);
+                            if tuple >= start_tuple && tuple <= end_tuple {
+                                channel.interpolate(col, start.tick, end.tick);
+                            }
+                        }
+                    }
+                }
+
+                Edit::Interpolate { start, end }
+            }
         }
     }
 
@@ -415,6 +431,7 @@ impl Module {
         false
     }
 
+    /// Return the number of channels between two positions.
     pub fn channels_between(&self, start: Position, end: Position) -> usize {
         let mut n = 0;
         let mut t = start.track;
@@ -495,9 +512,9 @@ pub enum TrackTarget {
 #[derive(Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
-    pub pitch_interp: Vec<u32>, // TODO
-    pub vel_interp: Vec<u32>, // TODO
-    pub mod_interp: Vec<u32>, // TODO
+    pub pitch_interp: Vec<u32>,
+    pub vel_interp: Vec<u32>,
+    pub mod_interp: Vec<u32>,
     pub links: Vec<Link>, // TODO
 }
 
@@ -531,6 +548,39 @@ impl Channel {
         }
 
         deleted
+    }
+
+    pub fn interpolate(&mut self, col: u8, start: u32, end: u32) {
+        let interp = match col {
+            0 => &mut self.pitch_interp,
+            1 => &mut self.vel_interp,
+            2 => &mut self.mod_interp,
+            _ => panic!(),
+        };
+
+        for tick in [start, end] {
+            if let Some(index) = interp.iter().position(|x| *x == tick) {
+                interp.remove(index);
+            } else {
+                interp.push(tick);
+            }
+        }
+
+        interp.sort();
+    }
+
+    pub fn interp_by_col(&self, col: u8) -> &Vec<u32> {
+        match col {
+            0 => &self.pitch_interp,
+            1 => &self.vel_interp,
+            2 => &self.mod_interp,
+            _ => panic!(),
+        }
+    }
+
+    pub fn is_interpolated(&self, col: u8, tick: u32) -> bool {
+        let interp = self.interp_by_col(col);
+        interp.iter().filter(|x| **x <= tick).count() % 2 == 1
     }
 }
 
@@ -641,6 +691,10 @@ pub enum Edit {
         insert: Vec<LocatedEvent>,
     },
     ReplaceEvents(Vec<LocatedEvent>),
+    Interpolate {
+        start: Position,
+        end: Position,
+    },
 }
 
 pub struct ChannelCoords {

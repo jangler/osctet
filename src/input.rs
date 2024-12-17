@@ -496,6 +496,7 @@ pub enum Action {
     PatternEnd,
     IncrementValues,
     DecrementValues,
+    Interpolate,
 }
 
 impl Action {
@@ -557,6 +558,7 @@ impl Action {
             Self::PatternEnd => "Go to pattern end",
             Self::IncrementValues => "Increment values",
             Self::DecrementValues => "Decrement values",
+            Self::Interpolate => "Interpolate",
         }
     }
 }

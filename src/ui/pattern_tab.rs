@@ -261,8 +261,22 @@ impl PatternEditor {
             }
             Action::IncrementValues => self.shift_values(1, module),
             Action::DecrementValues => self.shift_values(-1, module),
+            Action::Interpolate => self.interpolate(module),
             _ => (),
         }
+    }
+
+    fn interpolate(&self, module: &mut Module) {
+        let (mut start, end) = self.selection_corners();
+        if start.tick == end.tick {
+            // make sure start & end are differentiated
+            if start.tick > 0 {
+                start.tick -= 1;
+            } else {
+                return
+            }
+        }
+        module.push_edit(Edit::Interpolate { start, end });
     }
 
     fn multi_channel_delete(&self, module: &mut Module) {
@@ -527,6 +541,7 @@ impl PatternEditor {
         let char_width = text_width("x", &ui.style.text_params());
         let beat_height = self.beat_height(ui);
         self.draw_channel_line(ui);
+        self.draw_interpolation(ui, channel);
 
         // draw events
         for event in &channel.events {
@@ -540,6 +555,36 @@ impl PatternEditor {
         ui.push_line(ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll,
             ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll + ui.bounds.h,
             ui.style.theme.control_bg());
+        ui.cursor_z += 1;
+    }
+
+    fn draw_interpolation(&self, ui: &mut UI, channel: &Channel) {
+        ui.cursor_z -= 1;
+        let char_width = text_width("x", &ui.style.text_params());
+        let beat_height = self.beat_height(ui);
+        let tpr = self.ticks_per_row();
+        let colors = [
+            with_alpha(0.5, ui.style.theme.fg()),
+            with_alpha(0.5, ui.style.theme.accent1_fg()),
+            with_alpha(0.5, ui.style.theme.accent2_fg()),
+        ];
+
+        for col in 0..3 {
+            let interp = channel.interp_by_col(col);
+            let x = ui.cursor_x + MARGIN - 1.0 - LINE_THICKNESS * 0.5
+                + column_x(col, char_width);
+
+            for chunk in interp.chunks_exact(2) {
+                if let [start, end] = chunk {
+                    let y1 = ui.cursor_y + (*start + tpr / 4) as f32
+                        / TICKS_PER_BEAT as f32 * beat_height;
+                    let y2 = ui.cursor_y + (*end + tpr * 3 / 4) as f32
+                        / TICKS_PER_BEAT as f32 * beat_height;
+                    ui.push_line(x, y1, x, y2, colors[col as usize]);
+                }
+            }
+        }
+
         ui.cursor_z += 1;
     }
 
@@ -1097,5 +1142,12 @@ fn column_x(column: u8, char_width: f32) -> f32 {
         // allow this to make some calculations easier
         3 => char_width * 5.0 + MARGIN * 3.0,
         _ => panic!("invalid cursor column"),
+    }
+}
+
+fn with_alpha(a: f32, color: Color) -> Color {
+    Color {
+        a,
+        ..color
     }
 }

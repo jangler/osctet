@@ -151,6 +151,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::End), Action::PatternEnd),
         (Hotkey::new(Modifiers::Shift, KeyCode::F2), Action::IncrementValues),
         (Hotkey::new(Modifiers::Shift, KeyCode::F1), Action::DecrementValues),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::I), Action::Interpolate),
         // (Hotkey::new(Modifiers::Ctrl, KeyCode::R), Action::ToggleRecord),
     ]
 }
