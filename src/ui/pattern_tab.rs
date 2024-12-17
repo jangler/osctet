@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use gcd::Gcd;
 
 use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch};
@@ -344,10 +346,30 @@ impl PatternEditor {
         self.edit_end.channel = module.tracks[self.edit_end.track].channels.len() - 1;
     }
 
-    fn place_events_evenly(&self, _module: &mut Module) {
-        // TODO
-        // let (start, end) = self.selection_corners();
-        // let events = module.scan_events(start, end);
+    fn place_events_evenly(&self, module: &mut Module) {
+        let (start, end) = self.selection_corners();
+        let tick_delta = end.tick - start.tick + self.ticks_per_row();
+        let events = module.scan_events(start, end);
+        let channels: HashSet<_> = events.iter().map(|e| (e.track, e.channel)).collect();
+
+        module.push_edit(Edit::PatternData {
+            remove: events.iter().map(|e| e.position()).collect(),
+            add: channels.into_iter().flat_map(|(track, channel)| {
+                let events: Vec<_> = events.iter()
+                    .filter(|e| e.track == track && e.channel == channel)
+                    .collect();
+                let n = events.len();
+
+                events.into_iter().enumerate().map(move |(i, e)| LocatedEvent {
+                    track,
+                    channel,
+                    event: Event {
+                        tick: start.tick + tick_delta / n as u32 * i as u32,
+                        data: e.event.data.clone()
+                    }
+                })
+            }).collect(),
+        })
     }
     
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
