@@ -66,22 +66,22 @@ impl PatternEditor {
 
     pub fn inc_division(&mut self) {
         self.beat_division = (self.beat_division + 1).min(TICKS_PER_BEAT as u8);
-        self.cursor_to_divison();
+        self.cursor_to_division();
     }
 
     pub fn dec_division(&mut self) {
         self.beat_division = (self.beat_division - 1).max(1);
-        self.cursor_to_divison();
+        self.cursor_to_division();
     }
 
     pub fn double_division(&mut self) {
         self.beat_division = (self.beat_division * 2).min(TICKS_PER_BEAT as u8);
-        self.cursor_to_divison();
+        self.cursor_to_division();
     }
 
     pub fn halve_division(&mut self) {
         self.beat_division = (self.beat_division / 2).max(1);
-        self.cursor_to_divison();
+        self.cursor_to_division();
     }
 
     pub fn cursor_track(&self) -> usize {
@@ -328,7 +328,7 @@ impl PatternEditor {
 
     /// If the cursor tick is off-divison, set it to the nearest on-divison
     /// value.
-    fn cursor_to_divison(&mut self) {
+    pub fn cursor_to_division(&mut self) {
         let tpr = self.ticks_per_row();
         for tick in [&mut self.edit_start.tick, &mut self.edit_end.tick] {
             *tick = (*tick as f32 / tpr as f32).round() as u32 * tpr;

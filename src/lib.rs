@@ -474,7 +474,10 @@ impl App {
         if let Some(n) = self.ui.edit_box("Division", 3,
             self.pattern_editor.beat_division.to_string()) {
             match n.parse::<u8>() {
-                Ok(n) => self.pattern_editor.beat_division = n,
+                Ok(n) => {
+                    self.pattern_editor.beat_division = n;
+                    self.pattern_editor.cursor_to_division();
+                },
                 Err(e) => self.ui.report(e),
             }
         }
