@@ -717,7 +717,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         pe.edit_end.tick = tick;
     }
     let mut scroll = pe.scroll(ui);
-    if !(pe.follow || pe.record) {
+    if !(pe.follow || pe.record) || !player.is_playing() {
         ui.vertical_scrollbar(&mut scroll, end_y, viewport_h, false);
         pe.set_scroll(scroll, ui);
     }
