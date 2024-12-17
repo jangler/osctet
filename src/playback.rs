@@ -186,7 +186,7 @@ impl Player {
             }
         }
 
-        events.sort_by_key(|e| (e.event.tick, e.event.data.column()));
+        events.sort_by_key(|e| (e.event.tick, e.event.data.spatial_column()));
 
         for event in events {
             self.handle_event(&event.event, module, event.track, event.channel);
@@ -211,7 +211,7 @@ impl Player {
                 let mut events: Vec<_> = channel.events.iter()
                     .filter(|e| e.tick < tick)
                     .collect();
-                events.sort_by_key(|e| (e.tick, e.data.column()));
+                events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
 
                 let mut active_note = None;
 
@@ -235,7 +235,8 @@ impl Player {
                         EventData::NoteOff => active_note = None,
                         EventData::Tempo(t) => self.tempo = t,
                         EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
-                        EventData::End | EventData::Loop => (),
+                        EventData::End | EventData::Loop
+                            | EventData::ToggleInterpolation(_) => (),
                         EventData::PitchBend(_) => panic!("pitch bend event in pattern"),
                     }
                 }
@@ -293,7 +294,7 @@ impl Player {
             } else {
                 self.stop();
             },
-            EventData::Loop => (),
+            EventData::Loop | EventData::ToggleInterpolation(_) => (),
             EventData::PitchBend(pitch) => {
                 if let TrackTarget::Patch(i) = module.tracks[track].target {
                     if let Some(patch) = module.patches.get(i) {

@@ -126,7 +126,7 @@ impl Module {
         for (track_i, track) in self.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
                 for evt in &channel.events {
-                    let tuple = (track_i, channel_i, evt.data.column());
+                    let tuple = (track_i, channel_i, evt.data.spatial_column());
                     if tick_range.contains(&evt.tick)
                         && tuple >= start_tuple && tuple <= end_tuple {
                         events.push(LocatedEvent {
@@ -151,7 +151,7 @@ impl Module {
         for (track_i, track) in self.tracks.iter_mut().enumerate() {
             for (channel_i, channel) in track.channels.iter_mut().enumerate() {
                 for evt in &mut channel.events {
-                    let tuple = (track_i, channel_i, evt.data.column());
+                    let tuple = (track_i, channel_i, evt.data.spatial_column());
                     if tick_range.contains(&evt.tick)
                         && tuple >= start_tuple && tuple <= end_tuple {
                         events.push(evt);
@@ -185,7 +185,7 @@ impl Module {
         if let Some(track) = self.tracks.get_mut(pos.track) {
             if let Some(channel) = track.channels.get_mut(pos.channel) {
                 return channel.events.iter_mut().find(|evt|
-                    evt.tick == pos.tick && evt.data.column() == pos.column)
+                    evt.tick == pos.tick && evt.data.logical_column() == pos.column)
             }
         }
         None
@@ -207,7 +207,7 @@ impl Module {
     fn delete_event(&mut self, pos: Position) -> Option<Event> {
         let channel = &mut self.tracks[pos.track].channels[pos.channel];
         channel.events.iter()
-            .position(|e| e.tick == pos.tick && e.data.column() == pos.column)
+            .position(|e| e.tick == pos.tick && e.data.logical_column() == pos.column)
             .map(|i| channel.events.remove(i))
     }
 
@@ -233,7 +233,7 @@ impl Module {
                 track,
                 channel,
                 tick: event.tick,
-                column: event.data.column()
+                column: event.data.logical_column()
             }],
             add: vec![LocatedEvent { track, channel, event }]
         });
@@ -362,22 +362,6 @@ impl Module {
                     self.replace_event(event)
                 }).collect())
             },
-            Edit::Interpolate { start, end } => {
-                let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
-
-                for (track_i, track) in self.tracks.iter_mut().enumerate() {
-                    for (channel_i, channel) in track.channels.iter_mut().enumerate() {
-                        for col in if track_i == 0 { 0..1 } else { 0..3 } {
-                            let tuple = (track_i, channel_i, col);
-                            if tuple >= start_tuple && tuple <= end_tuple {
-                                channel.interpolate(col, start.tick, end.tick);
-                            }
-                        }
-                    }
-                }
-
-                Edit::Interpolate { start, end }
-            }
         }
     }
 
@@ -523,9 +507,12 @@ pub enum TrackTarget {
 #[derive(Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
-    pub pitch_interp: Vec<u32>,
-    pub vel_interp: Vec<u32>,
-    pub mod_interp: Vec<u32>,
+
+    // legacy, unused
+    pitch_interp: Vec<u32>,
+    vel_interp: Vec<u32>,
+    mod_interp: Vec<u32>,
+
     pub links: Vec<Link>, // TODO
 }
 
@@ -564,35 +551,14 @@ impl Channel {
     }
 
     pub fn sort_events(&mut self) {
-        self.events.sort_by_key(|e| (e.tick, e.data.column()));
+        self.events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
     }
 
-    pub fn interpolate(&mut self, col: u8, start: u32, end: u32) {
-        let interp = match col {
-            0 => &mut self.pitch_interp,
-            1 => &mut self.vel_interp,
-            2 => &mut self.mod_interp,
-            _ => panic!(),
-        };
-
-        for tick in [start, end] {
-            if let Some(index) = interp.iter().position(|x| *x == tick) {
-                interp.remove(index);
-            } else {
-                interp.push(tick);
-            }
-        }
-
-        interp.sort();
-    }
-
-    pub fn interp_by_col(&self, col: u8) -> &Vec<u32> {
-        match col {
-            0 => &self.pitch_interp,
-            1 => &self.vel_interp,
-            2 => &self.mod_interp,
-            _ => panic!(),
-        }
+    pub fn interp_by_col(&self, col: u8) -> Vec<u32> {
+        self.events.iter().filter_map(|e| match e.data {
+            EventData::ToggleInterpolation(i) if i == col => Some(e.tick),
+            _ => None,
+        }).collect()
     }
 
     pub fn is_interpolated(&self, col: u8, tick: u32) -> bool {
@@ -602,10 +568,11 @@ impl Channel {
 
     /// Returns the interpolated MIDI pitch at a given tick.
     pub fn interpolate_pitch(&self, tick: u32, tuning: &Tuning) -> Option<f32> {
-        if let Some(i) = self.pitch_interp.iter().position(|t| *t >= tick) {
+        let interp = self.interp_by_col(NOTE_COLUMN);
+        if let Some(i) = interp.iter().position(|t| *t >= tick) {
             if i % 2 == 1 {
-                let interp_start = self.pitch_interp[i - 1];
-                let interp_end = self.pitch_interp[i];
+                let interp_start = interp[i - 1];
+                let interp_end = interp[i];
 
                 let pitch_events: Vec<_> = self.events.iter().filter(|e| match e.data {
                     EventData::Pitch(_) => true,
@@ -655,24 +622,33 @@ pub enum EventData {
     End,
     Loop,
     PitchBend(f32),
+    ToggleInterpolation(u8), // column
 }
 
 impl EventData {
     pub const DIGIT_MAX: u8 = 0xf;
+    pub const INTERP_COL_FLAG: u8 = 0x80;
+
+    pub fn spatial_column(&self) -> u8 {
+        self.logical_column() & !Self::INTERP_COL_FLAG
+    }
     
-    pub fn column(&self) -> u8 {
+    pub fn logical_column(&self) -> u8 {
         match *self {
             Self::Pressure(_) => VEL_COLUMN,
             Self::Modulation(_) => MOD_COLUMN,
+            Self::ToggleInterpolation(col) => col | Self::INTERP_COL_FLAG,
             _ => NOTE_COLUMN,
         }
     }
 
+    /// Returns true if the data goes in the control/global track.
     pub fn is_ctrl(&self) -> bool {
+        // TODO: how to handle tempo interpolation?
         match *self {
-            Self::Pitch(_) | Self::NoteOff
-                | Self::Pressure(_) | Self::Modulation(_) => false,
-            _ => true,
+            Self::Tempo(_) | Self::RationalTempo(_, _)
+                | Self::End | Self::Loop => true,
+            _ => false,
         }
     }
 }
@@ -746,10 +722,6 @@ pub enum Edit {
         insert: Vec<LocatedEvent>,
     },
     ReplaceEvents(Vec<LocatedEvent>),
-    Interpolate {
-        start: Position,
-        end: Position,
-    },
 }
 
 pub struct ChannelCoords {
@@ -772,13 +744,24 @@ pub struct LocatedEvent {
 }
 
 impl LocatedEvent {
+    pub fn from_position(pos: Position, data: EventData) -> Self {
+        Self {
+            track: pos.track,
+            channel: pos.channel,
+            event: Event {
+                tick: pos.tick,
+                data,
+            }
+        }
+    }
+
     /// Returns the position of the event.
     pub fn position(&self) -> Position {
         Position {
             tick: self.event.tick,
             track: self.track,
             channel: self.channel,
-            column: self.event.data.column(),
+            column: self.event.data.logical_column(),
         }
     }
 }

@@ -268,6 +268,7 @@ impl PatternEditor {
 
     fn interpolate(&self, module: &mut Module) {
         let (mut start, end) = self.selection_corners();
+
         if start.tick == end.tick {
             // make sure start & end are differentiated
             if start.tick > 0 {
@@ -276,7 +277,14 @@ impl PatternEditor {
                 return
             }
         }
-        module.push_edit(Edit::Interpolate { start, end });
+
+        let add = [start, end].map(|pos|
+            LocatedEvent::from_position(pos, EventData::ToggleInterpolation(pos.column)));
+
+        module.push_edit(Edit::PatternData {
+            remove: add.iter().map(|e| e.position()).collect(),
+            add: add.to_vec(),
+        });
     }
 
     fn multi_channel_delete(&self, module: &mut Module) {
@@ -662,7 +670,7 @@ impl PatternEditor {
             track: cursor.track,
             tick: cursor.tick,
             channel: cursor.channel,
-            column: data.column(),
+            column: data.logical_column(),
         };
         if module.event_at(pos).is_some_and(|e| e.data != EventData::NoteOff) {
             pos.tick += TICKS_PER_BEAT / self.beat_division as u32;
@@ -989,7 +997,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
     if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
         return
     }
-    let col = evt.data.column();
+    let col = evt.data.spatial_column();
     let x = ui.cursor_x + column_x(col, char_width);
     if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
         return
@@ -1004,6 +1012,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
         EventData::Tempo(t) => t.round().to_string(),
         EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
         EventData::PitchBend(_) => panic!("pitch bend event in pattern"),
+        EventData::ToggleInterpolation(_) => return,
     };
     let color = match evt.data {
         EventData::Pressure(x) => Color {
