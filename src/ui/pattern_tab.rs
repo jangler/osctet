@@ -219,7 +219,13 @@ impl PatternEditor {
             Action::PrevChannel => shift_channel_left(self),
             Action::Delete => {
                 let (start, end) = self.selection_corners();
-                module.delete_events(start, end);
+                if (start.track, start.channel, start.column)
+                    == (end.track, end.channel, end.column)
+                    && is_shift_down() {
+                    self.multi_channel_delete(module);
+                } else {
+                    module.delete_events(start, end);
+                }
             },
             Action::NoteOff => self.input_note_off(module),
             Action::End =>
@@ -257,6 +263,25 @@ impl PatternEditor {
             Action::DecrementValues => self.shift_values(-1, module),
             _ => (),
         }
+    }
+
+    fn multi_channel_delete(&self, module: &mut Module) {
+        let (mut start, mut end) = self.selection_corners();
+        let n = module.tracks[self.edit_start.track].channels.len();
+        let mut remove = Vec::new();
+
+        for i in 0..n {
+            start.channel = i;
+            end.channel = i;
+            for event in module.scan_events(start, end) {
+                remove.push(event.position());
+            }
+        }
+
+        module.push_edit(Edit::PatternData {
+            remove,
+            add: Vec::new()
+        });
     }
 
     fn shift_values(&self, offset: i8, module: &mut Module) {

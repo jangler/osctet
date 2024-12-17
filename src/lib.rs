@@ -228,12 +228,13 @@ impl App {
                     },
                 }
             } else if let Some(action) = self.config.hotkey_action(&hk.without_shift()) {
+                // these actions have some special behavior when used with shift
                 match action {
                     Action::NextRow | Action::PrevRow
                         | Action::NextColumn | Action::PrevColumn
                         | Action::NextBeat | Action::PrevBeat
                         | Action::NextEvent | Action::PrevEvent
-                        | Action::PatternStart | Action::PatternEnd =>
+                        | Action::PatternStart | Action::PatternEnd | Action::Delete =>
                             self.pattern_editor.action(*action,
                                 &mut self.module, &self.config, &mut self.player),
                     _ => (),
