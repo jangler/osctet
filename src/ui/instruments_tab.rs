@@ -369,8 +369,8 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 
     labeled_group(ui, "", |ui| {
         for (i, osc) in patch.oscs.iter().enumerate() {
-            if i == 0 {
-                ui.offset_label(""); // can't delete first osc
+            if patch.oscs.len() < 2 {
+                ui.offset_label(""); // can't delete the only osc
             } else if ui.button("X", true) {
                 removed_osc = Some(i);
             }
