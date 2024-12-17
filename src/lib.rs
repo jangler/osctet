@@ -461,7 +461,7 @@ impl App {
             }
 
             let mut v = self.config.midi_send_pressure.unwrap_or(true);
-            if self.ui.checkbox("Use aftertouch", &mut v) {
+            if self.ui.checkbox("Use aftertouch", &mut v, self.midi.port_name.is_some()) {
                 self.config.midi_send_pressure = Some(v);
                 if let Err(e) = self.config.save() {
                     self.ui.report(e);

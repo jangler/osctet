@@ -760,7 +760,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
                     j => TrackTarget::Patch(j - 1),
                 }));
             }
-            if ui.button("X") {
+            if ui.button("X", true) {
                 edit = Some(Edit::RemoveTrack(i));
             }
             ui.end_group();
@@ -770,10 +770,10 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
 
         // chanel add/remove buttons
         ui.start_group();
-        if ui.button("-") && track.channels.len() > 1 {
+        if ui.button("-", track.channels.len() > 1) {
             edit = Some(Edit::RemoveChannel(i));
         }
-        if ui.button("+") {
+        if ui.button("+", true) {
             edit = Some(Edit::AddChannel(i, Channel::new()));
         }
         ui.end_group();
@@ -802,7 +802,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
         player.update_synths(module.drain_track_history());
     }
 
-    if !module.patches.is_empty() && ui.button("+") {
+    if ui.button("+", !module.patches.is_empty()) {
         module.add_track();
         player.update_synths(module.drain_track_history());
     }

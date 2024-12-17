@@ -551,7 +551,7 @@ impl UI {
         self.end_widget();
     }
 
-    fn text_rect(&mut self, label: &str, x: f32, y: f32,
+    fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,
         bg: &Color, bg_hover: &Color, bg_click: &Color,
     ) -> (Rect, MouseEvent) {
         let params = self.style.text_params();
@@ -561,7 +561,7 @@ impl UI {
             w: text_width(label, &params) + MARGIN * 2.0,
             h: cap_height(&params) + MARGIN * 2.0,
         };
-        let mouse_hit = self.mouse_hits(rect);
+        let mouse_hit = self.mouse_hits(rect) && enabled;
     
         // draw fill based on mouse state
         let (fill, stroke) = if mouse_hit {
@@ -570,12 +570,18 @@ impl UI {
             } else {
                 bg_hover
             }, self.style.theme.border_focused())
-        } else {
+        } else if enabled {
             (bg, self.style.theme.border_unfocused())
+        } else {
+            (&self.style.theme.panel_bg(), self.style.theme.border_disabled())
         };
 
         self.push_rect(rect, *fill, Some(stroke));
-        self.push_text(x, y, label.to_owned(), self.style.theme.fg());
+        self.push_text(x, y, label.to_owned(), if enabled {
+            self.style.theme.fg()
+        } else {
+            self.style.theme.border_disabled()
+        });
     
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
@@ -587,9 +593,9 @@ impl UI {
     }
 
     /// Draws a button and returns true if it was clicked this frame.
-    pub fn button(&mut self, label: &str) -> bool {
+    pub fn button(&mut self, label: &str, enabled: bool) -> bool {
         self.start_widget();
-        let (_, event) = self.text_rect(label,
+        let (_, event) = self.text_rect(label, enabled,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
@@ -599,17 +605,21 @@ impl UI {
     }
 
     /// Draws a checkbox and returns true if it was changed this frame.
-    pub fn checkbox(&mut self, label: &str, value: &mut bool) -> bool {
+    pub fn checkbox(&mut self, label: &str, value: &mut bool, enabled: bool) -> bool {
         let button_text = if *value { "X" } else { " " };
         self.start_widget();
-        let (rect, event) = self.text_rect(button_text,
+        let (rect, event) = self.text_rect(button_text, enabled,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg());
         let clicked = event == MouseEvent::Released;
         self.push_text(self.cursor_x + rect.w + MARGIN, self.cursor_y + MARGIN,
-            label.to_owned(), self.style.theme.fg());
+            label.to_owned(), if enabled {
+                self.style.theme.fg()
+            } else {
+                self.style.theme.border_disabled()
+            });
         if clicked {
             *value = !*value;
         }
@@ -624,7 +634,7 @@ impl UI {
         self.start_widget();
 
         // draw button and label
-        let (button_rect, event) = self.text_rect(&button_text,
+        let (button_rect, event) = self.text_rect(&button_text, true,
             self.cursor_x + MARGIN, self.cursor_y + MARGIN,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
@@ -1125,7 +1135,7 @@ impl UI {
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
         self.cursor_z += TOOLTIP_Z_OFFSET;
-        self.text_rect(text, x, y,
+        self.text_rect(text, true, x, y,
             &self.style.theme.panel_bg(),
             &self.style.theme.panel_bg(),
             &self.style.theme.panel_bg());
@@ -1242,7 +1252,7 @@ impl UI {
             let w = text_width(&text, &params);
             let h = cap_height(&params);
             self.cursor_z += TOOLTIP_Z_OFFSET;
-            let (_, evt) = self.text_rect(&text,
+            let (_, evt) = self.text_rect(&text, true,
                 self.bounds.x + self.bounds.w - w - MARGIN * 3.0,
                 self.bounds.y + self.bounds.h - h - MARGIN * 3.0,
                 &self.style.theme.panel_bg(),

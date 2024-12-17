@@ -11,7 +11,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.cursor_z -= 1;
     ui.start_group();
 
-    if ui.button("Save settings") {
+    if ui.button("Save settings", true) {
         cfg.theme = Some(ui.style.theme.clone());
         match cfg.save() {
             Ok(()) => ui.notify(String::from("Saved settings.")),
@@ -32,10 +32,10 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.end_group();
     
     ui.start_group();
-    if ui.button("Reset (light)") {
+    if ui.button("Reset (light)", true) {
         ui.style.theme = Theme::light();
     }
-    if ui.button("Reset (dark)") {
+    if ui.button("Reset (dark)", true) {
         ui.style.theme = Theme::dark();
     }
     ui.end_group();
