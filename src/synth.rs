@@ -510,14 +510,11 @@ impl Synth {
         }
     }
 
-    pub fn bend_to(&mut self, key: Key, pitch: f32, patch: &Patch, seq: &mut Sequencer) {
-        self.prev_freq = Some(midi_hz(pitch));
-
+    pub fn bend_to(&mut self, key: Key, pitch: f32) {
         if let Some(voice) = self.active_voices.get_mut(&key) {
+            self.prev_freq = Some(midi_hz(pitch));
             voice.base_pitch = pitch;
             voice.vars.freq.set(midi_hz(pitch));
-        } else {
-            self.note_on(key, pitch, None, patch, seq);
         }
     }
 

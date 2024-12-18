@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, Position, TrackEdit, TrackTarget, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, Position, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f32 = 10.0;
@@ -132,9 +132,9 @@ impl Player {
     }
 
     /// Interpolation pitch bend.
-    pub fn bend_to(&mut self, track: usize, key: Key, pitch: f32, patch: &Patch) {
+    pub fn bend_to(&mut self, track: usize, key: Key, pitch: f32) {
         if let Some(synth) = self.synths.get_mut(track) {
-            synth.bend_to(key, pitch, patch, &mut self.seq);
+            synth.bend_to(key, pitch);
         }
     }
 
@@ -282,7 +282,7 @@ impl Player {
                     let pitch = module.tuning.midi_pitch(&note);
                     let channel = &module.tracks[track].channels[channel];
                     if channel.is_interpolated(NOTE_COLUMN, event.tick) {
-                        self.bend_to(track, key, pitch, patch);
+                        self.bend_to(track, key, pitch);
                     } else {
                         self.note_on(track, key, pitch, None, patch);
                     }
@@ -308,13 +308,7 @@ impl Player {
                 self.stop();
             },
             EventData::Loop | EventData::ToggleInterpolation(_) => (),
-            EventData::InterpolatedPitch(pitch) => {
-                if let TrackTarget::Patch(i) = module.tracks[track].target {
-                    if let Some(patch) = module.patches.get(i) {
-                        self.bend_to(track, key, pitch, patch);
-                    }
-                }
-            },
+            EventData::InterpolatedPitch(pitch) => self.bend_to(track, key, pitch),
             EventData::InterpolatedPressure(v) =>
                 self.channel_pressure(track, channel as u8, v),
             EventData::InterpolatedModulation(v) =>
