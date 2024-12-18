@@ -1011,7 +1011,10 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
         EventData::Loop => String::from("LP"),
         EventData::Tempo(t) => t.round().to_string(),
         EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
-        EventData::PitchBend(_) => panic!("pitch bend event in pattern"),
+        EventData::InterpolatedPitch(_)
+            | EventData::InterpolatedPressure(_)
+            | EventData::InterpolatedModulation(_)
+            => panic!("interpolated event in pattern"),
         EventData::ToggleInterpolation(_) => return,
     };
     let color = match evt.data {

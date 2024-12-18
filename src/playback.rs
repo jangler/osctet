@@ -173,15 +173,22 @@ impl Player {
         // generate events from interpolation
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
+                let mut push_event = |data| events.push(LocatedEvent {
+                    track: track_i,
+                    channel: channel_i,
+                    event: Event {
+                        tick: self.tick,
+                        data,
+                    },
+                });
                 if let Some(pitch) = channel.interpolate_pitch(self.tick, &module.tuning) {
-                    events.push(LocatedEvent {
-                        track: track_i,
-                        channel: channel_i,
-                        event: Event {
-                            tick: self.tick,
-                            data: EventData::PitchBend(pitch),
-                        },
-                    });
+                    push_event(EventData::InterpolatedPitch(pitch));
+                }
+                if let Some(v) = channel.interpolate_pressure(self.tick) {
+                    push_event(EventData::InterpolatedPressure(v));
+                }
+                if let Some(v) = channel.interpolate_modulation(self.tick) {
+                    push_event(EventData::InterpolatedModulation(v));
                 }
             }
         }
@@ -237,7 +244,10 @@ impl Player {
                         EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
                         EventData::End | EventData::Loop
                             | EventData::ToggleInterpolation(_) => (),
-                        EventData::PitchBend(_) => panic!("pitch bend event in pattern"),
+                        EventData::InterpolatedPitch(_)
+                            | EventData::InterpolatedPressure(_)
+                            | EventData::InterpolatedModulation(_)
+                            => panic!("interpolated event in pattern"),
                     }
                 }
                 
@@ -295,13 +305,17 @@ impl Player {
                 self.stop();
             },
             EventData::Loop | EventData::ToggleInterpolation(_) => (),
-            EventData::PitchBend(pitch) => {
+            EventData::InterpolatedPitch(pitch) => {
                 if let TrackTarget::Patch(i) = module.tracks[track].target {
                     if let Some(patch) = module.patches.get(i) {
                         self.bend_to(track, key, pitch, patch);
                     }
                 }
             },
+            EventData::InterpolatedPressure(v) =>
+                self.channel_pressure(track, channel as u8, v),
+            EventData::InterpolatedModulation(v) =>
+                self.modulate(track, channel as u8, v),
         }
     }
 
