@@ -181,6 +181,9 @@ impl Player {
                         data,
                     },
                 });
+                if let Some(v) = channel.interpolate_tempo(self.tick) {
+                    push_event(EventData::Tempo(v));
+                }
                 if let Some(pitch) = channel.interpolate_pitch(self.tick, &module.tuning) {
                     push_event(EventData::InterpolatedPitch(pitch));
                 }

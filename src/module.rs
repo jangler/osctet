@@ -566,10 +566,10 @@ impl Channel {
         interp.iter().filter(|x| **x < tick).count() % 2 == 1
     }
 
-    /// Returns the start and end ticks of interpolation, and the previous
-    /// and next events matching `filter_fn`.
-    fn nearest_interp_by_col(&self, col: u8, tick: u32, filter_fn: impl Fn(&&Event) -> bool
-    ) -> Option<(u32, u32, &Event, &Event)> {
+    /// Returns an interpolated value from the given parameters.
+    fn interp_values(&self, col: u8, tick: u32, filter_fn: impl Fn(&&Event) -> bool,
+        extract_fn: impl Fn(&EventData) -> Option<f32>
+    ) -> Option<f32> {
         let interp = self.interp_by_col(col);
         if let Some(i) = interp.iter().position(|t| *t >= tick) {
             if i % 2 == 1 {
@@ -583,7 +583,12 @@ impl Channel {
                         let start = start.max(prev_event.tick);
                         if next_event.tick <= end {
                             let end = end.min(next_event.tick);
-                            return Some((start, end, prev_event, next_event))
+                            if let Some(prev) = extract_fn(&prev_event.data) {
+                                if let Some(next) = extract_fn(&next_event.data) {
+                                    let t = delerp(start as f32, end as f32, tick as f32);
+                                    return Some(lerp(prev, next, t))
+                                }
+                            }
                         }
                     }
                 }
@@ -594,59 +599,46 @@ impl Channel {
 
     /// Returns the interpolated MIDI pitch at a given tick.
     pub fn interpolate_pitch(&self, tick: u32, tuning: &Tuning) -> Option<f32> {
-        let interp = self.nearest_interp_by_col(NOTE_COLUMN, tick, |e| match e.data {
+        self.interp_values(NOTE_COLUMN, tick, |e| match e.data {
             EventData::Pitch(_) => true,
             _ => false,
-        });
-        if let Some((start, end, prev, next)) = interp {
-            if let EventData::Pitch(prev_note) = prev.data {
-                if let EventData::Pitch(next_note) = next.data {
-                    let prev_pitch = tuning.midi_pitch(&prev_note);
-                    let next_pitch = tuning.midi_pitch(&next_note);
-                    let t = delerp(start as f32, end as f32, tick as f32);
-                    return Some(lerp(prev_pitch, next_pitch, t))
-                }
-            }
-        }
-        None
+        }, |data| match data {
+            EventData::Pitch(note) => Some(tuning.midi_pitch(&note)),
+            _ => None,
+        })
     }
 
     /// Returns the interpolated pressure at a given tick.
     pub fn interpolate_pressure(&self, tick: u32) -> Option<f32> {
-        let interp = self.nearest_interp_by_col(VEL_COLUMN, tick, |e| match e.data {
+        self.interp_values(VEL_COLUMN, tick, |e| match e.data {
             EventData::Pressure(_) => true,
             _ => false,
-        });
-        if let Some((start, end, prev, next)) = interp {
-            if let EventData::Pressure(prev) = prev.data {
-                if let EventData::Pressure(next) = next.data {
-                    let prev = prev as f32 / EventData::DIGIT_MAX as f32;
-                    let next = next as f32 / EventData::DIGIT_MAX as f32;
-                    let t = delerp(start as f32, end as f32, tick as f32);
-                    return Some(lerp(prev, next, t))
-                }
-            }
-        }
-        None
+        }, |data| match data {
+            EventData::Pressure(v) => Some(*v as f32 / EventData::DIGIT_MAX as f32),
+            _ => None,
+        })
     }
 
     /// Returns the interpolated modulation at a given tick.
     pub fn interpolate_modulation(&self, tick: u32) -> Option<f32> {
-        let interp = self.nearest_interp_by_col(MOD_COLUMN, tick, |e| match e.data {
+        self.interp_values(MOD_COLUMN, tick, |e| match e.data {
             EventData::Modulation(_) => true,
             _ => false,
-        });
-        if let Some((start, end, prev, next)) = interp {
-            if let EventData::Modulation(prev) = prev.data {
-                if let EventData::Modulation(next) = next.data {
-                    let prev = prev as f32 / EventData::DIGIT_MAX as f32;
-                    let next = next as f32 / EventData::DIGIT_MAX as f32;
-                    let t = delerp(start as f32, end as f32, tick as f32);
-                    return Some(lerp(prev, next, t))
-                }
-            }
-        }
-        None
+        }, |data| match data {
+            EventData::Modulation(v) => Some(*v as f32 / EventData::DIGIT_MAX as f32),
+            _ => None,
+        })
+    }
+
+    /// Returns the interpolated tempo at a given tick.
+    pub fn interpolate_tempo(&self, tick: u32) -> Option<f32> {
+        self.interp_values(NOTE_COLUMN, tick, |e| match e.data {
+            EventData::Tempo(_) => true,
+            _ => false,
+        }, |data| match data {
+            EventData::Tempo(v) => Some(*v),
+            _ => None,
+        })
     }
 }
 
