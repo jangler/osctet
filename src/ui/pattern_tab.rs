@@ -94,7 +94,7 @@ impl PatternEditor {
     pub fn cursor_track(&self) -> usize {
         self.edit_start.track
     }
-    
+
     pub fn cursor_tick(&self) -> u32 {
         self.edit_start.tick
     }
@@ -188,7 +188,7 @@ impl PatternEditor {
         };
         (tl, br)
     }
-    
+
     fn draw_cursor(&self, ui: &mut UI, track_xs: &[f32]) {
         let params = &ui.style.text_params();
         let (tl, br) = self.selection_corners();
@@ -272,14 +272,29 @@ impl PatternEditor {
     }
 
     fn interpolate(&self, module: &mut Module) {
-        let (mut start, end) = self.selection_corners();
+        let (mut start, mut end) = self.selection_corners();
 
         if start.tick == end.tick {
-            // make sure start & end are differentiated
-            if start.tick > 0 {
-                start.tick -= 1;
+            if module.event_at(self.edit_start).is_some() {
+                // make sure start & end are differentiated
+                if start.tick > 0 {
+                    start.tick -= 1;
+                } else {
+                    return
+                }
             } else {
-                return
+                // interpolate to next event in column
+                let evt = module.tracks[self.edit_start.track]
+                    .channels[self.edit_start.channel]
+                    .events.iter()
+                    .find(|e| e.tick > self.edit_start.tick
+                        && e.data.logical_column() == self.edit_start.column);
+
+                if let Some(evt) = evt {
+                    end.tick = evt.tick;
+                } else {
+                    return
+                }
             }
         }
 
@@ -355,7 +370,7 @@ impl PatternEditor {
             .map(|e| e.tick)
             .filter(filter_fn)
             .min_by_key(|t| (*t as i32 - cursor.tick as i32).abs());
-        
+
         if let Some(tick) = tick {
             if !is_shift_down() {
                 self.edit_start.tick = tick;
@@ -423,7 +438,7 @@ impl PatternEditor {
             }).collect(),
         })
     }
-    
+
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
         if !is_ctrl_down() {
             match key {
@@ -515,7 +530,7 @@ impl PatternEditor {
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
                 self.edit_start.add_channels(x.channel_offset, &module.tracks)
                     .map(|pos| {
-                        if x.event.data.is_ctrl() == (pos.track == 0) 
+                        if x.event.data.is_ctrl() == (pos.track == 0)
                             && (!mix || !event_positions.contains(&Position {
                                 tick: (x.event.tick as i32 + tick_offset) as u32,
                                 ..pos
@@ -686,7 +701,7 @@ impl PatternEditor {
             data,
         });
     }
-    
+
     fn translate_cursor(&mut self, offset: i64) {
         if -offset > self.edit_end.tick as i64 {
             self.edit_end.tick = 0;
