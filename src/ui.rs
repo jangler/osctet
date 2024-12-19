@@ -173,7 +173,7 @@ impl UI {
         let atlas = font_path.map(|path| GlyphAtlas::from_file(path).ok())
             .flatten()
             .unwrap_or_else(|| GlyphAtlas::from_bdf_bytes(
-                include_bytes!("../font/ter-u12n.bdf"))
+                include_bytes!("../font/Dina_r400-8.bdf"))
                     .expect("included font should be loadable"));
 
         Self {
