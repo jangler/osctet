@@ -507,23 +507,12 @@ pub enum TrackTarget {
 #[derive(Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
-
-    // legacy, unused
-    pitch_interp: Vec<u32>,
-    vel_interp: Vec<u32>,
-    mod_interp: Vec<u32>,
-
-    pub links: Vec<Link>, // TODO
 }
 
 impl Channel {
     pub fn new() -> Self {
         Self {
             events: Vec::new(),
-            pitch_interp: Vec::new(),
-            vel_interp: Vec::new(),
-            mod_interp: Vec::new(),
-            links: Vec::new(),
         }
     }
 
