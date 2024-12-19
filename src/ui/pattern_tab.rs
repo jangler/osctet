@@ -583,7 +583,7 @@ impl PatternEditor {
         ];
 
         for col in 0..3 {
-            let interp = channel.interp_by_col(col);
+            let interp: Vec<_> = channel.interp_by_col(col).collect();
             let x = ui.cursor_x + MARGIN - 1.0 - LINE_THICKNESS * 0.5
                 + column_x(col, char_width);
 

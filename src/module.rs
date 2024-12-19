@@ -543,23 +543,23 @@ impl Channel {
         self.events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
     }
 
-    pub fn interp_by_col(&self, col: u8) -> Vec<u32> {
-        self.events.iter().filter_map(|e| match e.data {
+    pub fn interp_by_col(&self, col: u8) -> impl Iterator<Item = u32> + use<'_> {
+        self.events.iter().filter_map(move |e| match e.data {
             EventData::ToggleInterpolation(i) if i == col => Some(e.tick),
             _ => None,
-        }).collect()
+        })
     }
 
     pub fn is_interpolated(&self, col: u8, tick: u32) -> bool {
         let interp = self.interp_by_col(col);
-        interp.iter().filter(|x| **x < tick).count() % 2 == 1
+        interp.filter(|x| *x < tick).count() % 2 == 1
     }
 
     /// Returns an interpolated value from the given parameters.
     fn interp_values(&self, col: u8, tick: u32, filter_fn: impl Fn(&&Event) -> bool,
         extract_fn: impl Fn(&EventData) -> Option<f32>
     ) -> Option<f32> {
-        let interp = self.interp_by_col(col);
+        let interp: Vec<_> = self.interp_by_col(col).collect();
         if let Some(i) = interp.iter().position(|t| *t >= tick) {
             if i % 2 == 1 {
                 let start = interp[i - 1];
