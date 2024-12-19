@@ -129,7 +129,7 @@ impl App {
             player: Player::new(seq, module.tracks.len(), sample_rate),
             octave: 4,
             midi,
-            ui: ui::UI::new(config.theme.clone()),
+            ui: ui::UI::new(config.theme.clone(), config.font.as_ref()),
             config,
             module,
             fx: global_fx,

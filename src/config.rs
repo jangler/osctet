@@ -24,12 +24,14 @@ pub struct Config {
     pub render_folder: Option<String>,
     pub scale_folder: Option<String>,
     pub sample_folder: Option<String>,
+    pub font_folder: Option<String>,
     #[serde(default = "default_keys")]
     keys: Vec<(Hotkey, Action)>, // for serialization
     #[serde(skip)]
     key_map: HashMap<Hotkey, Action>, // for use
     #[serde(default = "input::default_note_keys")]
     pub note_keys: Vec<(Hotkey, Note)>,
+    pub font: Option<String>,
 }
 
 impl Config {
@@ -43,9 +45,11 @@ impl Config {
             render_folder: None,
             scale_folder: None,
             sample_folder: None,
+            font_folder: None,
             keys: default_keys(),
             key_map: HashMap::new(),
             note_keys: input::default_note_keys(),
+            font: None,
         }
     }
 

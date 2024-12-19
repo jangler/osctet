@@ -3,7 +3,7 @@
 //! Not polished for general reuse. Macroquad also has its own built-in UI
 //! library, but the demos don't give me much faith in it.
 
-use std::{collections::HashMap, fmt::Display, io::BufReader, ops::RangeInclusive};
+use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
@@ -11,7 +11,6 @@ use rfd::FileDialog;
 use text::GlyphAtlas;
 use textedit::TextEditState;
 use theme::Theme;
-use bdf_reader::Font;
 
 use crate::{input::{Hotkey, Modifiers}, module::EventData, pitch::Note, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
@@ -164,12 +163,16 @@ pub struct UI {
 }
 
 impl UI {
-    pub fn new(theme: Option<Theme>) -> Self {
-        let font = load_bdf_font_from_bytes(include_bytes!("../font/ter-u12n.bdf"))
-            .expect("included font should be loadable");
+    pub fn new(theme: Option<Theme>, font_path: Option<&String>) -> Self {
+        let atlas = font_path.map(|path| GlyphAtlas::from_file(path).ok())
+            .flatten()
+            .unwrap_or_else(|| GlyphAtlas::from_bdf_bytes(
+                include_bytes!("../font/ter-u12n.bdf"))
+                    .expect("included font should be loadable"));
+
         Self {
             style: Style {
-                atlas: GlyphAtlas::from_bdf(&font),
+                atlas,
                 theme: theme.unwrap_or(Theme::light()),
             },
             open_combo_box: None,
@@ -1321,9 +1324,4 @@ fn display_unit(unit: Option<&'static str>) -> Box<dyn FnOnce(f32) -> String> {
     } else {
         Box::new(|x| format!("{:.3}", x))
     }
-}
-
-fn load_bdf_font_from_bytes(bytes: &[u8]) -> Result<Font, bdf_reader::Error> {
-    let reader = BufReader::new(bytes);
-    Font::read(reader)
 }

@@ -1,8 +1,8 @@
 use palette::Lchuv;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 
-use super::{theme::Theme, Layout, MARGIN, UI};
+use super::{new_file_dialog, text::GlyphAtlas, theme::Theme, Layout, MARGIN, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.layout = Layout::Horizontal;
@@ -20,7 +20,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     }
 
     ui.space(2.0);
-    ui.header("COLOR THEME");
+    ui.header("APPEARANCE");
 
     // TODO: currently accent 2 isn't used on this page, so there's no way to
     //       see the effects of adjusting it
@@ -37,6 +37,18 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     }
     if ui.button("Reset (dark)", true) {
         ui.style.theme = Theme::dark();
+    }
+    ui.end_group();
+
+    ui.start_group();
+    if ui.button("Browse font", true) {
+        browse_font(cfg, ui);
+    }
+    if let Some(font) = &cfg.font {
+        ui.offset_label(&format!("Current: {}",
+            font.split(&['/', '\\']).last().unwrap_or_default()));
+    } else {
+        ui.offset_label("Current: (default)");
     }
     ui.end_group();
 
@@ -150,4 +162,22 @@ fn entries_per_col(ui: &UI, max_chars: usize, len: usize) -> usize {
     let char_width = ui.style.atlas.char_width();
     let cols = (ui.bounds.w / (max_chars as f32 * char_width)) as usize;
     (len as f32 / cols as f32).ceil() as usize
+}
+
+fn browse_font(cfg: &mut Config, ui: &mut UI) {
+    if let Some(path) = new_file_dialog()
+        .add_filter("BDF font", &["bdf"])
+        .set_directory(cfg.font_folder.clone()
+            .unwrap_or(String::from(".")))
+        .pick_file() {
+        cfg.font_folder = config::dir_as_string(&path);
+        let _ = cfg.save();
+        match GlyphAtlas::from_file(&path) {
+            Ok(atlas) => {
+                ui.style.atlas = atlas;
+                cfg.font = path.to_str().map(|s| s.to_owned());
+            }
+            Err(e) => ui.report(e),
+        }
+    }
 }

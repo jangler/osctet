@@ -1,6 +1,6 @@
 //! Code for drawing text using bitmap fonts.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error, fs::File, io::BufReader, path::Path};
 
 use bdf_reader::{Bitmap, Font};
 use macroquad::{color::Color, math::Rect, texture::{draw_texture, Texture2D}};
@@ -13,8 +13,23 @@ pub struct GlyphAtlas {
 }
 
 impl GlyphAtlas {
+    /// Creates a new atlas from the bytes of a BDF font.
+    pub fn from_bdf_bytes(bytes: &[u8]) -> Result<Self, bdf_reader::Error> {
+        let reader = BufReader::new(bytes);
+        let font = Font::read(reader)?;
+        Ok(Self::from_bdf(font))
+    }
+
+    /// Creates a new atlas from a BDF font file.
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let font = Font::read(reader)?;
+        Ok(Self::from_bdf(font))
+    }
+
     /// Creates a new atlas from a BDF font.
-    pub fn from_bdf(font: &Font) -> Self {
+    fn from_bdf(font: Font) -> Self {
         let mut map = HashMap::new();
         let mut width = 0.0_f32;
         let mut height = 0.0_f32;
