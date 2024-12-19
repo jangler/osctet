@@ -42,7 +42,7 @@ impl Nominal {
         }
     }
 
-    fn char(&self) -> char {
+    pub fn char(&self) -> char {
         match self {
             Nominal::A => 'A',
             Nominal::B => 'B',

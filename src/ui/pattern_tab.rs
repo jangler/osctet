@@ -896,14 +896,15 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
         // column labels
         ui.start_group();
         for _ in 0..track.channels.len() {
+            let color = ui.style.theme.border_unfocused();
             if i == 0 {
-                ui.label("XXX")
+                ui.colored_label("Ctrl", color)
             } else {
-                ui.label("NNN");
+                ui.colored_label("Note", color);
                 ui.cursor_x -= ui.style.margin;
-                ui.label("V");
+                ui.colored_label("P", color);
                 ui.cursor_x -= ui.style.margin;
-                ui.label("M");
+                ui.colored_label("M", color);
             }
         }
         ui.end_group();
@@ -1017,21 +1018,7 @@ fn draw_event(ui: &mut UI, evt: &Event, beat_height: f32, division: u8) {
     if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
         return
     }
-    let text = match evt.data {
-        EventData::Pitch(note) => note.to_string(),
-        EventData::NoteOff => String::from("---"),
-        EventData::Pressure(v) => format!("{:X}", v),
-        EventData::Modulation(v) => format!("{:X}", v),
-        EventData::End => String::from("END"),
-        EventData::Loop => String::from("LP"),
-        EventData::Tempo(t) => t.round().to_string(),
-        EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
-        EventData::InterpolatedPitch(_)
-            | EventData::InterpolatedPressure(_)
-            | EventData::InterpolatedModulation(_)
-            => panic!("interpolated event in pattern"),
-        EventData::ToggleInterpolation(_) => return,
-    };
+
     let mut color = match evt.data {
         EventData::Pressure(x) => Color {
             a: 0.5 + x as f32 / 18.0,
@@ -1046,7 +1033,27 @@ fn draw_event(ui: &mut UI, evt: &Event, beat_height: f32, division: u8) {
     if off_division(evt.tick, division) {
         color = with_alpha(0.25, color);
     }
-    ui.push_text(x, y - ui.style.margin + PATTERN_MARGIN, text, color);
+
+    let y = y - ui.style.margin + PATTERN_MARGIN;
+    let text = match evt.data {
+        EventData::Pitch(note) => {
+            ui.push_note_text(x, y, &note, color);
+            return
+        },
+        EventData::NoteOff => String::from(" ---"),
+        EventData::Pressure(v) => format!("{:X}", v),
+        EventData::Modulation(v) => format!("{:X}", v),
+        EventData::End => String::from("End"),
+        EventData::Loop => String::from("Loop"),
+        EventData::Tempo(t) => t.round().to_string(),
+        EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
+        EventData::InterpolatedPitch(_)
+            | EventData::InterpolatedPressure(_)
+            | EventData::InterpolatedModulation(_)
+            => panic!("interpolated event in pattern"),
+        EventData::ToggleInterpolation(_) => return,
+    };
+    ui.push_text(x, y, text, color);
 }
 
 fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
@@ -1158,9 +1165,9 @@ fn position_coords(pos: Position, style: &Style, track_xs: &[f32],
 
 fn channel_width(track_index: usize, style: &Style) -> f32 {
     if track_index == 0 {
-        style.atlas.char_width() * 3.0 + style.margin * 2.0
+        column_x(1, style) + style.margin
     } else {
-        style.atlas.char_width() * 5.0 + style.margin * 4.0
+        column_x(3, style) + style.margin
     }
 }
 
@@ -1170,10 +1177,10 @@ fn column_x(column: u8, style: &Style) -> f32 {
 
     match column {
         NOTE_COLUMN => 0.0,
-        VEL_COLUMN => char_width * 3.0 + margin,
-        MOD_COLUMN => char_width * 4.0 + margin * 2.0,
+        VEL_COLUMN => char_width * 4.0 + margin,
+        MOD_COLUMN => char_width * 5.0 + margin * 2.0,
         // allow this to make some calculations easier
-        3 => char_width * 5.0 + margin * 3.0,
+        3 => char_width * 6.0 + margin * 3.0,
         _ => panic!("invalid cursor column"),
     }
 }

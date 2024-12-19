@@ -505,9 +505,12 @@ impl UI {
 
     /// A label is non-interactive text.
     pub fn label(&mut self, label: &str) {
+        self.colored_label(label, self.style.theme.fg());
+    }
+
+    pub fn colored_label(&mut self, label: &str, color: Color) {
         self.start_widget();
-        self.push_text(self.cursor_x, self.cursor_y,
-            label.to_owned(), self.style.theme.fg());
+        self.push_text(self.cursor_x, self.cursor_y, label.to_owned(), color);
         self.end_widget();
     }
 
@@ -1260,6 +1263,40 @@ impl UI {
                 self.mouse_consumed = true;
             }
         }
+    }
+
+    /// Pushes a note to the draw list. The notation is drawn centered in the
+    /// space of 4 characters.
+    pub fn push_note_text(&mut self, x: f32, y: f32, note: &Note, color: Color) {
+        let accidental = match note.demisharps {
+            -2 => "b",
+            -1 => "d",
+            0 => "-",
+            1 => "t",
+            2 => "#",
+            4 => "x",
+            _ => "?",
+        };
+        let base = format!("{}{}{}", note.nominal.char(), accidental, note.equave);
+        let max_arrows = 3;
+
+        if note.arrows < 0 {
+            let n = (-note.arrows).min(max_arrows);
+            let y = y + (n - 1) as f32 * (self.style.margin * 0.5).floor();
+            for i in 0..n {
+                self.push_text(x, y - self.style.margin * i as f32,
+                    String::from("v"), color);
+            }
+        } else if note.arrows > 0 {
+            let n = note.arrows.min(max_arrows);
+            let y = y - (n - 1) as f32 * (self.style.margin * 0.5).floor();
+            for i in 0..n {
+                self.push_text(x, y + self.style.margin * i as f32,
+                    String::from("^"), color);
+            }
+        }
+
+        self.push_text(x + self.style.atlas.char_width(), y, base, color);
     }
 }
 
