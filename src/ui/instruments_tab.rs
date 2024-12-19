@@ -2,7 +2,7 @@ use fundsp::math::midi_hz;
 
 use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
 
-use super::{Layout, MARGIN, UI};
+use super::{Layout, UI};
 
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
@@ -30,7 +30,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     }
     ui.cursor_z += 1;
     ui.cursor_y += *scroll;
-    let scroll_h = ui.end_group().unwrap().h + MARGIN;
+    let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_y = old_y;
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }

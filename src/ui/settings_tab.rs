@@ -2,7 +2,7 @@ use palette::Lchuv;
 
 use crate::config::{self, Config};
 
-use super::{new_file_dialog, text::GlyphAtlas, theme::Theme, Layout, MARGIN, UI};
+use super::{new_file_dialog, text::GlyphAtlas, theme::Theme, Layout, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.layout = Layout::Horizontal;
@@ -59,7 +59,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     note_key_controls(ui, cfg, id);
 
     // TODO: duplication with instruments tab scroll code
-    let scroll_h = ui.end_group().unwrap().h + MARGIN;
+    let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_z += 1;
     ui.cursor_y = old_y;
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
@@ -174,6 +174,7 @@ fn browse_font(cfg: &mut Config, ui: &mut UI) {
         let _ = cfg.save();
         match GlyphAtlas::from_file(&path) {
             Ok(atlas) => {
+                ui.style.margin = atlas.max_height() - atlas.cap_height();
                 ui.style.atlas = atlas;
                 cfg.font = path.to_str().map(|s| s.to_owned());
             }

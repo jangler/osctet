@@ -22,7 +22,6 @@ pub mod theme;
 mod text;
 mod textedit;
 
-const MARGIN: f32 = 5.0;
 const LINE_THICKNESS: f32 = 1.0;
 const SLIDER_WIDTH: f32 = 100.0;
 const MOUSE_WHEEL_INCREMENT: f32 = 120.0;
@@ -49,9 +48,9 @@ enum Dialog {
 
 /// Draws text with the top-left corner at (x, y), plus margins.
 /// Returns the bounds of the text, plus margins.
-fn draw_text_topleft(glyphs: &GlyphAtlas, color: Color, label: &str, x: f32, y: f32
+fn draw_text_topleft(style: &Style, color: Color, label: &str, x: f32, y: f32
 ) -> Rect {
-    glyphs.draw_text(x + MARGIN, y + MARGIN, label, color)
+    style.atlas.draw_text(x + style.margin, y + style.margin, label, color)
 }
 
 /// Returns mouse position as a `Vec2`.
@@ -70,6 +69,13 @@ fn draw_filled_rect(r: Rect, fill: Color, stroke: Color) {
 pub struct Style {
     pub atlas: GlyphAtlas,
     pub theme: Theme,
+    pub margin: f32,
+}
+
+impl Style {
+    pub fn line_height(&self) -> f32 {
+        self.atlas.cap_height() + self.margin * 2.0
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -99,7 +105,7 @@ enum Graphic {
 }
 
 impl Graphic {
-    fn draw(&self, atlas: &GlyphAtlas) {
+    fn draw(&self, style: &Style) {
         match self {
             Self::Rect(rect, fill, stroke) => {
                 if let Some(stroke) = stroke {
@@ -112,7 +118,7 @@ impl Graphic {
                 draw_line(*x1, *y1, *x2, *y2, LINE_THICKNESS, *color);
             },
             Self::Text(x, y, text, color) => {
-                draw_text_topleft(atlas, *color, text, *x, *y);
+                draw_text_topleft(style, *color, text, *x, *y);
             }
         }
     }
@@ -172,6 +178,7 @@ impl UI {
 
         Self {
             style: Style {
+                margin: atlas.max_height() - atlas.cap_height(),
                 atlas,
                 theme: theme.unwrap_or(Theme::light()),
             },
@@ -205,7 +212,7 @@ impl UI {
     pub fn align_right(&mut self, n: usize) {
         let start = self.draw_queue.len() - n;
         let rect = self.group_rects.last().unwrap();
-        let edge = rect.x + rect.w - MARGIN;
+        let edge = rect.x + rect.w - self.style.margin;
 
         for op in self.draw_queue[start..].iter_mut() {
             op.graphic.align_right(edge, self.style.atlas.char_width());
@@ -228,8 +235,8 @@ impl UI {
             h: screen_height(),
         };
 
-        self.cursor_x = MARGIN;
-        self.cursor_y = MARGIN;
+        self.cursor_x = self.style.margin;
+        self.cursor_y = self.style.margin;
         self.cursor_z = 0;
 
         if !is_mouse_button_down(MouseButton::Left)
@@ -302,7 +309,7 @@ impl UI {
     pub fn end_frame(&mut self) {
         self.draw_queue.sort_by_key(|x| x.z);
         for op in &self.draw_queue {
-            op.graphic.draw(&self.style.atlas);
+            op.graphic.draw(&self.style);
         }
         self.draw_queue.clear();
 
@@ -326,8 +333,8 @@ impl UI {
 
     pub fn space(&mut self, scale: f32) {
         match self.layout {
-            Layout::Horizontal => self.cursor_x += MARGIN * scale,
-            Layout::Vertical => self.cursor_y += MARGIN * scale,
+            Layout::Horizontal => self.cursor_x += self.style.margin * scale,
+            Layout::Vertical => self.cursor_y += self.style.margin * scale,
         }
     }
 
@@ -336,8 +343,8 @@ impl UI {
             Graphic::Line(x1, y1, x2, y2, _) => (x1.max(*x2), y1.max(*y2)),
             Graphic::Rect(rect, _, _) => (rect.x + rect.w, rect.y + rect.h),
             Graphic::Text(x, y, text, _) => {
-                (x + self.style.atlas.text_width(text) + MARGIN * 2.0,
-                    y + self.style.atlas.char_height() + MARGIN * 2.0)
+                (x + self.style.atlas.text_width(text) + self.style.margin * 2.0,
+                    y + self.style.line_height())
             }
         };
         self.expand_groups(x, y);
@@ -377,15 +384,15 @@ impl UI {
         let rect = Rect {
             x,
             y,
-            w: self.style.atlas.text_width(&text) + MARGIN * 2.0,
-            h: self.style.atlas.char_height() + MARGIN * 2.0,
+            w: self.style.atlas.text_width(&text) + self.style.margin * 2.0,
+            h: self.style.line_height(),
         };
         self.push_graphic(Graphic::Text(x, y, text, color));
         rect
     }
 
     fn bottom_panel_height(&self) -> f32 {
-        self.style.atlas.char_height() + MARGIN * 4.0
+        self.style.line_height() + self.style.margin * 2.0
     }
 
     pub fn start_bottom_panel(&mut self) {
@@ -416,7 +423,8 @@ impl UI {
         current_y: &mut f32, max_y: f32, viewport_h: f32, keys: bool
     ) {
         let (_, y_scroll) = mouse_wheel();
-        let actual_increment = MARGIN * 6.0 + self.style.atlas.char_height() * 3.0;
+        let actual_increment = self.style.margin * 6.0
+            + self.style.atlas.cap_height() * 3.0;
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
         *current_y += dy;
 
@@ -438,7 +446,7 @@ impl UI {
             return // no need to draw scrollbar
         }
 
-        let w = MARGIN * 2.0;
+        let w = self.style.margin * 2.0;
         let trough = Rect {
             x: self.bounds.x + self.bounds.w - w,
             y: self.cursor_y,
@@ -507,7 +515,7 @@ impl UI {
     /// control labels.
     pub fn offset_label(&mut self, label: &str) {
         self.start_widget();
-        self.push_text(self.cursor_x, self.cursor_y + MARGIN,
+        self.push_text(self.cursor_x, self.cursor_y + self.style.margin,
             label.to_owned(), self.style.theme.fg());
         self.end_widget();
     }
@@ -517,7 +525,7 @@ impl UI {
             x: self.cursor_x,
             y: self.cursor_y,
             w: self.bounds.w + self.bounds.x - self.cursor_x,
-            h: self.style.atlas.char_height() + MARGIN * 2.0,
+            h: self.style.line_height(),
         };
         self.start_widget();
         self.push_rect(rect, self.style.theme.accent1_bg(), None);
@@ -532,8 +540,8 @@ impl UI {
         let rect = Rect {
             x,
             y,
-            w: self.style.atlas.text_width(label) + MARGIN * 2.0,
-            h: self.style.atlas.char_height() + MARGIN * 2.0,
+            w: self.style.atlas.text_width(label) + self.style.margin * 2.0,
+            h: self.style.line_height(),
         };
         let mouse_hit = self.mouse_hits(rect) && enabled;
 
@@ -570,7 +578,7 @@ impl UI {
     pub fn button(&mut self, label: &str, enabled: bool) -> bool {
         self.start_widget();
         let (_, event) = self.text_rect(label, enabled,
-            self.cursor_x + MARGIN, self.cursor_y + MARGIN,
+            self.cursor_x + self.style.margin, self.cursor_y + self.style.margin,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
@@ -583,12 +591,13 @@ impl UI {
         let button_text = if *value { "X" } else { " " };
         self.start_widget();
         let (rect, event) = self.text_rect(button_text, enabled,
-            self.cursor_x + MARGIN, self.cursor_y + MARGIN,
+            self.cursor_x + self.style.margin, self.cursor_y + self.style.margin,
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg());
         let clicked = event == MouseEvent::Released;
-        self.push_text(self.cursor_x + rect.w + MARGIN, self.cursor_y + MARGIN,
+        self.push_text(self.cursor_x + rect.w + self.style.margin,
+            self.cursor_y + self.style.margin,
             label.to_owned(), if enabled {
                 self.style.theme.fg()
             } else {
@@ -606,23 +615,24 @@ impl UI {
         get_options: impl Fn() -> Vec<String>
     ) -> Option<usize> {
         self.start_widget();
+        let margin = self.style.margin;
 
         // draw button and label
         let (button_rect, event) = self.text_rect(&button_text, true,
-            self.cursor_x + MARGIN, self.cursor_y + MARGIN,
+            self.cursor_x + margin, self.cursor_y + margin,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
         if !label.is_empty() {
-            self.push_text(self.cursor_x + button_rect.w + MARGIN,
-                self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
+            self.push_text(self.cursor_x + button_rect.w + margin,
+                self.cursor_y + margin, label.to_owned(), self.style.theme.fg());
         }
 
         // check to open list
         let open = self.open_combo_box.as_ref().is_some_and(|x| x.id == id);
         if event == MouseEvent::Pressed && !open {
             let options = get_options();
-            let list_rect = combo_box_list_rect(&self.style.atlas, button_rect, &options);
+            let list_rect = combo_box_list_rect(&self.style, button_rect, &options);
             self.open_combo_box = Some(ComboBoxState {
                 id: id.to_owned(),
                 options,
@@ -635,7 +645,7 @@ impl UI {
             if let Some(state) = &mut self.open_combo_box {
                 state.button_rect = button_rect;
                 state.list_rect =
-                    combo_box_list_rect(&self.style.atlas, button_rect, &state.options);
+                    combo_box_list_rect(&self.style, button_rect, &state.options);
             }
             self.combo_box_list(open)
         } else {
@@ -707,7 +717,7 @@ impl UI {
 
         let mut selected_index = self.tabs.get(id).cloned().unwrap_or_default();
         let mut x = self.cursor_x;
-        let h = self.style.atlas.char_height() + MARGIN * 2.0;
+        let h = self.style.line_height();
         let mut gfx = vec![
             Graphic::Rect(Rect {
                 x: self.bounds.x,
@@ -723,7 +733,7 @@ impl UI {
             let r = Rect {
                 x,
                 y: self.cursor_y,
-                w: self.style.atlas.text_width(label) + MARGIN * 2.0,
+                w: self.style.atlas.text_width(label) + self.style.margin * 2.0,
                 h,
             };
             // fill background
@@ -755,7 +765,7 @@ impl UI {
                     self.style.theme.panel_bg()));
             }
         }
-        let h = self.style.atlas.char_height() + MARGIN * 2.0 + LINE_THICKNESS;
+        let h = self.style.line_height() + LINE_THICKNESS;
         self.cursor_y += h;
         self.bounds.y += h;
         self.bounds.h -= h;
@@ -796,19 +806,19 @@ impl UI {
         }
 
         self.start_widget();
-        let h = self.style.atlas.char_height();
+        let h = self.style.atlas.cap_height();
 
         // draw groove
         let groove_w = SLIDER_WIDTH;
-        let groove_x = self.cursor_x + MARGIN * 2.0;
-        let groove_y = (self.cursor_y + MARGIN * 2.0 + h * 0.5).round() + 0.5;
+        let groove_x = self.cursor_x + self.style.margin * 2.0;
+        let groove_y = (self.cursor_y + self.style.margin * 2.0 + h * 0.5).round() + 0.5;
 
         // get/set grabbed state
         let hit_rect = Rect {
-            x: self.cursor_x + MARGIN,
-            w: groove_w + MARGIN * 2.0,
-            y: self.cursor_y + MARGIN,
-            h: h + MARGIN * 2.0,
+            x: self.cursor_x + self.style.margin,
+            w: groove_w + self.style.margin * 2.0,
+            y: self.cursor_y + self.style.margin,
+            h: h + self.style.margin * 2.0,
         };
         let mouse_pos = mouse_position_vec2();
         let hit = enabled && self.mouse_hits(hit_rect);
@@ -850,15 +860,15 @@ impl UI {
         self.push_line(groove_x, groove_y, groove_x + groove_w, groove_y, stroke);
         let f = deinterpolate(*val, &range).powf(1.0/power as f32);
         let handle_rect = Rect {
-            x: self.cursor_x + MARGIN + (f * groove_w).round(),
-            w: MARGIN * 2.0,
+            x: self.cursor_x + self.style.margin + (f * groove_w).round(),
+            w: self.style.margin * 2.0,
             ..hit_rect
         };
         self.push_rect(handle_rect, fill, Some(stroke));
 
         // draw label
-        let x = self.cursor_x + MARGIN * 3.0 + groove_w;
-        let y = self.cursor_y + MARGIN;
+        let x = self.cursor_x + self.style.margin * 3.0 + groove_w;
+        let y = self.cursor_y + self.style.margin;
         if !label.is_empty() {
             self.push_text(x, y, label.to_owned(), self.style.theme.fg());
         } else {
@@ -869,7 +879,8 @@ impl UI {
 
         if grabbed {
             let text = display(*val);
-            self.tooltip(&text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
+            self.tooltip(&text, handle_rect.x,
+                self.cursor_y - (h + self.style.margin * 2.0));
         }
 
         self.end_widget();
@@ -882,7 +893,7 @@ impl UI {
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
-        if self.text_box(id, label, SLIDER_WIDTH + MARGIN * 2.0, &mut text) {
+        if self.text_box(id, label, SLIDER_WIDTH + self.style.margin * 2.0, &mut text) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = f.max(*range.start()).min(*range.end());
@@ -899,7 +910,8 @@ impl UI {
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
         text: String
     ) -> Option<String> {
-        let w = chars_wide as f32 * self.style.atlas.char_width() + MARGIN * 2.0;
+        let w = chars_wide as f32 * self.style.atlas.char_width()
+            + self.style.margin * 2.0;
 
         if self.text_box(label, label, w, &text) {
             let s = self.focused_text.as_ref().map(|x| x.text.clone());
@@ -913,10 +925,10 @@ impl UI {
     /// Returns true if the text was submitted (i.e. Enter was pressed).
     fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str) -> bool {
         let box_rect = Rect {
-            x: self.cursor_x + MARGIN,
-            y: self.cursor_y + MARGIN,
+            x: self.cursor_x + self.style.margin,
+            y: self.cursor_y + self.style.margin,
             w: width,
-            h: self.style.atlas.char_height() + MARGIN * 2.0,
+            h: self.style.line_height(),
         };
 
         let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
@@ -950,7 +962,7 @@ impl UI {
 
         // draw label
         if !label.is_empty() {
-            self.push_text(box_rect.x + box_rect.w, self.cursor_y + MARGIN,
+            self.push_text(box_rect.x + box_rect.w, self.cursor_y + self.style.margin,
                 label.to_owned(), self.style.theme.fg());
         }
 
@@ -962,14 +974,15 @@ impl UI {
     pub fn instrument_list(&mut self, options: &[String], index: &mut usize,
         min_chars: usize,
     ) -> Option<String> {
+        let margin = self.style.margin;
         let atlas = &self.style.atlas;
-        let line_height = atlas.char_height() + MARGIN * 2.0;
+        let line_height = self.style.line_height();
         let list_rect = Rect {
-            x: self.cursor_x + MARGIN,
-            y: self.cursor_y + MARGIN,
+            x: self.cursor_x + margin,
+            y: self.cursor_y + margin,
             w: options.iter().fold(0.0_f32, |w, s| w.max(atlas.text_width(s)))
                 .max(atlas.char_width() * min_chars as f32)
-                + MARGIN * 2.0,
+                + margin * 2.0,
             h: line_height * options.len() as f32 + 2.0,
         };
 
@@ -1030,22 +1043,23 @@ impl UI {
     /// Primitive that draws the currently focused text and handles edit input.
     fn editable_text(&mut self, rect: Rect) -> bool {
         let hit = self.mouse_hits(rect);
+        let margin = self.style.margin;
 
         if let Some(state) = self.focused_text.as_mut() {
             let char_w = self.style.atlas.char_width();
             let mouse_i = if hit {
-                Some(((mouse_position_vec2().x - rect.x - MARGIN) / char_w)
+                Some(((mouse_position_vec2().x - rect.x - margin) / char_w)
                     .max(0.0).round() as usize)
             } else {
                 None
             };
             state.handle_input(mouse_i, &mut self.text_clipboard);
 
-            let text_h = self.style.atlas.char_height();
-            let f = |i| rect.x + char_w * i as f32 + MARGIN + LINE_THICKNESS * 0.5;
+            let text_h = self.style.atlas.cap_height();
+            let f = |i| rect.x + char_w * i as f32 + margin + LINE_THICKNESS * 0.5;
             let cursor_x = f(state.cursor);
-            let y1 = rect.y + MARGIN - 1.0;
-            let y2 = rect.y + MARGIN + text_h + 1.0;
+            let y1 = rect.y + margin - 1.0;
+            let y2 = rect.y + margin + text_h + 1.0;
             let text = state.text.clone();
 
             if state.cursor != state.anchor {
@@ -1127,12 +1141,13 @@ impl UI {
     /// Returns the key that set the new note value.
     pub fn note_input(&mut self, id: &str, note: &mut Note) -> Option<Key> {
         let label = note.to_string();
+        let margin = self.style.margin;
 
         let rect = Rect {
-            x: self.cursor_x + MARGIN,
-            y: self.cursor_y + MARGIN,
-            w: self.style.atlas.text_width(&label) + MARGIN * 2.0,
-            h: self.style.atlas.char_height() + MARGIN * 2.0,
+            x: self.cursor_x + margin,
+            y: self.cursor_y + margin,
+            w: self.style.atlas.text_width(&label) + margin * 2.0,
+            h: self.style.line_height(),
         };
         let mouse_hit = self.mouse_hits(rect);
 
@@ -1172,12 +1187,13 @@ impl UI {
     // TODO: code duplication with note_input
     pub fn hotkey_input(&mut self, id: usize, hotkey: &mut Hotkey) -> bool {
         let label = hotkey.to_string();
+        let margin = self.style.margin;
 
         let rect = Rect {
-            x: self.cursor_x + MARGIN,
-            y: self.cursor_y + MARGIN,
-            w: self.style.atlas.text_width(&label) + MARGIN * 2.0,
-            h: self.style.atlas.char_height() + MARGIN * 2.0,
+            x: self.cursor_x + margin,
+            y: self.cursor_y + margin,
+            w: self.style.atlas.text_width(&label) + margin * 2.0,
+            h: self.style.line_height(),
         };
         let mouse_hit = self.mouse_hits(rect);
 
@@ -1229,11 +1245,11 @@ impl UI {
 
         if let Some(text) = text {
             let w = self.style.atlas.text_width(&text);
-            let h = self.style.atlas.char_height();
+            let h = self.style.atlas.cap_height();
             self.cursor_z += TOOLTIP_Z_OFFSET;
             let (_, evt) = self.text_rect(&text, true,
-                self.bounds.x + self.bounds.w - w - MARGIN * 3.0,
-                self.bounds.y + self.bounds.h - h - MARGIN * 3.0,
+                self.bounds.x + self.bounds.w - w - self.style.margin * 3.0,
+                self.bounds.y + self.bounds.h - h - self.style.margin * 3.0,
                 &self.style.theme.panel_bg(),
                 &self.style.theme.panel_bg(),
                 &self.style.theme.panel_bg());
@@ -1258,17 +1274,17 @@ fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
 // TODO: characters with descenders give this too large a bottom margin. make
 //       the rect size independent of the particular characters
 fn alert_dialog(style: &Style, message: &str) {
-    let mut r = center(fit_strings(&style.atlas, &[message.to_owned()]));
-    r.h += MARGIN;
+    let mut r = center(fit_strings(style, &[message.to_owned()]));
+    r.h += style.margin;
     draw_filled_rect(r, style.theme.panel_bg(), style.theme.border_unfocused());
-    draw_text_topleft(&style.atlas, style.theme.fg(), message, r.x, r.y);
+    draw_text_topleft(style, style.theme.fg(), message, r.x, r.y);
 }
 
-fn fit_strings(atlas: &GlyphAtlas, v: &[String]) -> Rect {
+fn fit_strings(style: &Style, v: &[String]) -> Rect {
     let mut rect: Rect = Default::default();
     for s in v {
-        rect.w = rect.w.max(atlas.text_width(s) + MARGIN * 2.0);
-        rect.h += atlas.char_height() + MARGIN;
+        rect.w = rect.w.max(style.atlas.text_width(s) + style.margin * 2.0);
+        rect.h += style.atlas.cap_height() + style.margin;
     }
     rect
 }
@@ -1281,7 +1297,7 @@ fn center(r: Rect) -> Rect {
     }
 }
 
-fn combo_box_list_rect(atlas: &GlyphAtlas, button_rect: Rect, options: &[String]) -> Rect {
+fn combo_box_list_rect(style: &Style, button_rect: Rect, options: &[String]) -> Rect {
     // should options be drawn above or below the button?
     let y_direction = if button_rect.y > screen_height() / 2.0 {
         -1.0
@@ -1297,7 +1313,8 @@ fn combo_box_list_rect(atlas: &GlyphAtlas, button_rect: Rect, options: &[String]
         } else {
             button_rect.y + button_rect.h - 1.0
         },
-        w: options.iter().fold(0.0_f32, |w, s| w.max(atlas.text_width(s))) + MARGIN * 2.0,
+        w: options.iter().fold(0.0_f32,
+            |w, s| w.max(style.atlas.text_width(s))) + style.margin * 2.0,
         h,
     }
 }

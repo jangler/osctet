@@ -10,6 +10,8 @@ pub struct GlyphAtlas {
     map: HashMap<char, Texture2D>,
     width: f32,
     height: f32,
+    cap_height: f32,
+    offset_y: f32,
 }
 
 impl GlyphAtlas {
@@ -44,13 +46,20 @@ impl GlyphAtlas {
             }
         }
 
-        Self { map, width, height }
+        let (cap_height, offset_y) = if let Some(glyph) = font.glyph('X') {
+            (count_bitmap_rows(glyph.bitmap()) as f32,
+                -(first_bitmap_row(glyph.bitmap()) as f32))
+        } else {
+            (height, 0.0)
+        };
+
+        Self { map, width, height, cap_height, offset_y }
     }
 
     /// Draws `text` horizontally without wrapping. Returns the drawn area.
     pub fn draw_text(&self, x: f32, y: f32, text: &str, color: Color) -> Rect {
         let initial_x = x.round();
-        let y = y.round();
+        let y = y.round() + self.offset_y;
         let mut x = initial_x;
 
         for char in text.chars() {
@@ -68,14 +77,22 @@ impl GlyphAtlas {
         }
     }
 
+    /// Returns the width of a single character.
     pub fn char_width(&self) -> f32 {
         self.width
     }
 
-    pub fn char_height(&self) -> f32 {
+    /// Return the maximum height of a character.
+    pub fn max_height(&self) -> f32 {
         self.height
     }
 
+    /// Return the visual height of a capital Latin letter.
+    pub fn cap_height(&self) -> f32 {
+        self.cap_height
+    }
+
+    /// Returns the width of a string.
     pub fn text_width(&self, text: &str) -> f32 {
         self.width * text.chars().count() as f32
     }
@@ -97,4 +114,17 @@ fn texture_from_bitmap(bitmap: Bitmap) -> Texture2D {
     }
 
     Texture2D::from_rgba8(bitmap.width() as u16, bitmap.height() as u16, &rgba)
+}
+
+/// Returns the number of non-blank rows in a bitmap.
+fn count_bitmap_rows(bitmap: Bitmap) -> usize {
+    (0..bitmap.height())
+        .filter(|y| (0..bitmap.width()).any(|x| bitmap.get(x, *y).is_ok_and(|v| v)))
+        .count()
+}
+
+fn first_bitmap_row(bitmap: Bitmap) -> usize {
+    (0..bitmap.height())
+        .position(|y| (0..bitmap.width()).any(|x| bitmap.get(x, y).is_ok_and(|v| v)))
+        .unwrap_or_default()
 }

@@ -116,7 +116,6 @@ impl PatternEditor {
     /// Convert mouse coordinates to a Position.
     fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();
-        let char_width = ui.style.atlas.char_width();
         let tpr = self.ticks_per_row();
         let mut pos = Position {
             tick: (self.y_tick(y, ui) as f32 / tpr as f32).round() as u32 * tpr,
@@ -127,7 +126,7 @@ impl PatternEditor {
 
         for (i, tx) in track_xs.split_last().unwrap().1.iter().enumerate() {
             if x >= *tx {
-                let chan_width = channel_width(i, char_width);
+                let chan_width = channel_width(i, &ui.style);
                 pos.track = i;
                 pos.channel = (tracks[i].channels.len() - 1)
                     .min(((x - tx) / chan_width) as usize);
@@ -135,9 +134,9 @@ impl PatternEditor {
                     0
                 } else {
                     let x = x - tx - pos.channel as f32 * chan_width;
-                    if column_x(2, char_width) < x {
+                    if column_x(2, &ui.style) < x {
                         2
-                    } else if column_x(1, char_width) < x {
+                    } else if column_x(1, &ui.style) < x {
                         1
                     } else {
                         0
@@ -189,14 +188,13 @@ impl PatternEditor {
     }
 
     fn draw_cursor(&self, ui: &mut UI, track_xs: &[f32]) {
-        let atlas = &ui.style.atlas;
         let (tl, br) = self.selection_corners();
         let beat_height = self.beat_height(ui);
-        let start = position_coords(tl, &atlas, track_xs, false, beat_height);
-        let end = position_coords(br, &atlas, track_xs, true, beat_height);
+        let start = position_coords(tl, &ui.style, track_xs, false, beat_height);
+        let end = position_coords(br, &ui.style, track_xs, true, beat_height);
 
         let selection_rect = Rect {
-            x: MARGIN + start.x,
+            x: ui.style.margin + start.x,
             y: ui.cursor_y + start.y,
             w: end.x - start.x,
             h: end.y - start.y,
@@ -565,14 +563,13 @@ impl PatternEditor {
     }
 
     fn draw_channel(&self, ui: &mut UI, channel: &Channel) {
-        let char_width = ui.style.atlas.char_width();
         let beat_height = self.beat_height(ui);
         self.draw_channel_line(ui);
         self.draw_interpolation(ui, channel);
 
         // draw events
         for event in &channel.events {
-            draw_event(ui, event, char_width, beat_height, self.beat_division);
+            draw_event(ui, event, beat_height, self.beat_division);
         }
     }
 
@@ -587,7 +584,6 @@ impl PatternEditor {
 
     fn draw_interpolation(&self, ui: &mut UI, channel: &Channel) {
         ui.cursor_z -= 1;
-        let char_width = ui.style.atlas.char_width();
         let beat_height = self.beat_height(ui);
         let tpr = self.ticks_per_row();
         let colors = [
@@ -598,8 +594,8 @@ impl PatternEditor {
 
         for col in 0..3 {
             let interp: Vec<_> = channel.interp_by_col(col).collect();
-            let x = ui.cursor_x + MARGIN - 1.0 - LINE_THICKNESS * 0.5
-                + column_x(col, char_width);
+            let x = ui.cursor_x + ui.style.margin - 1.0 - LINE_THICKNESS * 0.5
+                + column_x(col, &ui.style);
 
             for chunk in interp.chunks_exact(2) {
                 if let [start, end] = chunk {
@@ -824,15 +820,14 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     pe.draw_cursor(ui, &track_xs);
 
     // draw channel data
-    let char_width = ui.style.atlas.char_width();
     for (track_i, track) in module.tracks.iter().enumerate() {
-        let chan_width = channel_width(track_i, char_width);
+        let chan_width = channel_width(track_i, &ui.style);
         for (channel_i, channel) in track.channels.iter().enumerate() {
             ui.cursor_x = track_xs[track_i] + chan_width * channel_i as f32;
             pe.draw_channel(ui, channel);
         }
     }
-    ui.cursor_x += channel_width(1, char_width);
+    ui.cursor_x += channel_width(1, &ui.style);
     pe.draw_channel_line(ui);
 }
 
@@ -849,7 +844,7 @@ fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
                 w: ui.bounds.w,
                 h: line_height,
             }, ui.style.theme.panel_bg(), None);
-            ui.push_text(x, y - MARGIN + PATTERN_MARGIN, beat.to_string(),
+            ui.push_text(x, y - ui.style.margin + PATTERN_MARGIN, beat.to_string(),
                 ui.style.theme.fg());
         }
         beat += 1;
@@ -863,7 +858,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     ui.layout = Layout::Horizontal;
 
     // offset for beat width
-    ui.cursor_x += ui.style.atlas.char_width() * 3.0 + MARGIN * 2.0;
+    ui.cursor_x += ui.style.atlas.char_width() * 3.0 + ui.style.margin * 2.0;
 
     let mut xs = vec![ui.cursor_x];
     xs.extend(module.tracks.iter_mut().enumerate().map(|(i, track)| {
@@ -905,9 +900,9 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
                 ui.label("XXX")
             } else {
                 ui.label("NNN");
-                ui.cursor_x -= MARGIN;
+                ui.cursor_x -= ui.style.margin;
                 ui.label("V");
-                ui.cursor_x -= MARGIN;
+                ui.cursor_x -= ui.style.margin;
                 ui.label("M");
             }
         }
@@ -1012,13 +1007,13 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
     ui.push_rect(rect, color, None);
 }
 
-fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32, division: u8) {
+fn draw_event(ui: &mut UI, evt: &Event, beat_height: f32, division: u8) {
     let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
     if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
         return
     }
     let col = evt.data.spatial_column();
-    let x = ui.cursor_x + column_x(col, char_width);
+    let x = ui.cursor_x + column_x(col, &ui.style);
     if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
         return
     }
@@ -1051,7 +1046,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32, divis
     if off_division(evt.tick, division) {
         color = with_alpha(0.25, color);
     }
-    ui.push_text(x, y - MARGIN + PATTERN_MARGIN, text, color);
+    ui.push_text(x, y - ui.style.margin + PATTERN_MARGIN, text, color);
 }
 
 fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
@@ -1144,39 +1139,41 @@ fn fix_cursors(pe: &mut PatternEditor, tracks: &[Track]) {
 
 /// Returns the visual coordinates of a Position. Uses the top-left corner of
 /// the cell by default.
-fn position_coords(pos: Position, atlas: &GlyphAtlas, track_xs: &[f32],
+fn position_coords(pos: Position, style: &Style, track_xs: &[f32],
     bottom_left: bool, beat_height: f32
 ) -> Vec2 {
-    let char_width = atlas.char_width();
-    let x = track_xs[pos.track] + channel_width(pos.track, char_width) * pos.channel as f32
+    let x = track_xs[pos.track] + channel_width(pos.track, style) * pos.channel as f32
         + if bottom_left {
-            column_x(pos.column + 1, char_width) - MARGIN
+            column_x(pos.column + 1, style) - style.margin
         } else {
-            column_x(pos.column, char_width)
+            column_x(pos.column, style)
         };
     let y = pos.beat() * beat_height + if bottom_left {
-        line_height(atlas)
+        line_height(&style.atlas)
     } else {
         0.0
     };
     Vec2 { x, y }
 }
 
-fn channel_width(track_index: usize, char_width: f32) -> f32 {
+fn channel_width(track_index: usize, style: &Style) -> f32 {
     if track_index == 0 {
-        char_width * 3.0 + MARGIN * 2.0
+        style.atlas.char_width() * 3.0 + style.margin * 2.0
     } else {
-        char_width * 5.0 + MARGIN * 4.0
+        style.atlas.char_width() * 5.0 + style.margin * 4.0
     }
 }
 
-fn column_x(column: u8, char_width: f32) -> f32 {
+fn column_x(column: u8, style: &Style) -> f32 {
+    let char_width = style.atlas.char_width();
+    let margin = style.margin;
+
     match column {
         NOTE_COLUMN => 0.0,
-        VEL_COLUMN => char_width * 3.0 + MARGIN,
-        MOD_COLUMN => char_width * 4.0 + MARGIN * 2.0,
+        VEL_COLUMN => char_width * 3.0 + margin,
+        MOD_COLUMN => char_width * 4.0 + margin * 2.0,
         // allow this to make some calculations easier
-        3 => char_width * 5.0 + MARGIN * 3.0,
+        3 => char_width * 5.0 + margin * 3.0,
         _ => panic!("invalid cursor column"),
     }
 }
@@ -1189,7 +1186,7 @@ fn with_alpha(a: f32, color: Color) -> Color {
 }
 
 fn line_height(atlas: &GlyphAtlas) -> f32 {
-    atlas.char_height() + PATTERN_MARGIN * 2.0
+    atlas.cap_height() + PATTERN_MARGIN * 2.0
 }
 
 fn off_division(tick: u32, division: u8) -> bool {
