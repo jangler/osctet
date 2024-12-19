@@ -2,7 +2,7 @@ use palette::Lchuv;
 
 use crate::config::Config;
 
-use super::{text_width, theme::Theme, Layout, MARGIN, UI};
+use super::{theme::Theme, Layout, MARGIN, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.layout = Layout::Horizontal;
@@ -147,7 +147,7 @@ fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
 }
 
 fn entries_per_col(ui: &UI, max_chars: usize, len: usize) -> usize {
-    let char_width = text_width("x", &ui.style.text_params());
+    let char_width = ui.style.atlas.char_width();
     let cols = (ui.bounds.w / (max_chars as f32 * char_width)) as usize;
     (len as f32 / cols as f32).ceil() as usize
 }

@@ -110,14 +110,13 @@ impl PatternEditor {
     }
 
     fn beat_height(&self, ui: &UI) -> f32 {
-        line_height(&ui.style.text_params()) * self.beat_division as f32
+        line_height(&ui.style.atlas) * self.beat_division as f32
     }
 
     /// Convert mouse coordinates to a Position.
     fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();
-        let params = ui.style.text_params();
-        let char_width = text_width("x", &params);
+        let char_width = ui.style.atlas.char_width();
         let tpr = self.ticks_per_row();
         let mut pos = Position {
             tick: (self.y_tick(y, ui) as f32 / tpr as f32).round() as u32 * tpr,
@@ -152,7 +151,7 @@ impl PatternEditor {
 
     fn y_tick(&self, y: f32, ui: &UI) -> u32 {
         let beat_height = self.beat_height(ui);
-        ((y - ui.cursor_y - line_height(&ui.style.text_params()) * 0.5)
+        ((y - ui.cursor_y - line_height(&ui.style.atlas) * 0.5)
             / beat_height * self.beat_division as f32
             * TICKS_PER_BEAT as f32 / self.beat_division as f32).round() as u32
     }
@@ -190,11 +189,11 @@ impl PatternEditor {
     }
 
     fn draw_cursor(&self, ui: &mut UI, track_xs: &[f32]) {
-        let params = &ui.style.text_params();
+        let atlas = &ui.style.atlas;
         let (tl, br) = self.selection_corners();
         let beat_height = self.beat_height(ui);
-        let start = position_coords(tl, &params, track_xs, false, beat_height);
-        let end = position_coords(br, &params, track_xs, true, beat_height);
+        let start = position_coords(tl, &atlas, track_xs, false, beat_height);
+        let end = position_coords(br, &atlas, track_xs, true, beat_height);
 
         let selection_rect = Rect {
             x: MARGIN + start.x,
@@ -566,7 +565,7 @@ impl PatternEditor {
     }
 
     fn draw_channel(&self, ui: &mut UI, channel: &Channel) {
-        let char_width = text_width("x", &ui.style.text_params());
+        let char_width = ui.style.atlas.char_width();
         let beat_height = self.beat_height(ui);
         self.draw_channel_line(ui);
         self.draw_interpolation(ui, channel);
@@ -588,7 +587,7 @@ impl PatternEditor {
 
     fn draw_interpolation(&self, ui: &mut UI, channel: &Channel) {
         ui.cursor_z -= 1;
-        let char_width = text_width("x", &ui.style.text_params());
+        let char_width = ui.style.atlas.char_width();
         let beat_height = self.beat_height(ui);
         let tpr = self.ticks_per_row();
         let colors = [
@@ -825,7 +824,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     pe.draw_cursor(ui, &track_xs);
 
     // draw channel data
-    let char_width = text_width("x", &ui.style.text_params());
+    let char_width = ui.style.atlas.char_width();
     for (track_i, track) in module.tracks.iter().enumerate() {
         let chan_width = channel_width(track_i, char_width);
         for (channel_i, channel) in track.channels.iter().enumerate() {
@@ -841,7 +840,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
     let mut beat = 1;
     let mut y = ui.cursor_y;
-    let line_height = line_height(&ui.style.text_params());
+    let line_height = line_height(&ui.style.atlas);
     while y < ui.bounds.y + ui.bounds.h {
         if y >= 0.0 {
             ui.push_rect(Rect {
@@ -864,7 +863,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     ui.layout = Layout::Horizontal;
 
     // offset for beat width
-    ui.cursor_x += text_width("x", &ui.style.text_params()) * 3.0 + MARGIN * 2.0;
+    ui.cursor_x += ui.style.atlas.char_width() * 3.0 + MARGIN * 2.0;
 
     let mut xs = vec![ui.cursor_x];
     xs.extend(module.tracks.iter_mut().enumerate().map(|(i, track)| {
@@ -1007,7 +1006,7 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
         x,
         y: ui.cursor_y + tick as f32 / TICKS_PER_BEAT as f32 * beat_height,
         w: ui.bounds.w,
-        h: line_height(&ui.style.text_params()),
+        h: line_height(&ui.style.atlas),
     };
     let color = Color { a: 0.1, ..ui.style.theme.fg() };
     ui.push_rect(rect, color, None);
@@ -1145,10 +1144,10 @@ fn fix_cursors(pe: &mut PatternEditor, tracks: &[Track]) {
 
 /// Returns the visual coordinates of a Position. Uses the top-left corner of
 /// the cell by default.
-fn position_coords(pos: Position, params: &TextParams, track_xs: &[f32],
+fn position_coords(pos: Position, atlas: &GlyphAtlas, track_xs: &[f32],
     bottom_left: bool, beat_height: f32
 ) -> Vec2 {
-    let char_width = text_width("x", &params);
+    let char_width = atlas.char_width();
     let x = track_xs[pos.track] + channel_width(pos.track, char_width) * pos.channel as f32
         + if bottom_left {
             column_x(pos.column + 1, char_width) - MARGIN
@@ -1156,7 +1155,7 @@ fn position_coords(pos: Position, params: &TextParams, track_xs: &[f32],
             column_x(pos.column, char_width)
         };
     let y = pos.beat() * beat_height + if bottom_left {
-        line_height(&params)
+        line_height(atlas)
     } else {
         0.0
     };
@@ -1189,8 +1188,8 @@ fn with_alpha(a: f32, color: Color) -> Color {
     }
 }
 
-fn line_height(params: &TextParams) -> f32 {
-    cap_height(params) + PATTERN_MARGIN * 2.0
+fn line_height(atlas: &GlyphAtlas) -> f32 {
+    atlas.char_height() + PATTERN_MARGIN * 2.0
 }
 
 fn off_division(tick: u32, division: u8) -> bool {

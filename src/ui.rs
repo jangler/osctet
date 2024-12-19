@@ -3,13 +3,15 @@
 //! Not polished for general reuse. Macroquad also has its own built-in UI
 //! library, but the demos don't give me much faith in it.
 
-use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
+use std::{collections::HashMap, fmt::Display, io::BufReader, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use macroquad::prelude::*;
 use rfd::FileDialog;
+use text::GlyphAtlas;
 use textedit::TextEditState;
 use theme::Theme;
+use bdf_reader::Font;
 
 use crate::{input::{Hotkey, Modifiers}, module::EventData, pitch::Note, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
@@ -18,6 +20,7 @@ pub mod pattern_tab;
 pub mod instruments_tab;
 pub mod settings_tab;
 pub mod theme;
+mod text;
 mod textedit;
 
 const MARGIN: f32 = 5.0;
@@ -47,22 +50,9 @@ enum Dialog {
 
 /// Draws text with the top-left corner at (x, y), plus margins.
 /// Returns the bounds of the text, plus margins.
-fn draw_text_topleft(params: TextParams, label: &str, x: f32, y: f32) -> Rect {
-    let dim = draw_text_ex(label,
-        (x + MARGIN).round(),
-        (y + MARGIN + cap_height(&params)).round(),
-        params);
-    Rect { x, y, w: dim.width + MARGIN * 2.0, h: dim.height + MARGIN * 2.0 }
-}
-
-/// Returns the height of a capital letter.
-fn cap_height(params: &TextParams) -> f32 {
-    measure_text("X", params.font, params.font_size, params.font_scale).offset_y
-}
-
-/// Returns the width of rendered text.
-fn text_width(text: &str, params: &TextParams) -> f32 {
-    measure_text(text, params.font, params.font_size, params.font_scale).width
+fn draw_text_topleft(glyphs: &GlyphAtlas, color: Color, label: &str, x: f32, y: f32
+) -> Rect {
+    glyphs.draw_text(x + MARGIN, y + MARGIN, label, color)
 }
 
 /// Returns mouse position as a `Vec2`.
@@ -79,19 +69,8 @@ fn draw_filled_rect(r: Rect, fill: Color, stroke: Color) {
 
 /// UI style, including font and color theme.
 pub struct Style {
-    pub font: Font,
+    pub atlas: GlyphAtlas,
     pub theme: Theme,
-}
-
-impl Style {
-    pub fn text_params(&self) -> TextParams {
-        TextParams {
-            font: Some(&self.font),
-            font_size: 16,
-            color: self.theme.fg(),
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -121,7 +100,7 @@ enum Graphic {
 }
 
 impl Graphic {
-    fn draw(&self, params: &TextParams) {
+    fn draw(&self, atlas: &GlyphAtlas) {
         match self {
             Self::Rect(rect, fill, stroke) => {
                 if let Some(stroke) = stroke {
@@ -134,23 +113,19 @@ impl Graphic {
                 draw_line(*x1, *y1, *x2, *y2, LINE_THICKNESS, *color);
             },
             Self::Text(x, y, text, color) => {
-                let params = TextParams {
-                    color: *color,
-                    ..*params
-                };
-                draw_text_topleft(params, text, *x, *y);
+                draw_text_topleft(atlas, *color, text, *x, *y);
             }
         }
     }
 
-    fn align_right(&mut self, right_edge: f32, params: &TextParams) {
+    fn align_right(&mut self, right_edge: f32, char_width: f32) {
         match self {
             Self::Rect(rect, _, _) => {
                 rect.x = right_edge - rect.w;
             },
             Self::Line(_, _, _, _, _) => todo!(),
             Self::Text(x, _, text, _) => {
-                *x = right_edge - text_width(text, params);
+                *x = right_edge - text.chars().count() as f32 * char_width;
             }
         }
     }
@@ -190,10 +165,11 @@ pub struct UI {
 
 impl UI {
     pub fn new(theme: Option<Theme>) -> Self {
+        let font = load_bdf_font_from_bytes(include_bytes!("../font/ter-u12n.bdf"))
+            .expect("included font should be loadable");
         Self {
             style: Style {
-                font: load_ttf_font_from_bytes(include_bytes!("../font/ProggyClean.ttf"))
-                    .expect("included font should be loadable"),
+                atlas: GlyphAtlas::from_bdf(&font),
                 theme: theme.unwrap_or(Theme::light()),
             },
             open_combo_box: None,
@@ -225,12 +201,11 @@ impl UI {
     /// Panics if no group.
     pub fn align_right(&mut self, n: usize) {
         let start = self.draw_queue.len() - n;
-        let params = self.style.text_params();
         let rect = self.group_rects.last().unwrap();
         let edge = rect.x + rect.w - MARGIN;
 
         for op in self.draw_queue[start..].iter_mut() {
-            op.graphic.align_right(edge, &params);
+            op.graphic.align_right(edge, self.style.atlas.char_width());
         }
     }
 
@@ -262,7 +237,7 @@ impl UI {
         if self.focused_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
             self.focused_slider = None;
         }
-        
+
         clear_background(self.style.theme.panel_bg());
 
         self.info_box();
@@ -322,10 +297,9 @@ impl UI {
     }
 
     pub fn end_frame(&mut self) {
-        let params = self.style.text_params();
         self.draw_queue.sort_by_key(|x| x.z);
         for op in &self.draw_queue {
-            op.graphic.draw(&params);
+            op.graphic.draw(&self.style.atlas);
         }
         self.draw_queue.clear();
 
@@ -359,9 +333,8 @@ impl UI {
             Graphic::Line(x1, y1, x2, y2, _) => (x1.max(*x2), y1.max(*y2)),
             Graphic::Rect(rect, _, _) => (rect.x + rect.w, rect.y + rect.h),
             Graphic::Text(x, y, text, _) => {
-                let params = self.style.text_params();
-                (x + text_width(&text, &params) + MARGIN * 2.0,
-                    y + cap_height(&params) + MARGIN * 2.0)
+                (x + self.style.atlas.text_width(text) + MARGIN * 2.0,
+                    y + self.style.atlas.char_height() + MARGIN * 2.0)
             }
         };
         self.expand_groups(x, y);
@@ -371,7 +344,7 @@ impl UI {
         });
     }
 
-    fn push_graphics(&mut self, gfx: Vec<Graphic>) {   
+    fn push_graphics(&mut self, gfx: Vec<Graphic>) {
         for gfx in gfx {
             self.push_graphic(gfx);
         }
@@ -398,19 +371,18 @@ impl UI {
     }
 
     fn push_text(&mut self, x: f32, y: f32, text: String, color: Color) -> Rect {
-        let params = self.style.text_params();
         let rect = Rect {
             x,
             y,
-            w: text_width(&text, &params) + MARGIN * 2.0,
-            h: cap_height(&params) + MARGIN * 2.0,
+            w: self.style.atlas.text_width(&text) + MARGIN * 2.0,
+            h: self.style.atlas.char_height() + MARGIN * 2.0,
         };
         self.push_graphic(Graphic::Text(x, y, text, color));
         rect
     }
 
     fn bottom_panel_height(&self) -> f32 {
-        cap_height(&self.style.text_params()) + MARGIN * 4.0
+        self.style.atlas.char_height() + MARGIN * 4.0
     }
 
     pub fn start_bottom_panel(&mut self) {
@@ -418,7 +390,7 @@ impl UI {
         self.cursor_z += PANEL_Z_OFFSET;
         self.push_rect(Rect {
             y: self.bounds.h - h,
-            h, 
+            h,
             ..self.bounds
         }, self.style.theme.panel_bg(), None);
         self.push_line(self.bounds.x, self.bounds.h - h + 0.5,
@@ -441,7 +413,7 @@ impl UI {
         current_y: &mut f32, max_y: f32, viewport_h: f32, keys: bool
     ) {
         let (_, y_scroll) = mouse_wheel();
-        let actual_increment = MARGIN * 6.0 + cap_height(&self.style.text_params()) * 3.0;
+        let actual_increment = MARGIN * 6.0 + self.style.atlas.char_height() * 3.0;
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
         *current_y += dy;
 
@@ -519,7 +491,7 @@ impl UI {
 
         rect.contains(pt)
     }
-    
+
     /// A label is non-interactive text.
     pub fn label(&mut self, label: &str) {
         self.start_widget();
@@ -542,7 +514,7 @@ impl UI {
             x: self.cursor_x,
             y: self.cursor_y,
             w: self.bounds.w + self.bounds.x - self.cursor_x,
-            h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
+            h: self.style.atlas.char_height() + MARGIN * 2.0,
         };
         self.start_widget();
         self.push_rect(rect, self.style.theme.accent1_bg(), None);
@@ -554,15 +526,14 @@ impl UI {
     fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,
         bg: &Color, bg_hover: &Color, bg_click: &Color,
     ) -> (Rect, MouseEvent) {
-        let params = self.style.text_params();
         let rect = Rect {
             x,
             y,
-            w: text_width(label, &params) + MARGIN * 2.0,
-            h: cap_height(&params) + MARGIN * 2.0,
+            w: self.style.atlas.text_width(label) + MARGIN * 2.0,
+            h: self.style.atlas.char_height() + MARGIN * 2.0,
         };
         let mouse_hit = self.mouse_hits(rect) && enabled;
-    
+
         // draw fill based on mouse state
         let (fill, stroke) = if mouse_hit {
             (if is_mouse_button_down(MouseButton::Left) {
@@ -582,7 +553,7 @@ impl UI {
         } else {
             self.style.theme.border_disabled()
         });
-    
+
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             MouseEvent::Pressed
         } else if mouse_hit && is_mouse_button_released(MouseButton::Left) {
@@ -626,7 +597,7 @@ impl UI {
         self.end_widget();
         clicked
     }
-    
+
     /// Draws a combo box. If a value was selected this frame, returns the value's index.
     pub fn combo_box(&mut self, id: &str, label: &str, button_text: &str,
         get_options: impl Fn() -> Vec<String>
@@ -643,13 +614,12 @@ impl UI {
             self.push_text(self.cursor_x + button_rect.w + MARGIN,
                 self.cursor_y + MARGIN, label.to_owned(), self.style.theme.fg());
         }
-        let params = self.style.text_params();
 
         // check to open list
         let open = self.open_combo_box.as_ref().is_some_and(|x| x.id == id);
         if event == MouseEvent::Pressed && !open {
             let options = get_options();
-            let list_rect = combo_box_list_rect(&params, button_rect, &options);
+            let list_rect = combo_box_list_rect(&self.style.atlas, button_rect, &options);
             self.open_combo_box = Some(ComboBoxState {
                 id: id.to_owned(),
                 options,
@@ -661,7 +631,8 @@ impl UI {
         let return_val = if open {
             if let Some(state) = &mut self.open_combo_box {
                 state.button_rect = button_rect;
-                state.list_rect = combo_box_list_rect(&params, button_rect, &state.options);
+                state.list_rect =
+                    combo_box_list_rect(&self.style.atlas, button_rect, &state.options);
             }
             self.combo_box_list(open)
         } else {
@@ -731,10 +702,9 @@ impl UI {
             self.tabs.insert(id.to_owned(), 0);
         }
 
-        let params = self.style.text_params();
         let mut selected_index = self.tabs.get(id).cloned().unwrap_or_default();
         let mut x = self.cursor_x;
-        let h = cap_height(&params) + MARGIN * 2.0;
+        let h = self.style.atlas.char_height() + MARGIN * 2.0;
         let mut gfx = vec![
             Graphic::Rect(Rect {
                 x: self.bounds.x,
@@ -750,7 +720,7 @@ impl UI {
             let r = Rect {
                 x,
                 y: self.cursor_y,
-                w: text_width(label, &params) + MARGIN * 2.0,
+                w: self.style.atlas.text_width(label) + MARGIN * 2.0,
                 h,
             };
             // fill background
@@ -782,7 +752,7 @@ impl UI {
                     self.style.theme.panel_bg()));
             }
         }
-        let h = cap_height(&params) + MARGIN * 2.0 + LINE_THICKNESS;
+        let h = self.style.atlas.char_height() + MARGIN * 2.0 + LINE_THICKNESS;
         self.cursor_y += h;
         self.bounds.y += h;
         self.bounds.h -= h;
@@ -799,7 +769,7 @@ impl UI {
             *i = (*i + 1) % n;
         }
     }
-    
+
     pub fn prev_tab(&mut self, id: &str, n: usize) {
         if let Some(i) = self.tabs.get_mut(id) {
             *i = (*i as isize - 1).rem_euclid(n as isize) as usize;
@@ -823,7 +793,7 @@ impl UI {
         }
 
         self.start_widget();
-        let h = cap_height(&self.style.text_params());
+        let h = self.style.atlas.char_height();
 
         // draw groove
         let groove_w = SLIDER_WIDTH;
@@ -872,7 +842,7 @@ impl UI {
         } else {
             (self.style.theme.panel_bg(), self.style.theme.border_disabled(), false)
         };
-        
+
         // draw groove & handle
         self.push_line(groove_x, groove_y, groove_x + groove_w, groove_y, stroke);
         let f = deinterpolate(*val, &range).powf(1.0/power as f32);
@@ -893,7 +863,7 @@ impl UI {
             let r = Rect { x, y, w: 0.0, h: 0.0 };
             self.push_rect(r, Color { a: 0.0, ..Default::default() }, None);
         };
-        
+
         if grabbed {
             let text = display(*val);
             self.tooltip(&text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
@@ -926,8 +896,7 @@ impl UI {
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
         text: String
     ) -> Option<String> {
-        let w = chars_wide as f32 * text_width("x", &self.style.text_params())
-            + MARGIN * 2.0;
+        let w = chars_wide as f32 * self.style.atlas.char_width() + MARGIN * 2.0;
 
         if self.text_box(label, label, w, &text) {
             let s = self.focused_text.as_ref().map(|x| x.text.clone());
@@ -944,19 +913,19 @@ impl UI {
             x: self.cursor_x + MARGIN,
             y: self.cursor_y + MARGIN,
             w: width,
-            h: cap_height(&self.style.text_params()) + MARGIN * 2.0,
+            h: self.style.atlas.char_height() + MARGIN * 2.0,
         };
 
         let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
         let hit = self.mouse_hits(box_rect);
-        
+
         // focus/unfocus
         if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
             self.focused_text = Some(TextEditState::new(id.to_owned(), text.to_owned()));
         } else if is_key_pressed(KeyCode::Escape) {
             self.focused_text = None;
         }
-        
+
         self.start_widget();
 
         // draw box
@@ -966,7 +935,7 @@ impl UI {
             self.style.theme.border_unfocused()
         };
         self.push_rect(box_rect, self.style.theme.content_bg(), Some(stroke));
-        
+
         // draw text
         let submit = if focused {
             self.editable_text(box_rect)
@@ -981,7 +950,7 @@ impl UI {
             self.push_text(box_rect.x + box_rect.w, self.cursor_y + MARGIN,
                 label.to_owned(), self.style.theme.fg());
         }
-        
+
         self.end_widget();
         submit
     }
@@ -990,13 +959,13 @@ impl UI {
     pub fn instrument_list(&mut self, options: &[String], index: &mut usize,
         min_chars: usize,
     ) -> Option<String> {
-        let params = self.style.text_params();
-        let line_height = cap_height(&params) + MARGIN * 2.0;
+        let atlas = &self.style.atlas;
+        let line_height = atlas.char_height() + MARGIN * 2.0;
         let list_rect = Rect {
             x: self.cursor_x + MARGIN,
             y: self.cursor_y + MARGIN,
-            w: options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params)))
-                .max(text_width("x", &params) * min_chars as f32)
+            w: options.iter().fold(0.0_f32, |w, s| w.max(atlas.text_width(s)))
+                .max(atlas.char_width() * min_chars as f32)
                 + MARGIN * 2.0,
             h: line_height * options.len() as f32 + 2.0,
         };
@@ -1060,8 +1029,7 @@ impl UI {
         let hit = self.mouse_hits(rect);
 
         if let Some(state) = self.focused_text.as_mut() {
-            let params = self.style.text_params();
-            let char_w = text_width("x", &params);
+            let char_w = self.style.atlas.char_width();
             let mouse_i = if hit {
                 Some(((mouse_position_vec2().x - rect.x - MARGIN) / char_w)
                     .max(0.0).round() as usize)
@@ -1070,13 +1038,13 @@ impl UI {
             };
             state.handle_input(mouse_i, &mut self.text_clipboard);
 
-            let text_h = cap_height(&params);
+            let text_h = self.style.atlas.char_height();
             let f = |i| rect.x + char_w * i as f32 + MARGIN + LINE_THICKNESS * 0.5;
             let cursor_x = f(state.cursor);
             let y1 = rect.y + MARGIN - 1.0;
             let y2 = rect.y + MARGIN + text_h + 1.0;
             let text = state.text.clone();
-            
+
             if state.cursor != state.anchor {
                 let anchor_x = f(state.anchor);
                 let start = cursor_x.min(anchor_x);
@@ -1093,7 +1061,7 @@ impl UI {
                 };
                 self.push_rect(r, c, None);
             }
-            
+
             self.push_line(cursor_x, y1, cursor_x, y2, self.style.theme.fg());
             self.push_text(rect.x, rect.y, text, self.style.theme.fg());
         }
@@ -1111,7 +1079,7 @@ impl UI {
 
     pub fn formatted_shared_slider(&mut self, id: &str, label: &str, param: &Shared,
         range: RangeInclusive<f32>, power: i32, enabled: bool,
-        display: impl FnOnce(f32) -> String, 
+        display: impl FnOnce(f32) -> String,
     ) {
         let mut val = param.value();
         if self.formatted_slider(id, label, &mut val, range, power, enabled, display) {
@@ -1155,14 +1123,13 @@ impl UI {
 
     /// Returns the key that set the new note value.
     pub fn note_input(&mut self, id: &str, note: &mut Note) -> Option<Key> {
-        let params = self.style.text_params();
         let label = note.to_string();
 
         let rect = Rect {
             x: self.cursor_x + MARGIN,
             y: self.cursor_y + MARGIN,
-            w: text_width(&label, &params) + MARGIN * 2.0,
-            h: cap_height(&params) + MARGIN * 2.0,
+            w: self.style.atlas.text_width(&label) + MARGIN * 2.0,
+            h: self.style.atlas.char_height() + MARGIN * 2.0,
         };
         let mouse_hit = self.mouse_hits(rect);
 
@@ -1170,7 +1137,7 @@ impl UI {
             self.focused_note = Some(id.to_owned());
         }
         let focused = self.focused_note.as_ref().is_some_and(|x| x == id);
-    
+
         // draw fill based on mouse state
         let (fill, stroke) = if focused {
             (self.style.theme.control_bg_click(), self.style.theme.border_focused())
@@ -1201,14 +1168,13 @@ impl UI {
 
     // TODO: code duplication with note_input
     pub fn hotkey_input(&mut self, id: usize, hotkey: &mut Hotkey) -> bool {
-        let params = self.style.text_params();
         let label = hotkey.to_string();
 
         let rect = Rect {
             x: self.cursor_x + MARGIN,
             y: self.cursor_y + MARGIN,
-            w: text_width(&label, &params) + MARGIN * 2.0,
-            h: cap_height(&params) + MARGIN * 2.0,
+            w: self.style.atlas.text_width(&label) + MARGIN * 2.0,
+            h: self.style.atlas.char_height() + MARGIN * 2.0,
         };
         let mouse_hit = self.mouse_hits(rect);
 
@@ -1216,7 +1182,7 @@ impl UI {
             self.focused_hotkey = Some(id.to_owned());
         }
         let focused = self.focused_hotkey.as_ref().is_some_and(|x| *x == id);
-    
+
         // draw fill based on mouse state
         let (fill, stroke) = if focused {
             (self.style.theme.control_bg_click(), self.style.theme.border_focused())
@@ -1259,9 +1225,8 @@ impl UI {
         }
 
         if let Some(text) = text {
-            let params = self.style.text_params();
-            let w = text_width(&text, &params);
-            let h = cap_height(&params);
+            let w = self.style.atlas.text_width(&text);
+            let h = self.style.atlas.char_height();
             self.cursor_z += TOOLTIP_Z_OFFSET;
             let (_, evt) = self.text_rect(&text, true,
                 self.bounds.x + self.bounds.w - w - MARGIN * 3.0,
@@ -1290,19 +1255,17 @@ fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
 // TODO: characters with descenders give this too large a bottom margin. make
 //       the rect size independent of the particular characters
 fn alert_dialog(style: &Style, message: &str) {
-    let params = style.text_params();
-    let mut r = center(fit_strings(params.clone(), &[message.to_owned()]));
+    let mut r = center(fit_strings(&style.atlas, &[message.to_owned()]));
     r.h += MARGIN;
     draw_filled_rect(r, style.theme.panel_bg(), style.theme.border_unfocused());
-    draw_text_topleft(params.clone(), message, r.x, r.y);
+    draw_text_topleft(&style.atlas, style.theme.fg(), message, r.x, r.y);
 }
 
-fn fit_strings(params: TextParams, v: &[String]) -> Rect {
+fn fit_strings(atlas: &GlyphAtlas, v: &[String]) -> Rect {
     let mut rect: Rect = Default::default();
     for s in v {
-        let dim = measure_text(s, params.font, params.font_size, params.font_scale);
-        rect.w = rect.w.max(dim.width + MARGIN * 2.0);
-        rect.h += dim.height + MARGIN;
+        rect.w = rect.w.max(atlas.text_width(s) + MARGIN * 2.0);
+        rect.h += atlas.char_height() + MARGIN;
     }
     rect
 }
@@ -1315,7 +1278,7 @@ fn center(r: Rect) -> Rect {
     }
 }
 
-fn combo_box_list_rect(params: &TextParams, button_rect: Rect, options: &[String]) -> Rect {
+fn combo_box_list_rect(atlas: &GlyphAtlas, button_rect: Rect, options: &[String]) -> Rect {
     // should options be drawn above or below the button?
     let y_direction = if button_rect.y > screen_height() / 2.0 {
         -1.0
@@ -1331,7 +1294,7 @@ fn combo_box_list_rect(params: &TextParams, button_rect: Rect, options: &[String
         } else {
             button_rect.y + button_rect.h - 1.0
         },
-        w: options.iter().fold(0.0_f32, |w, s| w.max(text_width(s, &params))) + MARGIN * 2.0,
+        w: options.iter().fold(0.0_f32, |w, s| w.max(atlas.text_width(s))) + MARGIN * 2.0,
         h,
     }
 }
@@ -1358,4 +1321,9 @@ fn display_unit(unit: Option<&'static str>) -> Box<dyn FnOnce(f32) -> String> {
     } else {
         Box::new(|x| format!("{:.3}", x))
     }
+}
+
+fn load_bdf_font_from_bytes(bytes: &[u8]) -> Result<Font, bdf_reader::Error> {
+    let reader = BufReader::new(bytes);
+    Font::read(reader)
 }

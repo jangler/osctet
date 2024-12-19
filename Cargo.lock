@@ -294,6 +294,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
+name = "bdf-reader"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c61a8c0b2caee4cd83ba4fbe2a57a15fa65aa07a27d751b075af4dd278affcc1"
+dependencies = [
+ "bit-vec",
+ "log",
+ "paste",
+ "thiserror",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -310,6 +322,12 @@ dependencies = [
  "shlex",
  "syn",
 ]
+
+[[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bitflags"
@@ -1836,6 +1854,7 @@ dependencies = [
 name = "osctet"
 version = "0.1.0"
 dependencies = [
+ "bdf-reader",
  "cpal",
  "criterion",
  "fundsp",
