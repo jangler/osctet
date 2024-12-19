@@ -1049,7 +1049,9 @@ impl Modulation {
         }
     }
 
-    fn dsp_component(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+    fn dsp_component(&self, settings: &Patch, vars: &VoiceVars, index: usize,
+        path: &[ModSource]
+    ) -> Net {
         let mut path = path.to_vec();
         path.push(self.source);
 
@@ -1077,8 +1079,11 @@ impl Modulation {
             // a bipolar source oscillates in [-1, 1] -- map that onto [0, 1]
             1.0 - (depth * (1.0 - 0.5 * (net + 1.0)) >> shape_fn(abs))
         } else {
-            // keep this in [0, 1] using `abs`
-            1.0 - (depth * (1.0 - net) >> shape_fn(abs))
+            if self.depth.0.value() >= 0.0 {
+                1.0 - depth * (1.0 - net)
+            } else {
+                1.0 + depth * net
+            }
         }
     }
 }
