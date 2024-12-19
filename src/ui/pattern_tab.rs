@@ -6,6 +6,8 @@ use crate::{config::Config, input::{self, Action}, module::*, playback::Player, 
 
 use super::*;
 
+const PATTERN_MARGIN: f32 = 2.0;
+
 fn is_shift_down() -> bool {
     is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
@@ -103,8 +105,7 @@ impl PatternEditor {
     }
 
     fn beat_height(&self, ui: &UI) -> f32 {
-        let line_h = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
-        line_h * self.beat_division as f32
+        line_height(&ui.style.text_params()) * self.beat_division as f32
     }
 
     /// Convert mouse coordinates to a Position.
@@ -145,9 +146,8 @@ impl PatternEditor {
     }
 
     fn y_tick(&self, y: f32, ui: &UI) -> u32 {
-        let cell_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
         let beat_height = self.beat_height(ui);
-        ((y - ui.cursor_y - cell_height * 0.5)
+        ((y - ui.cursor_y - line_height(&ui.style.text_params()) * 0.5)
             / beat_height * self.beat_division as f32
             * TICKS_PER_BEAT as f32 / self.beat_division as f32).round() as u32
     }
@@ -821,7 +821,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
     let mut beat = 1;
     let mut y = ui.cursor_y;
-    let line_height = cap_height(&ui.style.text_params()) + MARGIN * 2.0;
+    let line_height = line_height(&ui.style.text_params());
     while y < ui.bounds.y + ui.bounds.h {
         if y >= 0.0 {
             ui.push_rect(Rect {
@@ -830,7 +830,8 @@ fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
                 w: ui.bounds.w,
                 h: line_height,
             }, ui.style.theme.panel_bg(), None);
-            ui.push_text(x, y, beat.to_string(), ui.style.theme.fg());
+            ui.push_text(x, y - MARGIN + PATTERN_MARGIN, beat.to_string(),
+                ui.style.theme.fg());
         }
         beat += 1;
         y += beat_height;
@@ -986,7 +987,7 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
         x,
         y: ui.cursor_y + tick as f32 / TICKS_PER_BEAT as f32 * beat_height,
         w: ui.bounds.w,
-        h: cap_height(&ui.style.text_params()) + MARGIN * 2.0,
+        h: line_height(&ui.style.text_params()),
     };
     let color = Color { a: 0.1, ..ui.style.theme.fg() };
     ui.push_rect(rect, color, None);
@@ -1028,7 +1029,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
         },
         _ => ui.style.theme.fg(),
     };
-    ui.push_text(x, y, text, color);
+    ui.push_text(x, y - MARGIN + PATTERN_MARGIN, text, color);
 }
 
 fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
@@ -1132,7 +1133,7 @@ fn position_coords(pos: Position, params: &TextParams, track_xs: &[f32],
             column_x(pos.column, char_width)
         };
     let y = pos.beat() * beat_height + if bottom_left {
-        cap_height(&params) + MARGIN * 2.0
+        line_height(&params)
     } else {
         0.0
     };
@@ -1163,4 +1164,8 @@ fn with_alpha(a: f32, color: Color) -> Color {
         a,
         ..color
     }
+}
+
+fn line_height(params: &TextParams) -> f32 {
+    cap_height(params) + PATTERN_MARGIN * 2.0
 }
