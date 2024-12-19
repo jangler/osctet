@@ -558,7 +558,7 @@ impl PatternEditor {
 
         // draw events
         for event in &channel.events {
-            draw_event(ui, event, char_width, beat_height);
+            draw_event(ui, event, char_width, beat_height, self.beat_division);
         }
     }
 
@@ -998,7 +998,7 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
     ui.push_rect(rect, color, None);
 }
 
-fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
+fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32, division: u8) {
     let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
     if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
         return
@@ -1023,7 +1023,7 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
             => panic!("interpolated event in pattern"),
         EventData::ToggleInterpolation(_) => return,
     };
-    let color = match evt.data {
+    let mut color = match evt.data {
         EventData::Pressure(x) => Color {
             a: 0.5 + x as f32 / 18.0,
             ..ui.style.theme.accent1_fg()
@@ -1034,6 +1034,9 @@ fn draw_event(ui: &mut UI, evt: &Event, char_width: f32, beat_height: f32) {
         },
         _ => ui.style.theme.fg(),
     };
+    if off_division(evt.tick, division) {
+        color = with_alpha(0.25, color);
+    }
     ui.push_text(x, y - MARGIN + PATTERN_MARGIN, text, color);
 }
 
@@ -1166,11 +1169,16 @@ fn column_x(column: u8, char_width: f32) -> f32 {
 
 fn with_alpha(a: f32, color: Color) -> Color {
     Color {
-        a,
+        a: color.a * a,
         ..color
     }
 }
 
 fn line_height(params: &TextParams) -> f32 {
     cap_height(params) + PATTERN_MARGIN * 2.0
+}
+
+fn off_division(tick: u32, division: u8) -> bool {
+    let tpr = TICKS_PER_BEAT / division as u32;
+    tick % tpr != 0
 }
