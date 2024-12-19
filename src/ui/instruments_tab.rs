@@ -625,8 +625,8 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
     
         labeled_group(ui, "Depth", |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
-                ui.shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0, -1.0..=1.0,
-                    None, 1, true);
+                ui.formatted_shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0,
+                    -1.0..=1.0, 1, true, display_mod(&m.target));
             }
         });
     
@@ -664,4 +664,27 @@ fn labeled_group(ui: &mut UI, label: &str, f: impl FnOnce(&mut UI) -> ()) {
     ui.label(label);
     f(ui);
     ui.end_group();
+}
+
+// TODO: this would ideally be a recursive lookup with loop detection in the
+//       case of ModDepth
+fn display_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> String> {
+    match target {
+        ModTarget::ClipGain =>
+            Box::new(|d| format!("{:+.2}", d * MAX_CLIP_GAIN)),
+        ModTarget::EnvScale(_) =>
+            Box::new(|d| format!("x{:.2}", MAX_ENV_SCALE.powf(d))),
+        ModTarget::FilterCutoff(_) =>
+            Box::new(|d| format!("{:+.2} octaves", d * FILTER_CUTOFF_MOD_BASE.log2())),
+        ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
+            | ModTarget::ModDepth(_) => Box::new(|d| format!("{:+.2}", d)),
+        ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
+            Box::new(|d| format!("{:+.1} cents", d * 50.0)),
+        ModTarget::Gain | ModTarget::Level(_) =>
+            Box::new(|d| format!("{:.2}", d * d)),
+        ModTarget::LFORate(_) =>
+            Box::new(|d| format!("x{:.2}", (MAX_LFO_RATE/MIN_LFO_RATE).powf(d))),
+        ModTarget::Pitch | ModTarget::OscPitch(_) =>
+            Box::new(|d| format!("{:+.2} octaves", d * PITCH_MOD_BASE.log2())),
+    }
 }

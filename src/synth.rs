@@ -16,7 +16,7 @@ const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICE_GAIN: f32 = 0.5; // -6 dB
 const VOICES_PER_CHANNEL: usize = 3;
 
-const MAX_ENV_SCALE: f32 = 16.0;
+pub const MAX_ENV_SCALE: f32 = 16.0;
 
 pub const MIN_FREQ_RATIO: f32 = 0.25;
 pub const MAX_FREQ_RATIO: f32 = 16.0;
@@ -26,11 +26,13 @@ pub const MAX_LFO_RATE: f32 = 20.0;
 
 pub const MIN_FILTER_CUTOFF: f32 = 20.0;
 pub const MAX_FILTER_CUTOFF: f32 = 22_000.0;
+pub const FILTER_CUTOFF_MOD_BASE: f32 = MAX_FILTER_CUTOFF / MIN_FILTER_CUTOFF;
 
 pub const MIN_FILTER_RESONANCE: f32 = 0.1;
 
 const PITCH_FLOOR: f32 = 20.0;
 const PITCH_CEILING: f32 = 5000.0;
+pub const PITCH_MOD_BASE: f32 = 16.0;
 
 const SMOOTH_TIME: f32 = 0.01;
 
@@ -150,7 +152,7 @@ impl Waveform {
             * var_fn(&osc.fine_pitch.0, |x| pow(SEMITONE_RATIO, x))
             * ((settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::Pitch, &[])
-                >> shape_fn(|x| pow(16.0, x)))) // 4 octaves
+                >> shape_fn(|x| pow(PITCH_MOD_BASE, x)))) // 4 octaves
             * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::FinePitch, &[])
                 >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
@@ -957,7 +959,7 @@ impl Filter {
             KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
         let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index), &[])
-            >> shape_fn(|x| pow(1000.0, x));
+            >> shape_fn(|x| pow(FILTER_CUTOFF_MOD_BASE, x));
         let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index), &[]);
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),

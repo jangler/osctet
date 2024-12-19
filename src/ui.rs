@@ -808,7 +808,14 @@ impl UI {
 
     /// Draws a slider and returns true if the value was changed.
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>, unit: Option<&str>, power: i32, enabled: bool
+        range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool
+    ) -> bool {
+        self.formatted_slider(id, label, val, range, power, enabled, display_unit(unit))
+    }
+
+    pub fn formatted_slider(&mut self, id: &str, label: &str, val: &mut f32,
+        range: RangeInclusive<f32>, power: i32, enabled: bool,
+        display: impl FnOnce(f32) -> String
     ) -> bool {
         // are we in text entry mode?
         if self.focused_text.as_ref().is_some_and(|x| x.id == id) {
@@ -888,12 +895,8 @@ impl UI {
         };
         
         if grabbed {
-            let text = if let Some(unit) = unit {
-                &format!("{:.3} {}", val, unit)
-            } else {
-                &format!("{:.3}", val)
-            };
-            self.tooltip(text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
+            let text = display(*val);
+            self.tooltip(&text, handle_rect.x, self.cursor_y - (h + MARGIN * 2.0));
         }
 
         self.end_widget();
@@ -1100,10 +1103,18 @@ impl UI {
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
-        range: RangeInclusive<f32>, unit: Option<&str>, power: i32, enabled: bool,
+        range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool,
+    ) {
+        self.formatted_shared_slider(id, label, param, range, power, enabled,
+            display_unit(unit));
+    }
+
+    pub fn formatted_shared_slider(&mut self, id: &str, label: &str, param: &Shared,
+        range: RangeInclusive<f32>, power: i32, enabled: bool,
+        display: impl FnOnce(f32) -> String, 
     ) {
         let mut val = param.value();
-        if self.slider(id, label, &mut val, range, unit, power, enabled) {
+        if self.formatted_slider(id, label, &mut val, range, power, enabled, display) {
             param.set(val);
         }
     }
@@ -1337,5 +1348,14 @@ fn is_mod(key: KeyCode) -> bool {
             | KeyCode::LeftShift | KeyCode::RightShift
             | KeyCode::LeftSuper | KeyCode::RightSuper => true,
         _ => false,
+    }
+}
+
+fn display_unit(unit: Option<&'static str>) -> Box<dyn FnOnce(f32) -> String> {
+    if let Some(unit) = unit {
+        let unit = unit.to_owned();
+        Box::new(move |x| format!("{:.3} {}", x, unit))
+    } else {
+        Box::new(|x| format!("{:.3}", x))
     }
 }
