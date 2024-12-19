@@ -198,6 +198,17 @@ impl Player {
 
         events.sort_by_key(|e| (e.event.tick, e.event.data.spatial_column()));
 
+        // set pressure/modulation memory so that new notes will use new values
+        for event in &events {
+            match event.event.data {
+                EventData::Pressure(v) => self.synths[event.track].set_vel_memory(
+                    event.channel as u8, v as f32 / EventData::DIGIT_MAX as f32),
+                EventData::Modulation(v) => self.synths[event.track].set_mod_memory(
+                    event.channel as u8, v as f32 / EventData::DIGIT_MAX as f32),
+                _ => (),
+            }
+        }
+
         for event in events {
             self.handle_event(&event.event, module, event.track, event.channel);
         }

@@ -525,8 +525,7 @@ impl Synth {
     }
 
     pub fn channel_pressure(&mut self, channel: u8, pressure: f32) {
-        self.expand_memory(channel as usize);
-        self.pressure_memory[channel as usize] = pressure;
+        self.set_vel_memory(channel, pressure);
         for (key, voice) in self.active_voices.iter_mut() {
             if key.channel == channel {
                 voice.vars.pressure.set(pressure);
@@ -535,13 +534,22 @@ impl Synth {
     }
 
     pub fn modulate(&mut self, channel: u8, depth: f32) {
-        self.expand_memory(channel as usize);
-        self.mod_memory[channel as usize] = depth;
+        self.set_mod_memory(channel, depth);
         for (key, voice) in self.active_voices.iter_mut() {
             if key.channel == channel {
                 voice.vars.modulation.set(depth);
             }
         }
+    }
+
+    pub fn set_vel_memory(&mut self, channel: u8, pressure: f32) {
+        self.expand_memory(channel as usize);
+        self.pressure_memory[channel as usize] = pressure;
+    }
+
+    pub fn set_mod_memory(&mut self, channel: u8, depth: f32) {
+        self.expand_memory(channel as usize);
+        self.mod_memory[channel as usize] = depth;
     }
 }
 
