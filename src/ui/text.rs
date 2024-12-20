@@ -5,6 +5,41 @@ use std::{collections::HashMap, error::Error, fs::File, io::BufReader, path::Pat
 use bdf_reader::{Bitmap, Font};
 use macroquad::{color::Color, math::Rect, texture::{draw_texture, Texture2D}};
 
+pub const SHARP: u32 = 0x81;
+pub const DOUBLE_SHARP: u32 = 0x82;
+pub const SUB_SHARP: u32 = 0x83;
+pub const FLAT: u32 = 0x84;
+pub const DOUBLE_FLAT: u32 = 0x85;
+pub const SUB_FLAT: u32 = 0x86;
+pub const UP: u32 = 0x87;
+pub const DOUBLE_UP: u32 = 0x88;
+pub const SUB_UP: u32 = 0x8a;
+pub const DOWN: u32 = 0x8b;
+pub const DOUBLE_DOWN: u32 = 0x8c;
+pub const SUB_DOWN: u32 = 0x8e;
+pub const SUP_3: u32 = 0x8f;
+pub const SUP_4: u32 = 0x90;
+pub const SUP_5: u32 = 0x91;
+pub const SUP_6: u32 = 0x92;
+pub const SUP_7: u32 = 0x93;
+pub const SUP_8: u32 = 0x94;
+pub const SUP_9: u32 = 0x95;
+pub const SUP_QUESTION: u32 = 0x96;
+
+/// Returns the character code for a superscript digit.
+pub fn digit_superscript(digit: u8) -> char {
+    char::from_u32(match digit {
+        3 => SUP_3,
+        4 => SUP_4,
+        5 => SUP_5,
+        6 => SUP_6,
+        7 => SUP_7,
+        8 => SUP_8,
+        9 => SUP_9,
+        _ => SUP_QUESTION,
+    }).unwrap()
+}
+
 /// Maps characters to GPU textures.
 pub struct GlyphAtlas {
     map: HashMap<char, Texture2D>,
@@ -12,6 +47,7 @@ pub struct GlyphAtlas {
     height: f32,
     cap_height: f32,
     offset_y: f32,
+    font: Font,
 }
 
 impl GlyphAtlas {
@@ -53,7 +89,7 @@ impl GlyphAtlas {
             (height, 0.0)
         };
 
-        Self { map, width, height, cap_height, offset_y }
+        Self { map, width, height, cap_height, offset_y, font }
     }
 
     /// Draws `text` horizontally without wrapping. Returns the drawn area.
@@ -64,8 +100,13 @@ impl GlyphAtlas {
 
         for char in text.chars() {
             if let Some(texture) = self.map.get(&char) {
-                draw_texture(texture, x, y, color);
-                x += texture.width();
+                if let Some(glyph) = self.font.glyph(char) {
+                    let bbox = glyph.bounding_box();
+                    draw_texture(texture, x + bbox.offset_x as f32,
+                        y - bbox.offset_y as f32 + self.cap_height - bbox.height as f32,
+                        color);
+                    x += self.width;
+                }
             }
         }
 

@@ -173,7 +173,7 @@ impl UI {
         let atlas = font_path.map(|path| GlyphAtlas::from_file(path).ok())
             .flatten()
             .unwrap_or_else(|| GlyphAtlas::from_bdf_bytes(
-                include_bytes!("../font/Dina_r400-8.bdf"))
+                include_bytes!("../font/DinaMedium-10.bdf"))
                     .expect("included font should be loadable"));
 
         Self {
@@ -1268,36 +1268,44 @@ impl UI {
         }
     }
 
-    /// Pushes a note to the draw list. The notation is drawn centered in the
-    /// space of 4 characters.
+    /// Pushes a note to the draw list. The notation is drawn in the space of
+    /// 4 characters.
     pub fn push_note_text(&mut self, x: f32, y: f32, note: &Note, color: Color) {
-        let accidental = match note.sharps {
-            -1 => "b",
-            0 => "-",
-            1 => "#",
-            2 => "x",
-            _ => "?",
-        };
-        let base = format!("{}{}{}", note.nominal.char(), accidental, note.equave);
-        let max_arrows = 3;
+        let nominal = note.nominal.char();
 
-        if note.arrows < 0 {
-            let n = (-note.arrows).min(max_arrows);
-            let y = y + (n - 1) as f32 * (self.style.margin * 0.5).floor();
-            for i in 0..n {
-                self.push_text(x, y - self.style.margin * i as f32,
-                    String::from("v"), color);
-            }
-        } else if note.arrows > 0 {
-            let n = note.arrows.min(max_arrows);
-            let y = y - (n - 1) as f32 * (self.style.margin * 0.5).floor();
-            for i in 0..n {
-                self.push_text(x, y + self.style.margin * i as f32,
-                    String::from("^"), color);
-            }
+        let accidental = char::from_u32(match note.sharps {
+            ..=-3 => text::SUB_FLAT,
+            -2 => text::DOUBLE_FLAT,
+            -1 => text::FLAT,
+            0 => b'-'.into(),
+            1 => text::SHARP,
+            2 => text::DOUBLE_SHARP,
+            3.. => text::SUB_SHARP,
+        }).unwrap();
+
+        let arrow = char::from_u32(match note.arrows {
+            ..=-3 => text::SUB_DOWN,
+            -2 => text::DOUBLE_DOWN,
+            -1 => text::DOWN,
+            0 => b' '.into(),
+            1 => text::UP,
+            2 => text::DOUBLE_UP,
+            3.. => text::SUB_UP,
+        }).unwrap();
+
+        let base = format!("{}{}{}{}", arrow, nominal, accidental, note.equave);
+
+        if (3..=9).contains(&note.arrows.abs()) {
+            let s = text::digit_superscript(note.arrows.abs() as u8).to_string();
+            self.push_text(x, y, s, color);
         }
 
-        self.push_text(x + self.style.atlas.char_width(), y, base, color);
+        if (3..=9).contains(&note.sharps.abs()) {
+            let s = text::digit_superscript(note.sharps.abs() as u8).to_string();
+            self.push_text(x + self.style.atlas.char_width() * 2.0, y, s, color);
+        }
+
+        self.push_text(x, y, base, color);
     }
 }
 
