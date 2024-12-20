@@ -114,18 +114,11 @@ impl App {
     fn new(seq: Sequencer, global_fx: GlobalFX, fx_settings: FXSettings,
         sample_rate: f32
     ) -> Self {
-        let mut err: Option<Box<dyn Error>> = None;
-        let config = match Config::load() {
-            Ok(c) => c,
-            Err(e) => {
-                err = Some(e);
-                Config::default()
-            },
-        };
+        let config = Config::load().unwrap_or_default();
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
         let module = Module::new(fx_settings);
-        let mut app = App {
+        App {
             player: Player::new(seq, module.tracks.len(), sample_rate),
             octave: 4,
             midi,
@@ -138,11 +131,7 @@ impl App {
             instruments_scroll: 0.0,
             settings_scroll: 0.0,
             save_path: None,
-        };
-        if let Some(err) = err {
-            app.ui.report(err);
         }
-        app
     }
 
     // TODO: switching tracks while keyjazzing could result in stuck notes

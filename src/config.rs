@@ -35,25 +35,6 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn default() -> Self {
-        let keys = default_keys();
-        Self {
-            default_midi_input: None,
-            midi_send_pressure: Some(true),
-            theme: None,
-            module_folder: None,
-            patch_folder: None,
-            render_folder: None,
-            scale_folder: None,
-            sample_folder: None,
-            font_folder: None,
-            key_map: keys.iter().cloned().collect(),
-            keys,
-            note_keys: input::default_note_keys(),
-            font: None,
-        }
-    }
-
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let s = std::fs::read_to_string(config_path()?)?;
         let mut c: Self = toml::from_str(&s)?;
@@ -92,6 +73,27 @@ impl Config {
 
     pub fn update_hotkeys(&mut self) {
         self.key_map = self.keys.iter().cloned().collect();
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        let keys = default_keys();
+        Self {
+            default_midi_input: None,
+            midi_send_pressure: Some(true),
+            theme: None,
+            module_folder: None,
+            patch_folder: None,
+            render_folder: None,
+            scale_folder: None,
+            sample_folder: None,
+            font_folder: None,
+            key_map: keys.iter().cloned().collect(),
+            keys,
+            note_keys: input::default_note_keys(),
+            font: None,
+        }
     }
 }
 
