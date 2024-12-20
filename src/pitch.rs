@@ -2,10 +2,11 @@
 
 use std::error::Error;
 use std::{fmt, fs};
-use std::cmp::max;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+
+use crate::ui::text;
 
 const REFERENCE_MIDI_PITCH: f32 = 69.0; // A4
 const DEFAULT_ROOT: Note = Note {
@@ -210,6 +211,30 @@ impl Note {
     pub fn new(arrows: i8, nominal: Nominal, sharps: i8, equave: i8) -> Note {
         Note { arrows, nominal, sharps, equave }
     }
+    
+    pub fn arrow_char(&self) -> char {
+        char::from_u32(match self.arrows {
+            ..=-3 => text::SUB_DOWN,
+            -2 => text::DOUBLE_DOWN,
+            -1 => text::DOWN,
+            0 => b' '.into(),
+            1 => text::UP,
+            2 => text::DOUBLE_UP,
+            3.. => text::SUB_UP,
+        }).unwrap()
+    }
+
+    pub fn accidental_char(&self) -> char {
+        char::from_u32(match self.sharps {
+            ..=-3 => text::SUB_FLAT,
+            -2 => text::DOUBLE_FLAT,
+            -1 => text::FLAT,
+            0 => b'-'.into(),
+            1 => text::SHARP,
+            2 => text::DOUBLE_SHARP,
+            3.. => text::SUB_SHARP,
+        }).unwrap()
+    }
 }
 
 impl Default for Note {
@@ -225,17 +250,16 @@ impl Default for Note {
 
 impl fmt::Display for Note {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let arrow_str = "^".repeat(max(0, self.arrows) as usize) +
-            &"v".repeat(max(0, -self.arrows) as usize);
-        let sharp_str = match self.sharps {
-            -2 => "bb",
-            -1 => "b",
-            0 => "",
-            1 => "#",
-            2 => "x",
-            _ => "?",
+        let arrow_char = match self.arrow_char() {
+            ' ' => "",
+            c => &c.to_string(),
         };
-        write!(f, "{}{}{}{}", arrow_str, self.nominal.char(), sharp_str, self.equave)
+        let accidental_char = match self.accidental_char() {
+            '-' => "",
+            c => &c.to_string(),
+        };
+        write!(f, "{}{}{}{}", arrow_char, self.nominal.char(),
+            accidental_char, self.equave)
     }
 }
 

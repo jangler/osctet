@@ -19,7 +19,7 @@ pub mod pattern_tab;
 pub mod instruments_tab;
 pub mod settings_tab;
 pub mod theme;
-mod text;
+pub mod text;
 mod textedit;
 
 const LINE_THICKNESS: f32 = 1.0;
@@ -1271,29 +1271,8 @@ impl UI {
     /// Pushes a note to the draw list. The notation is drawn in the space of
     /// 4 characters.
     pub fn push_note_text(&mut self, x: f32, y: f32, note: &Note, color: Color) {
-        let nominal = note.nominal.char();
-
-        let accidental = char::from_u32(match note.sharps {
-            ..=-3 => text::SUB_FLAT,
-            -2 => text::DOUBLE_FLAT,
-            -1 => text::FLAT,
-            0 => b'-'.into(),
-            1 => text::SHARP,
-            2 => text::DOUBLE_SHARP,
-            3.. => text::SUB_SHARP,
-        }).unwrap();
-
-        let arrow = char::from_u32(match note.arrows {
-            ..=-3 => text::SUB_DOWN,
-            -2 => text::DOUBLE_DOWN,
-            -1 => text::DOWN,
-            0 => b' '.into(),
-            1 => text::UP,
-            2 => text::DOUBLE_UP,
-            3.. => text::SUB_UP,
-        }).unwrap();
-
-        let base = format!("{}{}{}{}", arrow, nominal, accidental, note.equave);
+        let base = format!("{}{}{}{}", note.arrow_char(), note.nominal.char(),
+            note.accidental_char(), note.equave);
 
         if (3..=9).contains(&note.arrows.abs()) {
             let s = text::digit_superscript(note.arrows.abs() as u8).to_string();
