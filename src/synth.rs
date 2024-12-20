@@ -554,7 +554,7 @@ impl Synth {
 }
 
 /// A Patch is a configuration of synthesis parameters.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Patch {
     pub name: String,
     pub gain: Parameter,
@@ -863,7 +863,7 @@ impl Patch {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Oscillator {
     pub level: Parameter,
     pub tone: Parameter,
@@ -942,7 +942,7 @@ impl KeyTracking {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Filter {
     pub filter_type: FilterType,
     pub cutoff: Parameter,
@@ -983,7 +983,7 @@ impl Filter {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ADSR {
     pub attack: f32,
     pub decay: f32,
@@ -1016,7 +1016,7 @@ impl ADSR {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct LFO {
     pub waveform: Waveform,
     pub freq: Parameter,
@@ -1033,7 +1033,7 @@ impl LFO {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Modulation {
     pub source: ModSource,
     pub target: ModTarget,

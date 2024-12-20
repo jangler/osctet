@@ -5,7 +5,7 @@ use std::{collections::HashSet, error::Error, fs, path::PathBuf};
 use fundsp::math::{delerp, lerp};
 use serde::{Deserialize, Serialize};
 
-use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::DEFAULT_TEMPO, synth::{Patch, DEFAULT_PRESSURE}};
+use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::{Patch, DEFAULT_PRESSURE}};
 
 pub const TICKS_PER_BEAT: u32 = 120;
 
@@ -14,7 +14,7 @@ pub const NOTE_COLUMN: u8 = 0;
 pub const VEL_COLUMN: u8 = 1;
 pub const MOD_COLUMN: u8 = 2;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Module {
     pub title: String,
     pub author: String,
@@ -413,13 +413,26 @@ impl Module {
         }).max()
     }
 
+    /// Returns true if the module ends.
     pub fn ends(&self) -> bool {
-        for track in &self.tracks {
-            for channel in &track.channels {
-                for event in &channel.events {
-                    if event.data == EventData::End {
-                        return true
-                    }
+        for channel in &self.tracks[0].channels {
+            for event in &channel.events {
+                if event.data == EventData::End {
+                    return true
+                }
+            }
+        }
+        false
+    }
+
+    /// Returns true if the module loops.
+    pub fn loops(&self) -> bool {
+        for channel in &self.tracks[0].channels {
+            for event in &channel.events {
+                match event.data {
+                    EventData::End => return false,
+                    EventData::Loop => return true,
+                    _ => (),
                 }
             }
         }
@@ -468,16 +481,51 @@ impl Module {
         }
         result
     }
+
+    /// Returns the total playtime of the module in seconds.
+    pub fn playtime(&self) -> f64 {
+        let ctrl_events: Vec<_> = self.tracks[0].channels.iter()
+            .flat_map(|c| c.events.iter())
+            .collect();
+        let mut tick = 0;
+        let mut time = 0.0;
+        let mut tempo = DEFAULT_TEMPO;
+
+        for evt in ctrl_events {
+            match evt.data {
+                EventData::Tempo(t) => {
+                    time += tick_interval(evt.tick - tick, tempo);
+                    tick = evt.tick;
+                    tempo = t;
+                }
+                EventData::RationalTempo(n, d) => {
+                    time += tick_interval(evt.tick - tick, tempo);
+                    tick = evt.tick;
+                    tempo *= n as f32 / d as f32;
+                }
+                EventData::End => {
+                    return time + tick_interval(evt.tick - tick, tempo)
+                }
+                _ => (),
+            }
+        }
+
+        if let Some(last_tick) = self.last_event_tick() {
+            time += tick_interval(last_tick - tick, tempo)
+        }
+
+        time
+    }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct KitEntry {
     pub input_note: Note,
     pub patch_index: usize,
     pub patch_note: Note,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Track {
     pub target: TrackTarget,
     pub channels: Vec<Channel>,
@@ -504,7 +552,7 @@ pub enum TrackTarget {
     Patch(usize),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
 }
@@ -733,6 +781,7 @@ impl Position {
 }
 
 /// An operation that changes Module data.
+#[derive(Clone)]
 pub enum Edit {
     InsertTrack(usize, Track),
     RemoveTrack(usize),
@@ -755,12 +804,14 @@ pub enum Edit {
     ReplaceEvents(Vec<LocatedEvent>),
 }
 
+#[derive(Clone)]
 pub struct ChannelCoords {
     track: u8,
     channel: u8,
 }
 
 /// Used to track added/removed Tracks for synchronizing Player with Module.
+#[derive(Clone)]
 pub enum TrackEdit {
     Insert(usize),
     Remove(usize),

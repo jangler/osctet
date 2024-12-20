@@ -1,11 +1,11 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf, sync::mpsc::{self, Receiver}, thread};
 
 use fundsp::hacker32::*;
 
 use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, Position, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
-const LOOP_FADEOUT_TIME: f32 = 10.0;
+const LOOP_FADEOUT_TIME: f64 = 10.0;
 
 /// Handles module playback. In methods that take a `track` argument, 0 can
 /// safely be used for keyjazz events (since track 0 will never sequence).
@@ -144,12 +144,12 @@ impl Player {
         }
     }
 
-    pub fn frame(&mut self, module: &Module, dt: f32) {
+    pub fn frame(&mut self, module: &Module, dt: f64) {
         if !self.playing {
             return
         }
 
-        self.playtime += dt as f64;
+        self.playtime += dt;
         let prev_tick = self.tick;
         self.tick += interval_ticks(self.playtime, self.tempo);
         self.playtime -= tick_interval(self.tick - prev_tick, self.tempo);
@@ -336,39 +336,61 @@ fn interval_ticks(dt: f64, tempo: f32) -> u32 {
     (dt * tempo as f64 / 60.0 * TICKS_PER_BEAT as f64).round() as u32
 }
 
-fn tick_interval(dtick: u32, tempo: f32) -> f64 {
+pub fn tick_interval(dtick: u32, tempo: f32) -> f64 {
     dtick as f64 / tempo as f64 * 60.0 / TICKS_PER_BEAT as f64
 }
 
+pub enum RenderUpdate {
+    Progress(f64),
+    Done(Wave, PathBuf),
+}
+
 /// Renders module to PCM. Loops forever if module is missing END!
-pub fn render(module: &Module) -> Wave {
-    let sample_rate = 44100;
-    let mut wave = Wave::new(2, sample_rate as f64);
-    let mut seq = Sequencer::new(false, 4);
-    seq.set_sample_rate(sample_rate as f64);
-    let mut fx = GlobalFX::new(seq.backend(), &module.fx);
-    let fadeout_gain = shared(1.0);
-    fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
-    fx.net.set_sample_rate(sample_rate as f64);
-    let mut player = Player::new(seq, module.tracks.len(), sample_rate as f32);
-    let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
-    let block_size = 64;
-    let dt = block_size as f32 / sample_rate as f32;
-    let mut time_since_loop = 0.0;
+pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
+    let (tx, rx) = mpsc::channel();
 
-    // TODO: render would probably be faster if we called player.frame() only
-    //       when there's a new event. benchmark this
-    player.play();
-    while player.playing && time_since_loop < LOOP_FADEOUT_TIME {
-        player.frame(module, dt);
-        for _ in 0..block_size {
-            wave.push(backend.get_stereo());
+    thread::spawn(move || {let sample_rate = 44100;
+        let mut wave = Wave::new(2, sample_rate as f64);
+        let mut seq = Sequencer::new(false, 4);
+        seq.set_sample_rate(sample_rate as f64);
+        let mut fx = GlobalFX::new(seq.backend(), &module.fx);
+        let fadeout_gain = shared(1.0);
+        fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
+        fx.net.set_sample_rate(sample_rate as f64);
+        let mut player = Player::new(seq, module.tracks.len(), sample_rate as f32);
+        let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
+        let block_size = 64;
+        let dt = block_size as f64 / sample_rate as f64;
+        let mut playtime = 0.0;
+        let mut time_since_loop = 0.0;
+        let render_time = if module.loops() {
+            module.playtime() + LOOP_FADEOUT_TIME as f64
+        } else {
+            module.playtime()
+        };
+    
+        // TODO: render would probably be faster if we called player.frame() only
+        //       when there's a new event. benchmark this
+        player.play();
+        while player.playing && time_since_loop < LOOP_FADEOUT_TIME {
+            player.frame(&module, dt);
+            playtime += dt;
+            for _ in 0..block_size {
+                wave.push(backend.get_stereo());
+            }
+            if player.looped {
+                fadeout_gain.set(1.0 - (time_since_loop / LOOP_FADEOUT_TIME) as f32);
+                time_since_loop += dt;
+            }
+            if let Err(e) = tx.send(RenderUpdate::Progress(playtime / render_time)) {
+                eprintln!("{}", e);
+            }
         }
-        if player.looped {
-            fadeout_gain.set(1.0 - (time_since_loop / LOOP_FADEOUT_TIME));
-            time_since_loop += dt;
+    
+        if let Err(e) = tx.send(RenderUpdate::Done(wave, path)) {
+            eprintln!("{}", e);
         }
-    }
+    });
 
-    wave
+    rx
 }

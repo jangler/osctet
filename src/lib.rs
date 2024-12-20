@@ -10,7 +10,7 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use module::{EventData, Module, TrackTarget};
-use playback::Player;
+use playback::{Player, RenderUpdate};
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
 
@@ -108,6 +108,7 @@ struct App {
     instruments_scroll: f32,
     settings_scroll: f32,
     save_path: Option<PathBuf>,
+    render_channel: Option<Receiver<RenderUpdate>>,
 }
 
 impl App {
@@ -131,6 +132,7 @@ impl App {
             instruments_scroll: 0.0,
             settings_scroll: 0.0,
             save_path: None,
+            render_channel: None,
         }
     }
 
@@ -409,10 +411,26 @@ impl App {
         if self.ui.accepting_note_input() {
             self.player.clear_notes_with_origin(KeyOrigin::Midi);
         }
+        self.handle_render_updates();
         self.handle_midi();
         self.check_midi_reconnect();
         self.process_ui();
-        self.player.frame(&self.module, get_frame_time());
+        self.player.frame(&self.module, get_frame_time().into());
+    }
+
+    fn handle_render_updates(&mut self) {
+        if let Some(rx) = &self.render_channel {
+            while let Ok(update) = rx.try_recv() {
+                match update {
+                    RenderUpdate::Progress(f) =>
+                        self.ui.notify(format!("Rendering: {}%", (f * 100.0).round())),
+                    RenderUpdate::Done(wav, path) => match wav.save_wav16(path) {
+                        Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
+                        Err(e) => self.ui.report(e),
+                    }
+                }
+            }
+        }
     }
 
     fn process_ui(&mut self) {
@@ -489,10 +507,7 @@ impl App {
                 .save_file() {
                 self.config.render_folder = config::dir_as_string(&path);
                 let _ = self.config.save();
-                match playback::render(&self.module).save_wav16(path) {
-                    Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
-                    Err(e) => self.ui.report(e),
-                }
+                self.render_channel = Some(playback::render(self.module.clone(), path));
             }
 
         } else {
