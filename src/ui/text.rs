@@ -26,6 +26,13 @@ pub const SUP_8: u32 = 0x94;
 pub const SUP_9: u32 = 0x95;
 pub const SUP_QUESTION: u32 = 0x96;
 
+pub const FONT_BYTES: [&[u8]; 4] = [
+    include_bytes!("../../font/DinaMedium-8.bdf"),
+    include_bytes!("../../font/DinaMedium-10.bdf"),
+    include_bytes!("../../font/DinaMedium-12.bdf"),
+    include_bytes!("../../font/DinaMedium-13.bdf"),
+];
+
 /// Returns the character code for a superscript digit.
 pub fn digit_superscript(digit: u8) -> char {
     char::from_u32(match digit {

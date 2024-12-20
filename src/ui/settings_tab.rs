@@ -1,8 +1,8 @@
 use palette::Lchuv;
 
-use crate::config::{self, Config};
+use crate::config::Config;
 
-use super::{new_file_dialog, text::GlyphAtlas, theme::Theme, Layout, UI};
+use super::{text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.layout = Layout::Horizontal;
@@ -30,7 +30,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     color_controls(ui, "Accent 1", true, |t| &mut t.accent1);
     color_controls(ui, "Accent 2", true, |t| &mut t.accent2);
     ui.end_group();
-    
+
     ui.start_group();
     if ui.button("Reset (light)", true) {
         ui.style.theme = Theme::light();
@@ -41,14 +41,12 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.end_group();
 
     ui.start_group();
-    if ui.button("Browse font", true) {
-        browse_font(cfg, ui);
+    ui.offset_label("Font size");
+    if ui.button("-", cfg.font_size > 0) {
+        set_font(cfg, ui, cfg.font_size - 1);
     }
-    if let Some(font) = &cfg.font {
-        ui.offset_label(&format!("Current: {}",
-            font.split(&['/', '\\']).last().unwrap_or_default()));
-    } else {
-        ui.offset_label("Current: (default)");
+    if ui.button("+", cfg.font_size < text::FONT_BYTES.len() - 1) {
+        set_font(cfg, ui, cfg.font_size + 1);
     }
     ui.end_group();
 
@@ -95,7 +93,7 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
 fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
     ui.header("KEY COMMANDS");
     ui.start_group();
-    
+
     let mut id = 0;
     let mut changed = false;
     let mut keymap: Vec<&mut _> = cfg.iter_keymap().collect();
@@ -164,21 +162,11 @@ fn entries_per_col(ui: &UI, max_chars: usize, len: usize) -> usize {
     (len as f32 / cols as f32).ceil() as usize
 }
 
-fn browse_font(cfg: &mut Config, ui: &mut UI) {
-    if let Some(path) = new_file_dialog()
-        .add_filter("BDF font", &["bdf"])
-        .set_directory(cfg.font_folder.clone()
-            .unwrap_or(String::from(".")))
-        .pick_file() {
-        cfg.font_folder = config::dir_as_string(&path);
-        let _ = cfg.save();
-        match GlyphAtlas::from_file(&path) {
-            Ok(atlas) => {
-                ui.style.margin = atlas.max_height() - atlas.cap_height();
-                ui.style.atlas = atlas;
-                cfg.font = path.to_str().map(|s| s.to_owned());
-            }
-            Err(e) => ui.report(e),
-        }
+fn set_font(cfg: &mut Config, ui: &mut UI, size: usize) {
+    if let Some(bytes) = text::FONT_BYTES.get(size) {
+        let atlas = GlyphAtlas::from_bdf_bytes(bytes).unwrap();
+        ui.style.margin = atlas.max_height() - atlas.cap_height();
+        ui.style.atlas = atlas;
+        cfg.font_size = size;
     }
 }

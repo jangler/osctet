@@ -7,6 +7,9 @@ use crate::{input::{self, Action, Hotkey, Modifiers}, pitch::Note, ui::theme::Th
 
 const CONFIG_FILENAME: &str = "config.toml";
 
+// this is a function instead of a constant to make serde happy
+fn default_font_size() -> usize { 1 }
+
 fn config_path() -> Result<PathBuf, std::io::Error> {
     let mut path = env::current_exe()?;
     path.pop();
@@ -24,14 +27,14 @@ pub struct Config {
     pub render_folder: Option<String>,
     pub scale_folder: Option<String>,
     pub sample_folder: Option<String>,
-    pub font_folder: Option<String>,
     #[serde(default = "default_keys")]
     keys: Vec<(Hotkey, Action)>, // for serialization
     #[serde(skip)]
     key_map: HashMap<Hotkey, Action>, // for use
     #[serde(default = "input::default_note_keys")]
     pub note_keys: Vec<(Hotkey, Note)>,
-    pub font: Option<String>,
+    #[serde(default = "default_font_size")]
+    pub font_size: usize,
 }
 
 impl Config {
@@ -88,11 +91,10 @@ impl Default for Config {
             render_folder: None,
             scale_folder: None,
             sample_folder: None,
-            font_folder: None,
             key_map: keys.iter().cloned().collect(),
             keys,
             note_keys: input::default_note_keys(),
-            font: None,
+            font_size: default_font_size(),
         }
     }
 }

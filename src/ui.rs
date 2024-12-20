@@ -169,12 +169,10 @@ pub struct UI {
 }
 
 impl UI {
-    pub fn new(theme: Option<Theme>, font_path: Option<&String>) -> Self {
-        let atlas = font_path.map(|path| GlyphAtlas::from_file(path).ok())
-            .flatten()
-            .unwrap_or_else(|| GlyphAtlas::from_bdf_bytes(
-                include_bytes!("../font/DinaMedium-10.bdf"))
-                    .expect("included font should be loadable"));
+    pub fn new(theme: Option<Theme>, font_index: usize) -> Self {
+        let atlas = GlyphAtlas::from_bdf_bytes(text::FONT_BYTES.get(font_index)
+            .unwrap_or(&text::FONT_BYTES[0]))
+            .expect("included font should be loadable");
 
         Self {
             style: Style {
@@ -1274,12 +1272,12 @@ impl UI {
         let base = format!("{}{}{}{}", note.arrow_char(), note.nominal.char(),
             note.accidental_char(), note.equave);
 
-        if (3..=9).contains(&note.arrows.abs()) {
+        if (3..).contains(&note.arrows.abs()) {
             let s = text::digit_superscript(note.arrows.abs() as u8).to_string();
             self.push_text(x, y, s, color);
         }
 
-        if (3..=9).contains(&note.sharps.abs()) {
+        if (3..).contains(&note.sharps.abs()) {
             let s = text::digit_superscript(note.sharps.abs() as u8).to_string();
             self.push_text(x + self.style.atlas.char_width() * 2.0, y, s, color);
         }

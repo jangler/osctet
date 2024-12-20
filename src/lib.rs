@@ -122,7 +122,7 @@ impl App {
             player: Player::new(seq, module.tracks.len(), sample_rate),
             octave: 4,
             midi,
-            ui: ui::UI::new(config.theme.clone(), config.font.as_ref()),
+            ui: ui::UI::new(config.theme.clone(), config.font_size),
             config,
             module,
             fx: global_fx,
@@ -229,7 +229,7 @@ impl App {
                     _ => (),
                 }
             }
-            
+
             if let Some(note) = input::note_from_key(
                 hk, &self.module.tuning, self.octave, &self.config) {
                 let key = Key {
@@ -414,7 +414,7 @@ impl App {
         self.process_ui();
         self.player.frame(&self.module, get_frame_time());
     }
-    
+
     fn process_ui(&mut self) {
         self.ui.start_frame();
 
@@ -435,7 +435,7 @@ impl App {
 
         self.ui.end_frame();
     }
-    
+
     fn bottom_panel(&mut self) {
         self.ui.start_bottom_panel();
 
@@ -475,10 +475,10 @@ impl App {
                 Err(e) => self.ui.report(e),
             }
         }
-        
+
         self.ui.end_bottom_panel();
     }
-    
+
     fn render_and_save(&mut self) {
         if self.module.ends() {
             if let Some(path) = ui::new_file_dialog()
@@ -587,7 +587,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let mut global_fx = GlobalFX::new(seq.backend(), &fx_settings);
     global_fx.net.set_sample_rate(config.sample_rate.0 as f64);
     let mut backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
-    
+
     let stream = device.build_output_stream(
         &config,move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
             // there's probably a better way to do this
