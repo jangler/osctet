@@ -423,8 +423,11 @@ impl UI {
         current_y: &mut f32, max_y: f32, viewport_h: f32, keys: bool
     ) {
         let (_, y_scroll) = mouse_wheel();
-        let actual_increment = self.style.margin * 6.0
-            + self.style.atlas.cap_height() * 3.0;
+        let actual_increment = if is_alt_down() {
+            viewport_h
+        } else {
+            self.style.line_height() * 3.0
+        };
         let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
         *current_y += dy;
 
@@ -1378,4 +1381,8 @@ fn display_unit(unit: Option<&'static str>) -> Box<dyn FnOnce(f32) -> String> {
     } else {
         Box::new(|x| format!("{:.3}", x))
     }
+}
+
+fn is_alt_down() -> bool {
+    is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt)
 }
