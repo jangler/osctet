@@ -1271,13 +1271,11 @@ impl UI {
     /// Pushes a note to the draw list. The notation is drawn centered in the
     /// space of 4 characters.
     pub fn push_note_text(&mut self, x: f32, y: f32, note: &Note, color: Color) {
-        let accidental = match note.demisharps {
-            -2 => "b",
-            -1 => "d",
+        let accidental = match note.sharps {
+            -1 => "b",
             0 => "-",
-            1 => "t",
-            2 => "#",
-            4 => "x",
+            1 => "#",
+            2 => "x",
             _ => "?",
         };
         let base = format!("{}{}{}", note.nominal.char(), accidental, note.equave);

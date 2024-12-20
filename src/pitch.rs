@@ -11,7 +11,7 @@ const REFERENCE_MIDI_PITCH: f32 = 69.0; // A4
 const DEFAULT_ROOT: Note = Note {
     arrows: 0,
     nominal: Nominal::C,
-    demisharps: 0,
+    sharps: 0,
     equave: 4,
 };
 
@@ -144,11 +144,11 @@ impl Tuning {
     pub fn midi_pitch(&self, note: &Note) -> f32 {
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let root_steps = self.nominal_steps(self.root.nominal)
-            + self.sharp_steps() * self.root.demisharps as i32 / 2
+            + self.sharp_steps() * self.root.sharps as i32
             + self.arrow_steps as i32 * self.root.arrows as i32;
         let steps = -root_steps
             + self.nominal_steps(note.nominal)
-            + self.sharp_steps() * note.demisharps as i32 / 2
+            + self.sharp_steps() * note.sharps as i32
             + self.arrow_steps as i32 * note.arrows as i32;
         let len = self.scale.len() as i32;
         let scale_index = (steps - 1).rem_euclid(len) as usize;
@@ -162,7 +162,7 @@ impl Tuning {
     fn root_pitch(&self) -> f32 {
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let steps = self.nominal_steps(self.root.nominal)
-            + self.sharp_steps() * self.root.demisharps as i32 / 2
+            + self.sharp_steps() * self.root.sharps as i32
             + self.arrow_steps as i32 * self.root.arrows as i32;
         let len = self.scale.len() as i32;
         let scale_index = (steps - 1).rem_euclid(len) as usize;
@@ -202,13 +202,13 @@ fn parse_interval(s: &str) -> Option<f32> {
 pub struct Note {
     pub arrows: i8,
     pub nominal: Nominal,
-    pub demisharps: i8,
+    pub sharps: i8,
     pub equave: i8,
 }
 
 impl Note {
-    pub fn new(arrows: i8, nominal: Nominal, demisharps: i8, equave: i8) -> Note {
-        Note { arrows, nominal, demisharps, equave }
+    pub fn new(arrows: i8, nominal: Nominal, sharps: i8, equave: i8) -> Note {
+        Note { arrows, nominal, sharps, equave }
     }
 }
 
@@ -217,7 +217,7 @@ impl Default for Note {
         Self {
             arrows: 0,
             nominal: Nominal::C,
-            demisharps: 0,
+            sharps: 0,
             equave: 4,
         }
     }
@@ -227,16 +227,12 @@ impl fmt::Display for Note {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let arrow_str = "^".repeat(max(0, self.arrows) as usize) +
             &"v".repeat(max(0, -self.arrows) as usize);
-        let sharp_str = match self.demisharps {
-            -4 => "bb",
-            -3 => "db",
-            -2 => "b",
-            -1 => "d",
+        let sharp_str = match self.sharps {
+            -2 => "bb",
+            -1 => "b",
             0 => "",
-            1 => "t",
-            2 => "#",
-            3 => "t#",
-            4 => "x",
+            1 => "#",
+            2 => "x",
             _ => "?",
         };
         write!(f, "{}{}{}{}", arrow_str, self.nominal.char(), sharp_str, self.equave)
@@ -251,7 +247,7 @@ mod tests {
         arrows: 0,
         nominal: Nominal::A,
         equave: 4,
-        demisharps: 0,
+        sharps: 0,
     };
 
     #[test]
@@ -308,9 +304,7 @@ mod tests {
         assert_eq!(t.midi_pitch(&Note { nominal: Nominal::B, ..A4 }), 71.0);
         assert_eq!(t.midi_pitch(&Note { nominal: Nominal::C, ..A4 }), 60.0);
         assert_eq!(t.midi_pitch(&Note { equave: 5, ..A4 }), 81.0);
-        assert_eq!(t.midi_pitch(&Note { demisharps: 1, ..A4 }), 69.0);
-        assert_eq!(t.midi_pitch(&Note { demisharps: -1, ..A4 }), 69.0);
-        assert_eq!(t.midi_pitch(&Note { demisharps: 2, ..A4 }), 70.0);
+        assert_eq!(t.midi_pitch(&Note { sharps: 1, ..A4 }), 70.0);
         t.root = Note::new(0, Nominal::D, 0, 0);
         assert_eq!(t.midi_pitch(&A4), 69.0);
     }
@@ -318,8 +312,8 @@ mod tests {
     #[test]
     fn test_note_display() {
         assert_eq!(format!("{}", A4), "A4");
-        assert_eq!(format!("{}", Note { demisharps: 2, ..A4 }), "A#4");
-        assert_eq!(format!("{}", Note { arrows: -1, demisharps: 2, ..A4 }), "vA#4");
+        assert_eq!(format!("{}", Note { sharps: 1, ..A4 }), "A#4");
+        assert_eq!(format!("{}", Note { arrows: -1, sharps: 1, ..A4 }), "vA#4");
     }
 
     #[test]

@@ -24,7 +24,7 @@ pub fn u8_from_key(k: KeyCode) -> u8 {
 // or the whole tone
 fn use_sharps(t: &Tuning) -> bool {
     let d4 = Note::new(0, Nominal::D, 0, 4);
-    let ds4 = Note { demisharps: 2, ..d4 };
+    let ds4 = Note { sharps: 1, ..d4 };
     t.midi_pitch(&d4) != t.midi_pitch(&ds4) &&
         t.midi_pitch(&ds4) != t.midi_pitch(&Note { nominal: Nominal::E, ..d4 })
 }
@@ -35,8 +35,8 @@ pub fn note_from_key(key: Hotkey, t: &Tuning, equave: i8, cfg: &Config) -> Optio
         .map(|(_, n)| {
             let n = if use_sharps(t) { *n } else {
                 Note {
-                    demisharps: 0,
-                    arrows: n.demisharps / 2,
+                    sharps: 0,
+                    arrows: n.sharps,
                     ..*n
                 }
             };
@@ -56,7 +56,7 @@ pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
     let f2 = |nominal, accidentals: i8, offset: i8| Note {
         arrows: 0,
         nominal,
-        demisharps: accidentals * 2,
+        sharps: accidentals,
         equave: DEFAULT_EQUAVE + offset,
     };
     vec![
@@ -105,7 +105,7 @@ pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
         adjust_note_for_modifier_keys(Note {
             arrows: if use_sharps(t) { 0 } else { accidentals },
             nominal,
-            demisharps: if use_sharps(t) { accidentals * 2} else { 0 },
+            sharps: if use_sharps(t) { accidentals } else { 0 },
             equave: (n as i8) / 12 - 1,
         }, cfg)
     };
@@ -129,7 +129,7 @@ pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
 pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config) -> Note {
     let mut note = Note {
         arrows: note.arrows,
-        demisharps: note.demisharps,
+        sharps: note.sharps,
         equave: note.equave,
         ..note
     };
@@ -141,10 +141,10 @@ pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config) -> Note {
         note.arrows -= 1;
     }
     if cfg.action_is_down(Action::NudgeSharp) {
-        note.demisharps += 2;
+        note.sharps += 1;
     }
     if cfg.action_is_down(Action::NudgeFlat) {
-        note.demisharps -= 2;
+        note.sharps -= 1;
     }
     if cfg.action_is_down(Action::NudgeOctaveUp) {
         note.equave += 1;
@@ -166,14 +166,14 @@ fn enharmonic_alternative(note: Note) -> Note {
         Nominal::C | Nominal::F => -1,
         _ => 0,
     };
-    let ((nominal, equave_offset), demisharp_offset) = if note.demisharps + bias >= 0 {
-        (note.nominal.next(), if bias > 0 { -2 } else { -4 })
+    let ((nominal, equave_offset), sharp_offset) = if note.sharps * 2 + bias >= 0 {
+        (note.nominal.next(), if bias > 0 { -1 } else { -2 })
     } else {
-        (note.nominal.prev(), if bias < 0 { 2 } else { 4 })
+        (note.nominal.prev(), if bias < 0 { 1 } else { 2 })
     };
     Note {
         nominal,
-        demisharps: note.demisharps + demisharp_offset,
+        sharps: note.sharps + sharp_offset,
         equave: note.equave + equave_offset,
         ..note
     }
