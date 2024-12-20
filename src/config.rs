@@ -36,6 +36,7 @@ pub struct Config {
 
 impl Config {
     pub fn default() -> Self {
+        let keys = default_keys();
         Self {
             default_midi_input: None,
             midi_send_pressure: Some(true),
@@ -46,8 +47,8 @@ impl Config {
             scale_folder: None,
             sample_folder: None,
             font_folder: None,
-            keys: default_keys(),
-            key_map: HashMap::new(),
+            key_map: keys.iter().cloned().collect(),
+            keys,
             note_keys: input::default_note_keys(),
             font: None,
         }
