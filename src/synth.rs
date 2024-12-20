@@ -357,7 +357,7 @@ impl FilterType {
     }
 }
 
-const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to A in column
+pub const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to A in column
 
 /// A Synth orchestrates the playing of patches.
 pub struct Synth {

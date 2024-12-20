@@ -5,7 +5,7 @@ use std::{collections::HashSet, error::Error, fs, path::PathBuf};
 use fundsp::math::{delerp, lerp};
 use serde::{Deserialize, Serialize};
 
-use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::DEFAULT_TEMPO, synth::Patch};
+use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::DEFAULT_TEMPO, synth::{Patch, DEFAULT_PRESSURE}};
 
 pub const TICKS_PER_BEAT: u32 = 120;
 
@@ -556,8 +556,8 @@ impl Channel {
     }
 
     /// Returns an interpolated value from the given parameters.
-    fn interp_values(&self, col: u8, tick: u32, filter_fn: impl Fn(&&Event) -> bool,
-        extract_fn: impl Fn(&EventData) -> Option<f32>
+    fn interp_values(&self, col: u8, tick: u32, default_value: Option<f32>,
+        filter_fn: impl Fn(&&Event) -> bool, extract_fn: impl Fn(&EventData) -> Option<f32>,
     ) -> Option<f32> {
         let interp: Vec<_> = self.interp_by_col(col).collect();
         if let Some(i) = interp.iter().position(|t| *t >= tick) {
@@ -566,17 +566,20 @@ impl Channel {
                 let end = interp[i];
                 let events: Vec<_> = self.events.iter().filter(filter_fn).collect();
                 if let Some(i) = events.iter().position(|e| e.tick >= tick) {
-                    if i > 0 {
-                        let prev_event = events[i - 1];
-                        let next_event = events[i];
-                        let start = start.max(prev_event.tick);
-                        if next_event.tick <= end {
-                            let end = end.min(next_event.tick);
-                            if let Some(prev) = extract_fn(&prev_event.data) {
-                                if let Some(next) = extract_fn(&next_event.data) {
-                                    let t = delerp(start as f32, end as f32, tick as f32);
-                                    return Some(lerp(prev, next, t))
-                                }
+                    let next_event = events[i];
+                    if next_event.tick <= end {
+                        let end = end.min(next_event.tick);
+                        let (prev, start) = if i > 0 {
+                            let prev_event = events[i - 1];
+                            let start = start.max(prev_event.tick);
+                            (extract_fn(&prev_event.data), start)
+                        } else {
+                            (default_value, start)
+                        };
+                        if let Some(prev) = prev {
+                            if let Some(next) = extract_fn(&next_event.data) {
+                                let t = delerp(start as f32, end as f32, tick as f32);
+                                return Some(lerp(prev, next, t))
                             }
                         }
                     }
@@ -588,7 +591,7 @@ impl Channel {
 
     /// Returns the interpolated MIDI pitch at a given tick.
     pub fn interpolate_pitch(&self, tick: u32, tuning: &Tuning) -> Option<f32> {
-        self.interp_values(NOTE_COLUMN, tick, |e| match e.data {
+        self.interp_values(NOTE_COLUMN, tick, None, |e| match e.data {
             EventData::Pitch(_) => true,
             _ => false,
         }, |data| match data {
@@ -599,7 +602,7 @@ impl Channel {
 
     /// Returns the interpolated pressure at a given tick.
     pub fn interpolate_pressure(&self, tick: u32) -> Option<f32> {
-        self.interp_values(VEL_COLUMN, tick, |e| match e.data {
+        self.interp_values(VEL_COLUMN, tick, Some(DEFAULT_PRESSURE), |e| match e.data {
             EventData::Pressure(_) => true,
             _ => false,
         }, |data| match data {
@@ -610,7 +613,7 @@ impl Channel {
 
     /// Returns the interpolated modulation at a given tick.
     pub fn interpolate_modulation(&self, tick: u32) -> Option<f32> {
-        self.interp_values(MOD_COLUMN, tick, |e| match e.data {
+        self.interp_values(MOD_COLUMN, tick, Some(0.0), |e| match e.data {
             EventData::Modulation(_) => true,
             _ => false,
         }, |data| match data {
@@ -621,7 +624,7 @@ impl Channel {
 
     /// Returns the interpolated tempo at a given tick.
     pub fn interpolate_tempo(&self, tick: u32) -> Option<f32> {
-        self.interp_values(NOTE_COLUMN, tick, |e| match e.data {
+        self.interp_values(NOTE_COLUMN, tick, Some(DEFAULT_TEMPO), |e| match e.data {
             EventData::Tempo(_) => true,
             _ => false,
         }, |data| match data {
