@@ -13,7 +13,6 @@ use crate::adsr::adsr_scalable;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
-const VOICE_GAIN: f32 = 0.5; // -6 dB
 const VOICES_PER_CHANNEL: usize = 3;
 
 pub const MAX_ENV_SCALE: f32 = 16.0;
@@ -1203,8 +1202,7 @@ impl Voice {
             rate,
         };
         let gain = (var(&settings.gain.0) >> follow(SMOOTH_TIME))
-            * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x))
-            * VOICE_GAIN;
+            * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x));
         let filter_net = settings.make_filter_net(&vars);
 
         // use dry signal if clip gain is set to 1.0

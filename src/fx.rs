@@ -23,7 +23,7 @@ pub struct FXSettings {
 
 impl FXSettings {
     pub fn make_gain(&self) -> Box<dyn AudioUnit> {
-        Box::new(var(&self.gain.0) >> split::<U4>())
+        Box::new(var(&self.gain.0) >> split::<U2>())
     }
 
     pub fn make_amount(&self) -> Box<dyn AudioUnit> {
@@ -81,11 +81,10 @@ impl GlobalFX {
 
         Self {
             net: Net::wrap(Box::new(backend))
-                * gain
                 >> (multipass::<U2>()
-                    | (multipass::<U2>() >> amount * (predelay >> reverb)))
-                >> multijoin::<U2, U2>()
+                    + (multipass::<U2>() >> amount * (predelay >> reverb)))
                 >> (dcblock() | dcblock())
+                * gain
                 >> comp,
             gain_id,
             amount_id,
