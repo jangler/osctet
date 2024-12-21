@@ -23,6 +23,7 @@ pub mod fx;
 pub mod ui;
 pub mod module;
 pub mod playback;
+mod compressor;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
 use ui::instruments_tab::fix_patch_index;

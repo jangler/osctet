@@ -1,3 +1,5 @@
+use fundsp::math::amp_db;
+
 use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX}, module::Module, pitch::Tuning};
 
 use super::*;
@@ -17,9 +19,8 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.space(2.0);
-    ui.header("FX");
-    ui.shared_slider("gain",
-        "Global volume", &settings.gain.0, 0.0..=2.0, None, 2, true);
+    ui.header("REVERB");
+
     ui.shared_slider("reverb_level",
         "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None, 2, true);
 
@@ -34,6 +35,33 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     if ui.slider("decay_time",
         "Decay time", &mut settings.reverb_time, 0.0..=5.0, Some("s"), 2, true) {
         fx.commit_reverb(settings);
+    }
+
+    ui.space(2.0);
+    ui.header("COMPRESSION");
+
+    ui.shared_slider("gain", "Gain", &settings.gain.0, 0.0..=2.0, None, 2, true);
+
+    let comp = &mut settings.comp_settings;
+    if ui.formatted_slider("threshold", "Threshold", &mut comp.threshold,
+        0.0..=1.0, 1, true, |x| format!("{:.1} dB", amp_db(x))) {
+        fx.commit_comp(comp);
+    }
+    if ui.formatted_slider("ratio", "Ratio", &mut comp.slope,
+        0.0..=1.0, 1, true, |x| format!("{:.1}:1", if x == 1.0 {
+            f32::INFINITY
+        } else {
+            1.0 / (1.0 - x)
+        })) {
+        fx.commit_comp(comp);
+    }
+    if ui.slider("comp_attack", "Attack", &mut comp.attack,
+        0.0..=1.0, Some("s"), 2, true) {
+        fx.commit_comp(comp);
+    }
+    if ui.slider("comp_release", "Release", &mut comp.release,
+        0.0..=1.0, Some("s"), 2, true) {
+        fx.commit_comp(comp);
     }
 }
 

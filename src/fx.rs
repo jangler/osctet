@@ -4,7 +4,7 @@ use fundsp::hacker32::*;
 use realseq::SequencerBackend;
 use serde::{Deserialize, Serialize};
 
-use crate::synth::Parameter;
+use crate::{compressor::compressor, synth::Parameter};
 
 // serializable global FX settings
 #[derive(Clone, Serialize, Deserialize)]
@@ -17,6 +17,8 @@ pub struct FXSettings {
     pub reverb_diffusion: f32,
     pub reverb_mod_speed: f32,
     pub reverb_damping: f32,
+    #[serde(default)]
+    pub comp_settings: CompSettings,
 }
 
 impl FXSettings {
@@ -54,6 +56,7 @@ impl Default for FXSettings {
             reverb_diffusion: 0.5,
             reverb_mod_speed: 0.5,
             reverb_damping: 3.0,
+            comp_settings: Default::default(),
         } 
     }
 }
@@ -65,6 +68,7 @@ pub struct GlobalFX {
     amount_id: NodeId,
     predelay_id: NodeId,
     reverb_id: NodeId,
+    comp_id: NodeId,
 }
 
 impl GlobalFX {
@@ -73,22 +77,21 @@ impl GlobalFX {
         let (reverb, reverb_id) = Net::wrap_id(settings.make_reverb());
         let (gain, gain_id) = Net::wrap_id(settings.make_gain());
         let (amount, amount_id) = Net::wrap_id(settings.make_amount());
+        let (comp, comp_id) = Net::wrap_id(settings.comp_settings.make_node());
 
         Self {
             net: Net::wrap(Box::new(backend))
                 * gain
-                >> (dcblock() | dcblock() | dcblock() | dcblock())
-                >> (shape(Tanh(1.0))
-                    | shape(Tanh(1.0))
-                    | shape(Tanh(1.0))
-                    | shape(Tanh(1.0)))
                 >> (multipass::<U2>()
                     | (multipass::<U2>() >> amount * (predelay >> reverb)))
-                >> multijoin::<U2, U2>(),
+                >> multijoin::<U2, U2>()
+                >> (dcblock() | dcblock())
+                >> comp,
             gain_id,
             amount_id,
             predelay_id,
             reverb_id,
+            comp_id,
         }
     }
 
@@ -102,6 +105,8 @@ impl GlobalFX {
         self.net.crossfade(self.amount_id, Fade::Smooth, 0.1, settings.make_amount());
         self.net.crossfade(self.predelay_id, Fade::Smooth, 0.1, settings.make_predelay());
         self.net.crossfade(self.reverb_id, Fade::Smooth, 0.1, settings.make_reverb());
+        self.net.crossfade(self.comp_id, Fade::Smooth, 0.1,
+            settings.comp_settings.make_node());
         self.net.commit();
     }
 
@@ -113,8 +118,41 @@ impl GlobalFX {
         self.crossfade(self.reverb_id, settings.make_reverb());
     }
 
+    pub fn commit_comp(&mut self, comp: &CompSettings) {
+        self.crossfade(self.comp_id, comp.make_node());
+    }
+
     fn crossfade(&mut self, id: NodeId, unit: Box<dyn AudioUnit>) {
         self.net.crossfade(id, Fade::Smooth, 0.1, unit);
         self.net.commit();
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct CompSettings {
+    pub threshold: f32,
+    pub slope: f32,
+    pub attack: f32,
+    pub release: f32,
+}
+
+impl CompSettings {
+    fn make_node(&self) -> Box<dyn AudioUnit> {
+        if self.threshold < 1.0 && self.slope > 0.0 {
+            Box::new(compressor(self.threshold, self.slope, self.attack, self.release))
+        } else {
+            Box::new(pass() | pass())
+        }
+    }
+}
+
+impl Default for CompSettings {
+    fn default() -> Self {
+        Self {
+            threshold: 0.5,
+            slope: 0.5,
+            attack: 0.01,
+            release: 0.1,
+        }
     }
 }
