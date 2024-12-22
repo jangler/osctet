@@ -9,9 +9,7 @@ use crate::dsp::compressor;
 // serializable global FX settings
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FXSettings {
-    #[serde(default)]
     pub spatial: SpatialFx,
-    #[serde(default)]
     pub comp: Compression,
 }
 
