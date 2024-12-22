@@ -4,7 +4,7 @@ use fundsp::hacker32::*;
 use realseq::SequencerBackend;
 use serde::{Deserialize, Serialize};
 
-use crate::compressor::compressor;
+use crate::dsp::compressor;
 
 // serializable global FX settings
 #[derive(Clone, Serialize, Deserialize)]
@@ -135,8 +135,7 @@ impl SpatialFx {
             Self::Reverb { level, predelay, room_size, decay_time } => {
                 Box::new((delay(*predelay) | delay(*predelay))
                     >> *level * reverb2_stereo(*room_size, *decay_time, 0.5, 0.5,
-                        highshelf_hz(5000.0, 1.0, db_amp(-3.0))
-                            >> lowshelf_hz(80.0, 1.0, db_amp(-3.0))))
+                        lowpole_hz(5000.0) >> highpole_hz(80.0)))
             }
             Self::Delay { level, time, feedback } => {
                 Box::new(*level * hacker32::feedback(

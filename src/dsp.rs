@@ -1,6 +1,63 @@
+//! Custom FunDSP audio nodes.
+
 use std::marker::PhantomData;
 
-use fundsp::{hacker::{AFollow, An, AudioNode, U2}, math::{abs, amp_db, db_amp, max}, signal::SignalFrame, Frame, Size, DEFAULT_SR};
+use fundsp::prelude::*;
+
+/// Slightly different implementation of adsr_live. Inputs are 1) gate and 2) scale.
+pub fn adsr_scalable(
+    attack: f32,
+    decay: f32,
+    sustain: f32,
+    release: f32,
+) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U2>) -> f32 + Clone, U2, f32>> {
+    let neg1 = -1.0;
+    let zero = 0.0;
+    let a = shared(zero);
+    let b = shared(neg1);
+    let c = shared(zero);
+    let d = shared(zero);
+    let attack_start = var(&a);
+    let release_start = var(&b);
+    let prev_time = var(&c);
+    let scaled_time = var(&d);
+    envelope3(move |time, control, speed| {
+        scaled_time.set_value(scaled_time.value() + speed * (time - prev_time.value()));
+        prev_time.set_value(time);
+        let time = scaled_time.value();
+
+        if release_start.value() >= zero && control > zero {
+            attack_start.set_value(time);
+            release_start.set_value(neg1);
+        } else if release_start.value() < zero && control <= zero {
+            release_start.set_value(time);
+        }
+        let ads_value = ads(attack, decay, sustain, time - attack_start.value());
+        if release_start.value() < zero {
+            ads_value
+        } else {
+            ads_value
+                * clamp01(delerp(
+                    release_start.value() + release,
+                    release_start.value(),
+                    time,
+                ))
+        }
+    })
+}
+
+fn ads<F: Real>(attack: F, decay: F, sustain: F, time: F) -> F {
+    if time < attack {
+        lerp(F::from_f64(0.0), F::from_f64(1.0), time / attack)
+    } else {
+        let decay_time = time - attack;
+        if decay_time < decay {
+            lerp(F::from_f64(1.0), sustain, decay_time / decay)
+        } else {
+            sustain
+        }
+    }
+}
 
 /// Stereo compressor. Slope is 0.0..=1.0, equivalent to (ratio - 1) / ratio.
 pub fn compressor(threshold: f32, slope: f32, attack: f32, release: f32
@@ -24,7 +81,7 @@ impl<N> Compressor<N>
 where
     N: Size<f32>,
 {
-    pub fn new(sample_rate: f64, threshold: f32, slope: f32, attack: f32, release: f32
+    fn new(sample_rate: f64, threshold: f32, slope: f32, attack: f32, release: f32
     ) -> Self {
         // attack/release scaling copied from fundsp's limiter
         // follower tracks dB of gain reduction

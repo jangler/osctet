@@ -9,7 +9,7 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::adsr::adsr_scalable;
+use crate::dsp::adsr_scalable;
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
