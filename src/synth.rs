@@ -113,6 +113,15 @@ impl Waveform {
         Self::Pcm(None),
     ];
 
+    pub const LFO_VARIANTS: [Waveform; 6] = [
+        Self::Sawtooth,
+        Self::Pulse,
+        Self::Triangle,
+        Self::Sine,
+        Self::Hold,
+        Self::Noise,
+    ];
+
     pub fn name(&self) -> &str {
         match self {
             Self::Sawtooth => "Sawtooth",

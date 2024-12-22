@@ -552,8 +552,8 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("lfo_{}_wave", i),
                     "", lfo.waveform.name(),
-                    || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
-                    lfo.waveform = Waveform::VARIANTS[i].clone();
+                    || Waveform::LFO_VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
+                    lfo.waveform = Waveform::LFO_VARIANTS[i].clone();
                 }
             }
         });
