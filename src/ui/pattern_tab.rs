@@ -83,6 +83,7 @@ impl PatternEditor {
     }
 
     pub fn set_division(&mut self, division: u8) {
+        let division = division.max(1).min(TICKS_PER_BEAT as u8);
         self.screen_tick_max = self.screen_tick
             + (self.screen_tick_max - self.screen_tick)
             * self.beat_division as u32 / division as u32;
@@ -116,9 +117,8 @@ impl PatternEditor {
     /// Convert mouse coordinates to a Position.
     fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();
-        let tpr = self.ticks_per_row();
         let mut pos = Position {
-            tick: (self.y_tick(y, ui) as f32 / tpr as f32).round() as u32 * tpr,
+            tick: self.round_tick(self.y_tick(y, ui)),
             track: 0,
             channel: 0,
             column: 0,
@@ -393,10 +393,18 @@ impl PatternEditor {
     /// If the cursor tick is off-divison, set it to the nearest on-divison
     /// value.
     pub fn cursor_to_division(&mut self) {
-        let tpr = self.ticks_per_row();
-        for tick in [&mut self.edit_start.tick, &mut self.edit_end.tick] {
-            *tick = (*tick as f32 / tpr as f32).round() as u32 * tpr;
-        }
+        self.edit_start.tick = self.round_tick(self.edit_start.tick);
+        self.edit_end.tick = self.round_tick(self.edit_end.tick);
+    }
+
+    pub fn round_tick(&self, tick: u32) -> u32 {
+        let tpr = TICKS_PER_BEAT as f32 / self.beat_division as f32;
+        let div = ((tick % TICKS_PER_BEAT) as f32 / tpr).round();
+        (tick / TICKS_PER_BEAT) * TICKS_PER_BEAT + (div * tpr).round() as u32
+    }
+
+    fn off_division(&self, tick: u32) -> bool {
+        tick != self.round_tick(tick)
     }
 
     fn ticks_per_row(&self) -> u32 {
@@ -569,7 +577,7 @@ impl PatternEditor {
 
         // draw events
         for event in &channel.events {
-            draw_event(ui, event, beat_height, self.beat_division);
+            self.draw_event(ui, event, beat_height);
         }
     }
 
@@ -701,7 +709,8 @@ impl PatternEditor {
         if -offset > self.edit_end.tick as i64 {
             self.edit_end.tick = 0;
         } else {
-            self.edit_end.tick = (self.edit_end.tick as i64 + offset) as u32;
+            self.edit_end.tick =
+                self.round_tick((self.edit_end.tick as i64 + offset) as u32);
         }
 
         if !is_shift_down() {
@@ -721,6 +730,54 @@ impl PatternEditor {
 
     fn tick_visible(&self, tick: u32) -> bool {
         tick >= self.screen_tick && tick <= self.screen_tick_max
+    }
+
+    fn draw_event(&self, ui: &mut UI, evt: &Event, beat_height: f32) {
+        let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
+        if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
+            return
+        }
+        let col = evt.data.spatial_column();
+        let x = ui.cursor_x + column_x(col, &ui.style);
+        if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
+            return
+        }
+
+        let mut color = match evt.data {
+            EventData::Pressure(x) => Color {
+                a: 0.5 + x as f32 / 18.0,
+                ..ui.style.theme.accent1_fg()
+            },
+            EventData::Modulation(x) => Color {
+                a: 0.5 + x as f32 / 18.0,
+                ..ui.style.theme.accent2_fg()
+            },
+            _ => ui.style.theme.fg(),
+        };
+        if self.off_division(evt.tick) {
+            color = with_alpha(0.25, color);
+        }
+
+        let y = y - ui.style.margin + PATTERN_MARGIN;
+        let text = match evt.data {
+            EventData::Pitch(note) => {
+                ui.push_note_text(x, y, &note, color);
+                return
+            },
+            EventData::NoteOff => String::from(" ---"),
+            EventData::Pressure(v) => format!("{:X}", v),
+            EventData::Modulation(v) => format!("{:X}", v),
+            EventData::End => String::from("End"),
+            EventData::Loop => String::from("Loop"),
+            EventData::Tempo(t) => t.round().to_string(),
+            EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
+            EventData::InterpolatedPitch(_)
+                | EventData::InterpolatedPressure(_)
+                | EventData::InterpolatedModulation(_)
+                => panic!("interpolated event in pattern"),
+            EventData::ToggleInterpolation(_) => return,
+        };
+        ui.push_text(x, y, text, color);
     }
 }
 
@@ -1008,54 +1065,6 @@ fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
     ui.push_rect(rect, color, None);
 }
 
-fn draw_event(ui: &mut UI, evt: &Event, beat_height: f32, division: u8) {
-    let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
-    if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
-        return
-    }
-    let col = evt.data.spatial_column();
-    let x = ui.cursor_x + column_x(col, &ui.style);
-    if x < 0.0 || x > ui.bounds.x + ui.bounds.w {
-        return
-    }
-
-    let mut color = match evt.data {
-        EventData::Pressure(x) => Color {
-            a: 0.5 + x as f32 / 18.0,
-            ..ui.style.theme.accent1_fg()
-        },
-        EventData::Modulation(x) => Color {
-            a: 0.5 + x as f32 / 18.0,
-            ..ui.style.theme.accent2_fg()
-        },
-        _ => ui.style.theme.fg(),
-    };
-    if off_division(evt.tick, division) {
-        color = with_alpha(0.25, color);
-    }
-
-    let y = y - ui.style.margin + PATTERN_MARGIN;
-    let text = match evt.data {
-        EventData::Pitch(note) => {
-            ui.push_note_text(x, y, &note, color);
-            return
-        },
-        EventData::NoteOff => String::from(" ---"),
-        EventData::Pressure(v) => format!("{:X}", v),
-        EventData::Modulation(v) => format!("{:X}", v),
-        EventData::End => String::from("End"),
-        EventData::Loop => String::from("Loop"),
-        EventData::Tempo(t) => t.round().to_string(),
-        EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
-        EventData::InterpolatedPitch(_)
-            | EventData::InterpolatedPressure(_)
-            | EventData::InterpolatedModulation(_)
-            => panic!("interpolated event in pattern"),
-        EventData::ToggleInterpolation(_) => return,
-    };
-    ui.push_text(x, y, text, color);
-}
-
 fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
     let column = pe.edit_end.column as i8 - 1;
     if column >= 0 {
@@ -1194,9 +1203,4 @@ fn with_alpha(a: f32, color: Color) -> Color {
 
 fn line_height(atlas: &GlyphAtlas) -> f32 {
     atlas.cap_height() + PATTERN_MARGIN * 2.0
-}
-
-fn off_division(tick: u32, division: u8) -> bool {
-    let tpr = TICKS_PER_BEAT / division as u32;
-    tick % tpr != 0
 }
