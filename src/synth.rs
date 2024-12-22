@@ -573,7 +573,7 @@ pub struct Patch {
     pub envs: Vec<ADSR>,
     pub lfos: Vec<LFO>,
     pub mod_matrix: Vec<Modulation>,
-    pub reverb_send: Parameter,
+    pub fx_send: Parameter,
     pub clip_gain: Parameter,
 }
 
@@ -582,7 +582,7 @@ impl Patch {
         Self {
             name: String::from("init"),
             gain: Parameter(shared(0.5)),
-            reverb_send: Parameter(shared(1.0)),
+            fx_send: Parameter(shared(1.0)),
             clip_gain: Parameter(shared(1.0)),
             oscs: vec![Oscillator::new()],
             envs: vec![ADSR::new()],
@@ -1232,7 +1232,7 @@ impl Voice {
                     >> shape_fn(|x| clamp11(x)))
             >> panner() >> multisplit::<U2, U2>()
             >> (multipass::<U2>()
-                | multipass::<U2>() * (var(&settings.reverb_send.0) >> split::<U2>()));
+                | multipass::<U2>() * (var(&settings.fx_send.0) >> split::<U2>()));
 
         Self {
             vars,

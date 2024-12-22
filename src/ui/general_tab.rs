@@ -22,7 +22,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.header("SPATIAL FX");
     let mut commit = false;
 
-    if let Some(i) = ui.combo_box("spatial_type", "", settings.spatial.variant_name(),
+    if let Some(i) = ui.combo_box("spatial_type", "Type", settings.spatial.variant_name(),
         || SpatialFx::DEFAULT_VARIANTS.map(|v| v.variant_name().to_owned()).to_vec()) {
         settings.spatial = SpatialFx::DEFAULT_VARIANTS[i].clone();
         commit = true;
