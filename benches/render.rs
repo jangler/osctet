@@ -28,5 +28,9 @@ fn interpolation(c: &mut Criterion) {
     render_module(c, "interpolation.osctet");
 }
 
-criterion_group!(benches, scale_dry, scale_reverb, scale_delay, interpolation);
+fn lfo(c: &mut Criterion) {
+    render_module(c, "lfo.osctet");
+}
+
+criterion_group!(benches, scale_dry, scale_reverb, scale_delay, interpolation, lfo);
 criterion_main!(benches);
