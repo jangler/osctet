@@ -38,7 +38,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
                 commit = true;
             }
             if ui.slider("room_size", "Room size", room_size,
-                5.0..=100.0, Some("m"), 2, true) {
+                10.0..=30.0, Some("m"), 2, true) {
                 commit = true;
             }
             if ui.slider("decay_time", "Decay time", decay_time,
