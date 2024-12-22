@@ -1,4 +1,4 @@
-use fundsp::math::amp_db;
+use fundsp::math::{amp_db, db_amp};
 
 use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, module::Module, pitch::Tuning};
 
@@ -73,7 +73,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
         commit = true;
     }
     if ui.formatted_slider("threshold", "Threshold", &mut comp.threshold,
-        0.0..=1.0, 1, true, |x| format!("{:.1} dB", amp_db(x))) {
+        0.0..=1.0, 1, true, |x| format!("{:.1} dB", amp_db(x)), db_amp) {
         commit = true;
     }
     if ui.formatted_slider("ratio", "Ratio", &mut comp.slope,
@@ -81,7 +81,11 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
             f32::INFINITY
         } else {
             1.0 / (1.0 - x)
-        })) {
+        }), |f| if f == f32::INFINITY {
+            1.0
+        } else {
+            (f - 1.0) / f
+        }) {
         commit = true;
     }
     if ui.slider("comp_attack", "Attack", &mut comp.attack,

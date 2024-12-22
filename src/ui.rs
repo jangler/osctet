@@ -797,16 +797,17 @@ impl UI {
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool
     ) -> bool {
-        self.formatted_slider(id, label, val, range, power, enabled, display_unit(unit))
+        self.formatted_slider(id, label, val, range, power, enabled,
+            display_unit(unit), |x| x)
     }
 
     pub fn formatted_slider(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>, power: i32, enabled: bool,
-        display: impl FnOnce(f32) -> String
+        display: impl Fn(f32) -> String, convert: impl FnOnce(f32) -> f32,
     ) -> bool {
         // are we in text entry mode?
         if self.focused_text.as_ref().is_some_and(|x| x.id == id) {
-            return self.slider_text_entry(id, label, val, range);
+            return self.slider_text_entry(id, label, val, range, convert);
         }
 
         self.start_widget();
@@ -832,7 +833,8 @@ impl UI {
                 self.mouse_consumed = true;
             }
             if is_mouse_button_pressed(MouseButton::Right) {
-                let text = val.to_string();
+                let text = display(*val).trim_start_matches('x')
+                    .split([' ', ':']).next().unwrap().to_owned();
                 self.focused_text = Some(TextEditState::new(id.to_owned(), text));
             }
         }
@@ -892,7 +894,7 @@ impl UI {
     }
 
     fn slider_text_entry(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>
+        range: RangeInclusive<f32>, convert: impl FnOnce(f32) -> f32,
     ) -> bool {
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
@@ -900,7 +902,7 @@ impl UI {
         if self.text_box(id, label, SLIDER_WIDTH + self.style.margin * 2.0, &mut text) {
             match text.parse::<f32>() {
                 Ok(f) => {
-                    *val = f.max(*range.start()).min(*range.end());
+                    *val = convert(f).max(*range.start()).min(*range.end());
                     changed = true;
                 },
                 Err(e) => self.report(e),
@@ -1095,15 +1097,16 @@ impl UI {
         range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool,
     ) {
         self.formatted_shared_slider(id, label, param, range, power, enabled,
-            display_unit(unit));
+            display_unit(unit), |x| x);
     }
 
     pub fn formatted_shared_slider(&mut self, id: &str, label: &str, param: &Shared,
         range: RangeInclusive<f32>, power: i32, enabled: bool,
-        display: impl FnOnce(f32) -> String,
+        display: impl Fn(f32) -> String, convert: impl FnOnce(f32) -> f32,
     ) {
         let mut val = param.value();
-        if self.formatted_slider(id, label, &mut val, range, power, enabled, display) {
+        if self.formatted_slider(id, label, &mut val, range, power, enabled,
+            display, convert) {
             param.set(val);
         }
     }
@@ -1357,7 +1360,7 @@ fn is_mod(key: KeyCode) -> bool {
     }
 }
 
-fn display_unit(unit: Option<&'static str>) -> Box<dyn FnOnce(f32) -> String> {
+fn display_unit(unit: Option<&'static str>) -> Box<dyn Fn(f32) -> String> {
     if let Some(unit) = unit {
         let unit = unit.to_owned();
         Box::new(move |x| format!("{:.3} {}", x, unit))
