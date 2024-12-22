@@ -4,92 +4,45 @@ use fundsp::hacker32::*;
 use realseq::SequencerBackend;
 use serde::{Deserialize, Serialize};
 
-use crate::{compressor::compressor, synth::Parameter};
+use crate::compressor::compressor;
 
 // serializable global FX settings
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FXSettings {
-    pub gain: Parameter,
-    pub reverb_amount: Parameter,
-    pub predelay_time: f32,
-    pub reverb_room_size: f32,
-    pub reverb_time: f32,
-    pub reverb_diffusion: f32,
-    pub reverb_mod_speed: f32,
-    pub reverb_damping: f32,
     #[serde(default)]
-    pub comp_settings: CompSettings,
-}
-
-impl FXSettings {
-    pub fn make_gain(&self) -> Box<dyn AudioUnit> {
-        Box::new(var(&self.gain.0) >> split::<U2>())
-    }
-
-    pub fn make_amount(&self) -> Box<dyn AudioUnit> {
-        Box::new(var(&self.reverb_amount.0) >> split::<U2>())
-    }
-
-    pub fn make_predelay(&self) -> Box<dyn AudioUnit> {
-        Box::new(delay(self.predelay_time) | delay(self.predelay_time))
-    }
-
-    pub fn make_reverb(&self) -> Box<dyn AudioUnit> {
-        Box::new(reverb2_stereo(
-            self.reverb_room_size,
-            self.reverb_time,
-            self.reverb_diffusion,
-            self.reverb_mod_speed,
-            highshelf_hz(5000.0, 1.0, db_amp(-self.reverb_damping))
-                >> lowshelf_hz(80.0, 1.0, db_amp(-self.reverb_damping))))
-    }
+    pub spatial: SpatialFx,
+    #[serde(default)]
+    pub comp: Compression,
 }
 
 impl Default for FXSettings {
     fn default() -> Self {
         Self {
-            gain: Parameter(shared(1.0)),
-            reverb_amount: Parameter(shared(0.1)),
-            predelay_time: 0.01,
-            reverb_room_size: 20.0,
-            reverb_time: 0.2,
-            reverb_diffusion: 0.5,
-            reverb_mod_speed: 0.5,
-            reverb_damping: 3.0,
-            comp_settings: Default::default(),
-        } 
+            comp: Default::default(),
+            spatial: Default::default(),
+        }
     }
 }
 
 // controls updates of global FX
 pub struct GlobalFX {
     pub net: Net,
-    gain_id: NodeId,
-    amount_id: NodeId,
-    predelay_id: NodeId,
-    reverb_id: NodeId,
+    spatial_id: NodeId,
     comp_id: NodeId,
 }
 
 impl GlobalFX {
     pub fn new(backend: SequencerBackend, settings: &FXSettings) -> Self {
-        let (predelay, predelay_id) = Net::wrap_id(settings.make_predelay());
-        let (reverb, reverb_id) = Net::wrap_id(settings.make_reverb());
-        let (gain, gain_id) = Net::wrap_id(settings.make_gain());
-        let (amount, amount_id) = Net::wrap_id(settings.make_amount());
-        let (comp, comp_id) = Net::wrap_id(settings.comp_settings.make_node());
+        let (spatial, spatial_id) = Net::wrap_id(settings.spatial.make_node());
+        let (comp, comp_id) = Net::wrap_id(settings.comp.make_node());
 
         Self {
             net: Net::wrap(Box::new(backend))
                 >> (multipass::<U2>()
-                    + (multipass::<U2>() >> amount * (predelay >> reverb)))
+                    + (multipass::<U2>() >> spatial))
                 >> (dcblock() | dcblock())
-                * gain
                 >> comp,
-            gain_id,
-            amount_id,
-            predelay_id,
-            reverb_id,
+            spatial_id,
             comp_id,
         }
     }
@@ -100,24 +53,18 @@ impl GlobalFX {
     }
 
     pub fn reinit(&mut self, settings: &FXSettings) {
-        self.net.crossfade(self.gain_id, Fade::Smooth, 0.1, settings.make_gain());
-        self.net.crossfade(self.amount_id, Fade::Smooth, 0.1, settings.make_amount());
-        self.net.crossfade(self.predelay_id, Fade::Smooth, 0.1, settings.make_predelay());
-        self.net.crossfade(self.reverb_id, Fade::Smooth, 0.1, settings.make_reverb());
+        self.net.crossfade(self.spatial_id, Fade::Smooth, 0.1,
+            settings.spatial.make_node());
         self.net.crossfade(self.comp_id, Fade::Smooth, 0.1,
-            settings.comp_settings.make_node());
+            settings.comp.make_node());
         self.net.commit();
     }
 
-    pub fn commit_predelay(&mut self, settings: &FXSettings) {
-        self.crossfade(self.predelay_id, settings.make_predelay());
+    pub fn commit_spatial(&mut self, spatial: &SpatialFx) {
+        self.crossfade(self.spatial_id, spatial.make_node());
     }
 
-    pub fn commit_reverb(&mut self, settings: &FXSettings) {
-        self.crossfade(self.reverb_id, settings.make_reverb());
-    }
-
-    pub fn commit_comp(&mut self, comp: &CompSettings) {
+    pub fn commit_comp(&mut self, comp: &Compression) {
         self.crossfade(self.comp_id, comp.make_node());
     }
 
@@ -128,30 +75,88 @@ impl GlobalFX {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct CompSettings {
+pub struct Compression {
+    pub gain: f32,
     pub threshold: f32,
     pub slope: f32,
     pub attack: f32,
     pub release: f32,
 }
 
-impl CompSettings {
+impl Compression {
     fn make_node(&self) -> Box<dyn AudioUnit> {
         if self.threshold < 1.0 && self.slope > 0.0 {
-            Box::new(compressor(self.threshold, self.slope, self.attack, self.release))
+            Box::new((mul(self.gain) | mul(self.gain))
+                >> compressor(self.threshold, self.slope, self.attack, self.release))
         } else {
             Box::new(pass() | pass())
         }
     }
 }
 
-impl Default for CompSettings {
+impl Default for Compression {
     fn default() -> Self {
         Self {
-            threshold: 0.5,
-            slope: 0.5,
-            attack: 0.01,
-            release: 0.1,
+            gain: 1.0,
+            threshold: db_amp(-3.0),
+            slope: 0.75,
+            attack: 0.001,
+            release: 0.05,
         }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub enum SpatialFx {
+    None,
+    Reverb {
+        level: f32,
+        predelay: f32,
+        room_size: f32,
+        decay_time: f32,
+    },
+    Delay {
+        level: f32,
+        time: f32,
+        feedback: f32,
+    }
+}
+
+impl SpatialFx {
+    pub const DEFAULT_VARIANTS: [Self; 3] = [
+        Self::None,
+        Self::Reverb { level: 0.1, predelay: 0.01, room_size: 20.0, decay_time: 0.2 },
+        Self::Delay { level: 0.1, time: 0.5, feedback: 0.5 },
+    ];
+
+    fn make_node(&self) -> Box<dyn AudioUnit> {
+        match self {
+            Self::None => Box::new(pass() | pass()),
+            Self::Reverb { level, predelay, room_size, decay_time } => {
+                Box::new((delay(*predelay) | delay(*predelay))
+                    >> *level * reverb2_stereo(*room_size, *decay_time, 0.5, 0.5,
+                        highshelf_hz(5000.0, 1.0, db_amp(-3.0))
+                            >> lowshelf_hz(80.0, 1.0, db_amp(-3.0))))
+            }
+            Self::Delay { level, time, feedback } => {
+                Box::new(*level * hacker32::feedback(
+                    (delay(*time) | delay(*time))
+                    >> reverse() * *feedback))
+            }
+        }
+    }
+
+    pub fn variant_name(&self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Reverb { .. } => "Reverb",
+            Self::Delay { .. } => "Delay",
+        }
+    }
+}
+
+impl Default for SpatialFx {
+    fn default() -> Self {
+        Self::None
     }
 }

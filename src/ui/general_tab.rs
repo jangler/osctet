@@ -1,6 +1,6 @@
 use fundsp::math::amp_db;
 
-use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX}, module::Module, pitch::Tuning};
+use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, module::Module, pitch::Tuning};
 
 use super::*;
 
@@ -19,33 +19,62 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.space(2.0);
-    ui.header("REVERB");
+    ui.header("SPATIAL FX");
+    let mut commit = false;
 
-    ui.shared_slider("reverb_level",
-        "Reverb level", &settings.reverb_amount.0, 0.0..=1.0, None, 2, true);
+    if let Some(i) = ui.combo_box("spatial_type", "", settings.spatial.variant_name(),
+        || SpatialFx::DEFAULT_VARIANTS.map(|v| v.variant_name().to_owned()).to_vec()) {
+        settings.spatial = SpatialFx::DEFAULT_VARIANTS[i].clone();
+        commit = true;
+    }
 
-    if ui.slider("predelay",
-        "Predelay time", &mut settings.predelay_time, 0.0..=0.1, Some("s"), 2, true) {
-        fx.commit_predelay(settings);
+    match &mut settings.spatial {
+        SpatialFx::None => (),
+        SpatialFx::Reverb { level, predelay, room_size, decay_time } => {
+            if ui.slider("reverb_level", "Level", level, 0.0..=1.0, None, 2, true) {
+                commit = true;
+            }
+            if ui.slider("predelay", "Predelay", predelay, 0.0..=0.1, Some("s"), 2, true) {
+                commit = true;
+            }
+            if ui.slider("room_size", "Room size", room_size,
+                5.0..=100.0, Some("m"), 2, true) {
+                commit = true;
+            }
+            if ui.slider("decay_time", "Decay time", decay_time,
+                0.0..=5.0, Some("s"), 2, true) {
+                commit = true;
+            }
+        },
+        SpatialFx::Delay { level, time, feedback } => {
+            if ui.slider("delay_level", "Level", level, 0.01..=1.0, Some("s"), 2, true) {
+                commit = true;
+            }
+            if ui.slider("delay_time", "Time", time, 0.01..=1.0, Some("s"), 2, true) {
+                commit = true;
+            }
+            if ui.slider("feedback", "Feedback", feedback, 0.0..=1.0, None, 1, true) {
+                commit = true;
+            }
+        }
     }
-    if ui.slider("room_size",
-        "Room size", &mut settings.reverb_room_size, 5.0..=100.0, Some("m"), 2, true) {
-        fx.commit_reverb(settings);
-    }
-    if ui.slider("decay_time",
-        "Decay time", &mut settings.reverb_time, 0.0..=5.0, Some("s"), 2, true) {
-        fx.commit_reverb(settings);
+
+    if commit {
+        fx.commit_spatial(&settings.spatial);
     }
 
     ui.space(2.0);
     ui.header("COMPRESSION");
 
-    ui.shared_slider("gain", "Gain", &settings.gain.0, 0.0..=2.0, None, 2, true);
+    let comp = &mut settings.comp;
+    let mut commit = false;
 
-    let comp = &mut settings.comp_settings;
+    if ui.slider("gain", "Gain", &mut comp.gain, 0.0..=2.0, None, 2, true) {
+        commit = true;
+    }
     if ui.formatted_slider("threshold", "Threshold", &mut comp.threshold,
         0.0..=1.0, 1, true, |x| format!("{:.1} dB", amp_db(x))) {
-        fx.commit_comp(comp);
+        commit = true;
     }
     if ui.formatted_slider("ratio", "Ratio", &mut comp.slope,
         0.0..=1.0, 1, true, |x| format!("{:.1}:1", if x == 1.0 {
@@ -53,14 +82,18 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
         } else {
             1.0 / (1.0 - x)
         })) {
-        fx.commit_comp(comp);
+        commit = true;
     }
     if ui.slider("comp_attack", "Attack", &mut comp.attack,
         0.0..=1.0, Some("s"), 2, true) {
-        fx.commit_comp(comp);
+        commit = true;
     }
     if ui.slider("comp_release", "Release", &mut comp.release,
         0.0..=1.0, Some("s"), 2, true) {
+        commit = true;
+    }
+
+    if commit {
         fx.commit_comp(comp);
     }
 }
