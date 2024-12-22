@@ -292,7 +292,7 @@ impl Player {
         if synth.muted {
             synth.clear_all_notes(&mut self.seq);
         } else if self.playing {
-            self.simulate_track_events(self.tick, module, dbg!(track_i));
+            self.simulate_track_events(self.tick, module, track_i);
         }
     }
 
@@ -305,8 +305,6 @@ impl Player {
                 || (*i != track_i && x.muted == soloed))
             .map(|(i, _)| i)
             .collect();
-
-        dbg!(&toggle_indices);
 
         for i in toggle_indices {
             self.toggle_mute(module, i);
