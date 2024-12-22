@@ -9,7 +9,7 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::dsp::adsr_scalable;
+use crate::dsp::{adsr_scalable, pow_shape};
 
 const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
@@ -157,13 +157,12 @@ impl Waveform {
         let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio.0)
-            * var_fn(&osc.fine_pitch.0, |x| pow(SEMITONE_RATIO, x))
             * ((settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::Pitch, &[])
-                >> shape_fn(|x| pow(PITCH_MOD_BASE, x)))) // 4 octaves
+                >> pow_shape(PITCH_MOD_BASE)))
             * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
-                + settings.dsp_component(vars, ModTarget::FinePitch, &[])
-                >> shape_fn(|x| pow(SEMITONE_RATIO, x/2.0))))
+                + settings.dsp_component(vars, ModTarget::FinePitch, &[]))
+                * 0.5 + var(&osc.fine_pitch.0) >> pow_shape(SEMITONE_RATIO))
             * (1.0 + fm_oscs * FM_DEPTH_MULTIPLIER);
         let tone = var(&osc.tone.0) >> follow(SMOOTH_TIME)
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
@@ -193,7 +192,7 @@ impl Waveform {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
-            >> shape_fn(|x| pow(MAX_LFO_RATE/MIN_LFO_RATE, x)))
+            >> pow_shape(MAX_LFO_RATE/MIN_LFO_RATE))
             >> shape_fn(|x| clamp(MIN_LFO_RATE, MAX_LFO_RATE, x));
         let dt = lfo.delay;
         let d = envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)));
@@ -209,7 +208,7 @@ impl Waveform {
                 Box::new(wavech(&data.wave, 0, data.loop_point))
             } else {
                 Box::new(zero())
-            }, 
+            },
         };
         Net::wrap(au)
     }
@@ -258,7 +257,7 @@ impl PcmData {
     pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
         Self::load(Self::next_file(path, offset))
     }
-    
+
     /// Return the next/previous PCM file path in the path's directory.
     fn next_file(path: &PathBuf, offset: isize) -> PathBuf {
         path.parent().map(|p| {
@@ -301,7 +300,7 @@ impl PcmData {
             let max_distance = (self.wave.sample_rate() as f32 * 0.001) as usize;
             let window_start = pt.saturating_sub(max_distance);
             let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 2);
-            
+
             let last_sample = self.wave.at(0, self.wave.len() - 1);
             let second_last_sample = self.wave.at(0, self.wave.len() - 2);
             let delta = last_sample - second_last_sample;
@@ -353,7 +352,7 @@ pub enum FilterType {
 impl FilterType {
     pub const VARIANTS: [FilterType; 5] =
         [Self::Ladder, Self::Lowpass, Self::Highpass, Self::Bandpass, Self::Notch];
-    
+
     pub fn name(&self) -> &str {
         match self {
             Self::Ladder => "Ladder",
@@ -726,7 +725,7 @@ impl Patch {
             }
         }
     }
-    
+
     pub fn remove_filter(&mut self, i: usize) {
         if i < self.filters.len() {
             self.filters.remove(i);
@@ -850,7 +849,7 @@ impl Patch {
                 }
             }
         }
-        
+
         true
     }
 
@@ -971,11 +970,13 @@ impl Filter {
     fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize) -> Net {
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
-            KeyTracking::Partial => Net::wrap(Box::new(var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
-            KeyTracking::Full => Net::wrap(Box::new(var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
+            KeyTracking::Partial => Net::wrap(Box::new(
+                var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
+            KeyTracking::Full => Net::wrap(Box::new(
+                var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
         };
         let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index), &[])
-            >> shape_fn(|x| pow(FILTER_CUTOFF_MOD_BASE, x));
+            >> pow_shape(FILTER_CUTOFF_MOD_BASE);
         let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index), &[]);
         let f = match self.filter_type {
             FilterType::Ladder => Net::wrap(Box::new(moog())),
@@ -1017,7 +1018,7 @@ impl ADSR {
         path: &[ModSource]
     ) -> Net {
         let scale = settings.dsp_component(vars, ModTarget::EnvScale(index), path)
-            >> shape_fn(|x| pow(MAX_ENV_SCALE, -x));
+            >> pow_shape(1.0/MAX_ENV_SCALE);
         Net::wrap(Box::new(
             (var(&vars.gate) | scale)
             >> adsr_scalable(self.attack, self.decay, self.sustain, self.release)))

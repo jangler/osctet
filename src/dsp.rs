@@ -133,3 +133,64 @@ where
 
     fn allocate(&mut self) {}
 }
+
+/// Optimized waveshaper. Output is `pow(base, input)`.
+pub fn pow_shape(base: f32) -> An<PowShaper> {
+    An(PowShaper::new(base))
+}
+
+#[derive(Clone)]
+pub struct PowShaper {
+    base: f32,
+    cached_in: f32,
+    cached_out: f32,
+}
+
+impl PowShaper {
+    fn new(base: f32) -> Self {
+        let mut shaper = Self { base, cached_in: 0.0, cached_out: 1.0 };
+        shaper.set_sample_rate(DEFAULT_SR);
+        shaper
+    }
+
+    fn shape(&mut self, input: f32) -> f32 {
+        if input != self.cached_in {
+            self.cached_in = input;
+            self.cached_out = pow(self.base, input)
+        }
+        self.cached_out
+    }
+}
+
+impl AudioNode for PowShaper {
+    const ID: u64 = 42;
+    type Inputs = U1;
+    type Outputs = U1;
+
+    fn reset(&mut self) {
+        self.cached_in = 0.0;
+        self.cached_out = 1.0;
+    }
+
+    fn set_sample_rate(&mut self, _sample_rate: f64) {}
+
+    #[inline]
+    fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
+        Frame::from([self.shape(input[0])])
+    }
+
+    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
+        for i in 0..full_simd_items(size) {
+            output.set(0, i, F32x::new(core::array::from_fn(|i| {
+                self.shape(input.at(0, i).as_array_ref()[i])
+            })))
+        }
+        self.process_remainder(size, input, output);
+    }
+
+    fn route(&mut self, input: &SignalFrame, _frequency: f64) -> SignalFrame {
+        let mut output = SignalFrame::new(self.outputs());
+        output.set(0, input.at(0).distort(0.0));
+        output
+    }
+}
