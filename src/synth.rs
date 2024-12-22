@@ -375,6 +375,7 @@ pub struct Synth {
     pressure_memory: Vec<f32>,
     prev_freq: Option<f32>,
     sample_rate: f32,
+    pub muted: bool,
 }
 
 impl Synth {
@@ -387,6 +388,7 @@ impl Synth {
             pressure_memory: vec![DEFAULT_PRESSURE],
             prev_freq: None,
             sample_rate,
+            muted: false,
         }
     }
 
@@ -416,6 +418,10 @@ impl Synth {
     pub fn note_on(&mut self, key: Key, pitch: f32, pressure: Option<f32>,
         patch: &Patch, seq: &mut Sequencer
     ) {
+        if self.muted {
+            return
+        }
+
         // turn off prev note(s) in channel
         if key.origin == KeyOrigin::Pattern {
             let removed_keys: Vec<Key> = self.active_voices.keys()

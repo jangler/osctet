@@ -497,6 +497,9 @@ pub enum Action {
     IncrementValues,
     DecrementValues,
     Interpolate,
+    MuteTrack,
+    SoloTrack,
+    UnmuteAllTracks,
 }
 
 impl Action {
@@ -559,6 +562,9 @@ impl Action {
             Self::IncrementValues => "Increment values",
             Self::DecrementValues => "Decrement values",
             Self::Interpolate => "Interpolate",
+            Self::MuteTrack => "Mute track",
+            Self::SoloTrack => "Solo track",
+            Self::UnmuteAllTracks => "Unmute all tracks",
         }
     }
 }

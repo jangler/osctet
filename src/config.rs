@@ -161,6 +161,9 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Shift, KeyCode::F2), Action::IncrementValues),
         (Hotkey::new(Modifiers::Shift, KeyCode::F1), Action::DecrementValues),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::GraveAccent), Action::Interpolate),
+        (Hotkey::new(Modifiers::None, KeyCode::F9), Action::MuteTrack),
+        (Hotkey::new(Modifiers::None, KeyCode::F10), Action::SoloTrack),
+        (Hotkey::new(Modifiers::None, KeyCode::F11), Action::UnmuteAllTracks),
         // (Hotkey::new(Modifiers::Ctrl, KeyCode::R), Action::ToggleRecord),
     ]
 }

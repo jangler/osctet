@@ -26,7 +26,7 @@ impl Player {
     pub fn new(seq: Sequencer, num_tracks: usize, sample_rate: f32) -> Self {
         Self {
             seq,
-            synths: (0..=num_tracks).map(|_| Synth::new(sample_rate)).collect(),
+            synths: (0..num_tracks).map(|_| Synth::new(sample_rate)).collect(),
             playing: false,
             tick: 0,
             playtime: 0.0, // not total playtime!
@@ -42,7 +42,7 @@ impl Player {
         for synth in &mut self.synths {
             synth.clear_all_notes(&mut self.seq);
         }
-        self.synths = (0..=num_tracks).map(|_| Synth::new(self.sample_rate)).collect();
+        self.synths = (0..num_tracks).map(|_| Synth::new(self.sample_rate)).collect();
         self.playing = false;
         self.tick = 0;
         self.playtime = 0.0;
@@ -222,60 +222,110 @@ impl Player {
 
     /// Update state as if the module had been played up to a given tick.
     fn simulate_events(&mut self, tick: u32, module: &Module) {
-        for synth in self.synths.iter_mut() {
-            synth.reset_memory();
-        }
         self.tempo = DEFAULT_TEMPO;
 
-        for (track_i, track) in module.tracks.iter().enumerate() {
-            for (channel_i, channel) in track.channels.iter().enumerate() {
-                let mut events: Vec<_> = channel.events.iter()
-                    .filter(|e| e.tick < tick)
-                    .collect();
-                events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
+        for track in 0..module.tracks.len() {
+            self.simulate_track_events(tick, module, track);
+        }
+    }
 
-                let mut active_note = None;
+    fn simulate_track_events(&mut self, tick: u32, module: &Module, track_i: usize) {
+        self.synths[track_i].reset_memory();
 
-                for evt in events {
-                    match evt.data {
-                        EventData::Pitch(note) => {
-                            if let Some((patch, note)) = module.map_note(note, track_i) {
-                                if patch.sustains() {
-                                    active_note = Some((patch, note));
-                                }
+        for (channel_i, channel) in module.tracks[track_i].channels.iter().enumerate() {
+            let mut events: Vec<_> = channel.events.iter()
+                .filter(|e| e.tick < tick)
+                .collect();
+            events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
+
+            let mut active_note = None;
+
+            for evt in events {
+                match evt.data {
+                    EventData::Pitch(note) => {
+                        if let Some((patch, note)) = module.map_note(note, track_i) {
+                            if patch.sustains() {
+                                active_note = Some((patch, note));
                             }
                         }
-                        EventData::Pressure(v) => {
-                            self.channel_pressure(track_i, channel_i as u8,
-                                v as f32 / EventData::DIGIT_MAX as f32);
-                        }
-                        EventData::Modulation(v) => {
-                            self.modulate(track_i, channel_i as u8,
-                                v as f32 / EventData::DIGIT_MAX as f32);
-                        }
-                        EventData::NoteOff => active_note = None,
-                        EventData::Tempo(t) => self.tempo = t,
-                        EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
-                        EventData::End | EventData::Loop
-                            | EventData::ToggleInterpolation(_) => (),
-                        EventData::InterpolatedPitch(_)
-                            | EventData::InterpolatedPressure(_)
-                            | EventData::InterpolatedModulation(_)
-                            => panic!("interpolated event in pattern"),
                     }
-                }
-                
-                if let Some((patch, note)) = active_note {
-                    let key = Key {
-                        origin: KeyOrigin::Pattern,
-                        channel: channel_i as u8,
-                        key: 0,
-                    };
-                    let pitch = module.tuning.midi_pitch(&note);
-                    self.note_on(track_i, key, pitch, None, patch);
+                    EventData::Pressure(v) => {
+                        self.channel_pressure(track_i, channel_i as u8,
+                            v as f32 / EventData::DIGIT_MAX as f32);
+                    }
+                    EventData::Modulation(v) => {
+                        self.modulate(track_i, channel_i as u8,
+                            v as f32 / EventData::DIGIT_MAX as f32);
+                    }
+                    EventData::NoteOff => active_note = None,
+                    EventData::Tempo(t) => self.tempo = t,
+                    EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
+                    EventData::End | EventData::Loop
+                        | EventData::ToggleInterpolation(_) => (),
+                    EventData::InterpolatedPitch(_)
+                        | EventData::InterpolatedPressure(_)
+                        | EventData::InterpolatedModulation(_)
+                        => panic!("interpolated event in pattern"),
                 }
             }
+
+            if let Some((patch, note)) = active_note {
+                let key = Key {
+                    origin: KeyOrigin::Pattern,
+                    channel: channel_i as u8,
+                    key: 0,
+                };
+                let pitch = module.tuning.midi_pitch(&note);
+                self.note_on(track_i, key, pitch, None, patch);
+            }
         }
+    }
+
+    pub fn toggle_mute(&mut self, module: &Module, track_i: usize) {
+        if track_i == 0 {
+            return // never mute keyjazz track
+        }
+
+        let synth = &mut self.synths[track_i];
+        synth.muted = !synth.muted;
+
+        if synth.muted {
+            synth.clear_all_notes(&mut self.seq);
+        } else if self.playing {
+            self.simulate_track_events(self.tick, module, dbg!(track_i));
+        }
+    }
+
+    pub fn toggle_solo(&mut self, module: &Module, track_i: usize) {
+        let soloed = self.synths.iter().enumerate()
+            .all(|(i, x)| i == 0 || x.muted == (i != track_i));
+
+        let toggle_indices: Vec<_> = self.synths.iter().enumerate()
+            .filter(|(i, x)| (*i == track_i && x.muted)
+                || (*i != track_i && x.muted == soloed))
+            .map(|(i, _)| i)
+            .collect();
+
+        dbg!(&toggle_indices);
+
+        for i in toggle_indices {
+            self.toggle_mute(module, i);
+        }
+    }
+
+    pub fn unmute_all(&mut self, module: &Module) {
+        let toggle_indices: Vec<_> = self.synths.iter().enumerate()
+            .filter(|(_, x)| x.muted)
+            .map(|(i, _)| i)
+            .collect();
+
+        for i in toggle_indices {
+            self.toggle_mute(module, i);
+        }
+    }
+
+    pub fn track_muted(&self, i: usize) -> bool {
+        self.synths[i].muted
     }
 
     fn handle_event(&mut self, event: &Event, module: &Module,
@@ -329,7 +379,7 @@ impl Player {
 
     fn go_to(&mut self, tick: u32) {
         self.tick = tick;
-    } 
+    }
 }
 
 fn interval_ticks(dt: f64, tempo: f32) -> u32 {
@@ -368,7 +418,7 @@ pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
         } else {
             module.playtime()
         };
-    
+
         // TODO: render would probably be faster if we called player.frame() only
         //       when there's a new event. benchmark this
         player.play();
@@ -386,7 +436,7 @@ pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
                 eprintln!("{}", e);
             }
         }
-    
+
         if let Err(e) = tx.send(RenderUpdate::Done(wave, path)) {
             eprintln!("{}", e);
         }

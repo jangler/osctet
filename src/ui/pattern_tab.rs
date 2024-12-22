@@ -264,6 +264,9 @@ impl PatternEditor {
             Action::IncrementValues => self.shift_values(1, module),
             Action::DecrementValues => self.shift_values(-1, module),
             Action::Interpolate => self.interpolate(module),
+            Action::MuteTrack => player.toggle_mute(module, self.cursor_track()),
+            Action::SoloTrack => player.toggle_solo(module, self.cursor_track()),
+            Action::UnmuteAllTracks => player.unmute_all(module),
             _ => (),
         }
     }
@@ -570,14 +573,14 @@ impl PatternEditor {
         // TODO: report error?
     }
 
-    fn draw_channel(&self, ui: &mut UI, channel: &Channel) {
+    fn draw_channel(&self, ui: &mut UI, channel: &Channel, muted: bool) {
         let beat_height = self.beat_height(ui);
         self.draw_channel_line(ui);
         self.draw_interpolation(ui, channel);
 
         // draw events
         for event in &channel.events {
-            self.draw_event(ui, event, beat_height);
+            self.draw_event(ui, event, beat_height, muted);
         }
     }
 
@@ -732,7 +735,7 @@ impl PatternEditor {
         tick >= self.screen_tick && tick <= self.screen_tick_max
     }
 
-    fn draw_event(&self, ui: &mut UI, evt: &Event, beat_height: f32) {
+    fn draw_event(&self, ui: &mut UI, evt: &Event, beat_height: f32, muted: bool) {
         let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
         if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
             return
@@ -754,7 +757,7 @@ impl PatternEditor {
             },
             _ => ui.style.theme.fg(),
         };
-        if self.off_division(evt.tick) {
+        if muted || self.off_division(evt.tick) {
             color = with_alpha(0.25, color);
         }
 
@@ -881,7 +884,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         let chan_width = channel_width(track_i, &ui.style);
         for (channel_i, channel) in track.channels.iter().enumerate() {
             ui.cursor_x = track_xs[track_i] + chan_width * channel_i as f32;
-            pe.draw_channel(ui, channel);
+            pe.draw_channel(ui, channel, player.track_muted(track_i));
         }
     }
     ui.cursor_x += channel_width(1, &ui.style);
