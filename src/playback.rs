@@ -164,6 +164,8 @@ impl Player {
                 let mut glide_depth = [0, 0, 0];
 
                 for event in &channel.events {
+                    let col = event.data.logical_column();
+
                     if event.tick < self.tick {
                         if event.tick >= prev_tick {
                             events.push(LocatedEvent {
@@ -173,21 +175,17 @@ impl Player {
                             });
                         }
 
-                        // TODO: tick glide
                         match event.data {
                             EventData::StartGlide(i) => glide_depth[i as usize] += 1,
                             EventData::EndGlide(i) => glide_depth[i as usize] -= 1,
                             _ => (),
                         }
-                    }
 
-                    let col = event.data.logical_column();
-                    if event.tick < self.tick {
                         if let Some(v) = prev_data.get_mut(col as usize) {
                             *v = Some(&event.data);
                         }
                         start_tick[event.data.spatial_column() as usize] = event.tick;
-                    } else if event.tick > self.tick {
+                    } else {
                         if let Some(v) = next_event.get_mut(col as usize) {
                             if v.is_none() {
                                 *v = Some(event);
