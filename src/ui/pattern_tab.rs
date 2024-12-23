@@ -641,20 +641,15 @@ impl PatternEditor {
     /// Inserts rows into the pattern, shifting events.
     fn push_rows(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
-        let mut ticks = end.tick - start.tick;
-        if ticks == 0 {
-            ticks = TICKS_PER_BEAT / self.beat_division as u32;
-        }
+        let ticks = end.tick - start.tick + TICKS_PER_BEAT / self.beat_division as u32;
         module.shift_channel_events(start, end, ticks as i32);
     }
 
     /// Deletes rows from the pattern, shifting events.
     fn pull_rows(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
-        let mut ticks = start.tick as i32 - end.tick as i32;
-        if ticks == 0 {
-            ticks -= TICKS_PER_BEAT as i32 / self.beat_division as i32;
-        }
+        let ticks = start.tick as i32 - end.tick as i32
+            - TICKS_PER_BEAT as i32 / self.beat_division as i32;
         module.shift_channel_events(start, end, ticks);
     }
 
