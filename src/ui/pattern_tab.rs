@@ -290,6 +290,15 @@ impl PatternEditor {
             }
         }
 
+        let interp_event_at_start = module.event_at(Position {
+            column: end.column | EventData::INTERP_COL_FLAG,
+            ..end
+        }).map(|e| e.data.clone());
+        let interp_event_at_end = module.event_at(Position {
+            column: start.column | EventData::INTERP_COL_FLAG,
+            ..start
+        }).map(|e| e.data.clone());
+
         let add = if start.tick == end.tick {
             vec![LocatedEvent::from_position(start, EventData::TickGlide(start.column))]
         } else {
@@ -299,10 +308,23 @@ impl PatternEditor {
             ]
         };
 
-        module.push_edit(Edit::PatternData {
-            remove: add.iter().map(|e| e.position()).collect(),
-            add,
-        });
+        let edit = match (interp_event_at_start, interp_event_at_end) {
+            // if we're over an existing span, just delete it
+            (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
+                | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_))) =>
+                Edit::PatternData {
+                    remove: add.iter().map(|e| e.position()).collect(),
+                    add: Vec::new(),
+                },
+            // otherwise, insert as normal
+            _ => Edit::PatternData {
+                remove: add.iter().map(|e| e.position()).collect(),
+                add,
+            },
+            // TODO: other cases
+        };
+
+        module.push_edit(edit);
     }
 
     fn multi_channel_delete(&self, module: &mut Module) {
@@ -616,7 +638,7 @@ impl PatternEditor {
                     / TICKS_PER_BEAT as f32 * beat_height;
                 ui.push_line(x, y1, x, y2, colors[col as usize]);
             };
-            
+
             for event in interp {
                 match event.data {
                     EventData::StartGlide(_) => {
