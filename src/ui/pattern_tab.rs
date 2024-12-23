@@ -315,7 +315,7 @@ impl PatternEditor {
         for i in 0..n {
             start.channel = i;
             end.channel = i;
-            for event in module.scan_events(start, end) {
+            for event in module.scan_events(start, end, true) {
                 remove.push(event.position());
             }
         }
@@ -329,7 +329,7 @@ impl PatternEditor {
     fn shift_values(&self, offset: i8, module: &mut Module) {
         let (start, end) = self.selection_corners();
 
-        let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
+        let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
             match evt.event.data {
                 EventData::Pressure(v) => Some(LocatedEvent {
                     event: Event {
@@ -424,7 +424,7 @@ impl PatternEditor {
     fn place_events_evenly(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
         let tick_delta = end.tick - start.tick + self.ticks_per_row();
-        let events = module.scan_events(start, end);
+        let events = module.scan_events(start, end, false);
         let channels: HashSet<_> = events.iter().map(|e| (e.track, e.channel)).collect();
 
         module.push_edit(Edit::PatternData {
@@ -506,7 +506,7 @@ impl PatternEditor {
 
     fn copy(&mut self, module: &Module) {
         let (start, end) = self.selection_corners();
-        let events = module.scan_events(start, end).iter().map(|x| ClipEvent {
+        let events = module.scan_events(start, end, true).iter().map(|x| ClipEvent {
             channel_offset: module.channels_between(start, x.position()),
             event: x.event.clone(),
         }).collect();
@@ -532,7 +532,7 @@ impl PatternEditor {
                         column: 0,
                     })
             };
-            let event_positions: Vec<_> = module.scan_events(self.edit_start, end)
+            let event_positions: Vec<_> = module.scan_events(self.edit_start, end, true)
                 .iter().map(|x| x.position()).collect();
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
@@ -990,7 +990,7 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
 }
 
 fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Config) {
-    let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
+    let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
         if let EventData::Pitch(note) = evt.event.data {
             Some(LocatedEvent {
                 event: Event {

@@ -32,7 +32,7 @@ pub struct Module {
     redo_stack: Vec<Edit>,
     #[serde(skip)]
     track_history: Vec<TrackEdit>,
-    
+
     #[serde(skip)]
     pub has_unsaved_changes: bool,
 }
@@ -73,7 +73,7 @@ impl Module {
 
     pub fn save(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
-        fs::write(path, contents)?; 
+        fs::write(path, contents)?;
         self.has_unsaved_changes = false;
         Ok(())
     }
@@ -118,23 +118,59 @@ impl Module {
     }
 
     /// Return copies of pattern events between two positions.
-    pub fn scan_events(&self, start: Position, end: Position) -> Vec<LocatedEvent> {
+    /// If `full_interp` is true, don't return unpaired interpolation poles.
+    pub fn scan_events(&self, start: Position, end: Position, pair_interp: bool
+    ) -> Vec<LocatedEvent> {
         let tick_range = start.tick..=end.tick;
         let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
         let mut events = Vec::new();
 
         for (track_i, track) in self.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
+                let mut interp_on = [false, false, false];
+                let mut interp_events = [Vec::new(), Vec::new(), Vec::new()];
+
                 for evt in &channel.events {
                     let tuple = (track_i, channel_i, evt.data.spatial_column());
-                    if tick_range.contains(&evt.tick)
-                        && tuple >= start_tuple && tuple <= end_tuple {
+                    let collect = tick_range.contains(&evt.tick)
+                        && tuple >= start_tuple && tuple <= end_tuple;
+
+                    if let EventData::ToggleInterpolation(i) = evt.data {
+                        let i = i as usize;
+                        if collect {
+                            interp_events[i].push(LocatedEvent {
+                                track: track_i,
+                                channel: channel_i,
+                                event: evt.clone(),
+                            });
+                        } else {
+                            interp_on[i] = !interp_on[i];
+                        }
+                    } else if collect {
                         events.push(LocatedEvent {
                             track: track_i,
                             channel: channel_i,
                             event: evt.clone(),
                         });
                     }
+                }
+
+                for (i, es) in interp_events.iter_mut().enumerate() {
+                    if pair_interp {
+                        // if interp is on at the start of the collection period,
+                        // the first event is an off -- discard it.
+                        if interp_on[i] && !es.is_empty() {
+                            es.remove(0);
+                        }
+    
+                        // if we now have an uneven event count, the last will be
+                        // an on -- discard it.
+                        if es.len() % 2 != 0 {
+                            es.pop();
+                        }
+                    }
+
+                    events.extend_from_slice(&es);
                 }
             }
         }
@@ -154,7 +190,7 @@ impl Module {
 
     /// Delete pattern events between two positions.
     pub fn delete_events(&mut self, start: Position, end: Position) {
-        let remove: Vec<_> = self.scan_events(start, end).iter()
+        let remove: Vec<_> = self.scan_events(start, end, true).iter()
             .map(|x| x.position())
             .collect();
         if !remove.is_empty() {
@@ -221,7 +257,7 @@ impl Module {
             insert: Vec::new(),
         });
     }
-    
+
     /// Performs an edit operation and handles undo/redo stacks.
     pub fn push_edit(&mut self, edit: Edit) {
         // TODO: merge consecutive pattern data operations
@@ -672,7 +708,7 @@ impl EventData {
     pub fn spatial_column(&self) -> u8 {
         self.logical_column() & !Self::INTERP_COL_FLAG
     }
-    
+
     pub fn logical_column(&self) -> u8 {
         match *self {
             Self::Pressure(_) => VEL_COLUMN,
