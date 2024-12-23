@@ -1,4 +1,5 @@
 use fundsp::math::midi_hz;
+use macroquad::input::{KeyCode, is_key_pressed};
 
 use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
 
@@ -11,6 +12,12 @@ const PATCH_FILTER_EXT: &str = "oscins";
 pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     scroll: &mut f32, cfg: &mut Config, player: &mut Player
 ) {
+    if is_key_pressed(KeyCode::Up) {
+        shift_patch_index(-1, patch_index, module.patches.len());
+    } else if is_key_pressed(KeyCode::Down) {
+        shift_patch_index(1, patch_index, module.patches.len());
+    }
+
     ui.layout = Layout::Horizontal;
     ui.start_group();
     patch_list(ui, module, patch_index, cfg);
@@ -703,5 +710,17 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
             Box::new(|f| f.log(MAX_LFO_RATE/MIN_LFO_RATE)),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
             Box::new(|f| f / PITCH_MOD_BASE.log2()),
+    }
+}
+
+fn shift_patch_index(offset: isize, patch_index: &mut Option<usize>, n: usize) {
+    if let Some(index) = patch_index {
+        if let Some(i) = index.checked_add_signed(offset) {
+            *index = i.min(n - 1);
+        } else {
+            *patch_index = None;
+        }
+    } else if offset > 0 && n > 0 {
+        *patch_index = Some((offset as usize - 1).min(n - 1));
     }
 }
