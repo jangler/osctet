@@ -95,7 +95,7 @@ impl Compression {
 impl Default for Compression {
     fn default() -> Self {
         Self {
-            gain: 1.0,
+            gain: 0.5,
             threshold: db_amp(-3.0),
             slope: 0.75,
             attack: 0.001,
