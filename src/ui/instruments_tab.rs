@@ -208,7 +208,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         patch.play_mode = PlayMode::VARIANTS[i];
     }
     ui.shared_slider("distortion", "Distortion",
-        &patch.clip_gain.0, 1.0..=MAX_CLIP_GAIN, None, 1, true);
+        &patch.distortion.0, 0.0..=1.0, None, 1, true);
     ui.shared_slider("fx_send", "FX send",
         &patch.fx_send.0, 0.0..=1.0, None, 1, true);
 
@@ -670,13 +670,11 @@ fn labeled_group(ui: &mut UI, label: &str, f: impl FnOnce(&mut UI) -> ()) {
 //       case of ModDepth
 fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
     match target {
-        ModTarget::ClipGain =>
-            Box::new(|d| format!("{:+.2}", d * MAX_CLIP_GAIN)),
         ModTarget::EnvScale(_) =>
             Box::new(|d| format!("x{:.2}", MAX_ENV_SCALE.powf(d))),
         ModTarget::FilterCutoff(_) =>
             Box::new(|d| format!("{:+.2} octaves", d * FILTER_CUTOFF_MOD_BASE.log2())),
-        ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
+        ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
             | ModTarget::ModDepth(_) => Box::new(|d| format!("{:+.2}", d)),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|d| format!("{:+.1} cents", d * 50.0)),
@@ -691,13 +689,11 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
 
 fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
     match target {
-        ModTarget::ClipGain =>
-            Box::new(|f| f / MAX_CLIP_GAIN),
         ModTarget::EnvScale(_) =>
             Box::new(|f| f.log(MAX_ENV_SCALE)),
         ModTarget::FilterCutoff(_) =>
             Box::new(|f| f / FILTER_CUTOFF_MOD_BASE.log2()),
-        ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
+        ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
             | ModTarget::ModDepth(_) => Box::new(|f| f),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|f| f / 50.0),

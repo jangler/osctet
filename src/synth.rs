@@ -39,8 +39,6 @@ const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 
 const LFO_DELAY_CURVE: f32 = 3.0; // cubic
 
-pub const MAX_CLIP_GAIN: f32 = 8.0;
-
 // wrap this type so we can serialize it
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(from = "f32", into = "f32")]
@@ -580,7 +578,7 @@ pub struct Patch {
     pub lfos: Vec<LFO>,
     pub mod_matrix: Vec<Modulation>,
     pub fx_send: Parameter,
-    pub clip_gain: Parameter,
+    pub distortion: Parameter,
 }
 
 impl Patch {
@@ -589,7 +587,7 @@ impl Patch {
             name: String::from("init"),
             gain: Parameter(shared(0.5)),
             fx_send: Parameter(shared(1.0)),
-            clip_gain: Parameter(shared(1.0)),
+            distortion: Parameter(shared(0.0)),
             oscs: vec![Oscillator::new()],
             envs: vec![ADSR::new()],
             filters: Vec::new(),
@@ -1151,7 +1149,7 @@ pub enum ModTarget {
     EnvScale(usize),
     LFORate(usize),
     ModDepth(usize),
-    ClipGain,
+    ClipGain, // distortion, inaccurate name for legacy reasons
 }
 
 impl ModTarget {
@@ -1222,14 +1220,16 @@ impl Voice {
         let filter_net = settings.make_filter_net(&vars);
 
         // use dry signal if clip gain is set to 1.0
+        // TODO: doubling this could be costly. once we have live net updates,
+        //       make this node a conditional.
         let clip = pass()
-            * (var(&settings.clip_gain.0)
-                + settings.dsp_component(&vars, ModTarget::ClipGain, &[]) * MAX_CLIP_GAIN
-                >> shape_fn(|x| if x == 1.0 { 1.0 } else { 0.0 }))
+            * (var(&settings.distortion.0)
+                + settings.dsp_component(&vars, ModTarget::ClipGain, &[])
+                >> shape_fn(|x| if x == 0.0 { 1.0 } else { 0.0 }))
             & pass()
-            * (var(&settings.clip_gain.0)
-                + settings.dsp_component(&vars, ModTarget::ClipGain, &[]) * MAX_CLIP_GAIN
-                >> shape_fn(|x| x * if x == 1.0 { 0.0 } else { 1.0 }))
+            * (var(&settings.distortion.0)
+                + settings.dsp_component(&vars, ModTarget::ClipGain, &[])
+                >> shape_fn(|x| if x == 0.0 { 0.0 } else { (1.0 - clamp01(x)).recip() }))
             >> shape(Clip(1.0));
 
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
