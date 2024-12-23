@@ -272,38 +272,36 @@ impl PatternEditor {
     }
 
     fn interpolate(&self, module: &mut Module) {
-        let (mut start, mut end) = self.selection_corners();
+        let (start, mut end) = self.selection_corners();
 
-        if start.tick == end.tick {
-            if module.event_at(self.edit_start).is_some() {
-                // make sure start & end are differentiated
-                if start.tick > 0 {
-                    start.tick -= 1;
-                } else {
-                    return
-                }
+        if start.tick == end.tick &&
+            (start.column > 0 || module.event_at(self.edit_start).is_none()) {
+            // interpolate to next event in column
+            let evt = module.tracks[self.edit_start.track]
+                .channels[self.edit_start.channel]
+                .events.iter()
+                .find(|e| e.tick > self.edit_start.tick
+                    && e.data.logical_column() == self.edit_start.column);
+
+            if let Some(evt) = evt {
+                end.tick = evt.tick;
             } else {
-                // interpolate to next event in column
-                let evt = module.tracks[self.edit_start.track]
-                    .channels[self.edit_start.channel]
-                    .events.iter()
-                    .find(|e| e.tick > self.edit_start.tick
-                        && e.data.logical_column() == self.edit_start.column);
-
-                if let Some(evt) = evt {
-                    end.tick = evt.tick;
-                } else {
-                    return
-                }
+                return
             }
         }
 
-        let add = [start, end].map(|pos|
-            LocatedEvent::from_position(pos, EventData::ToggleInterpolation(pos.column)));
+        let add = if start.tick == end.tick {
+            vec![LocatedEvent::from_position(start, EventData::TickGlide(start.column))]
+        } else {
+            vec![
+                LocatedEvent::from_position(start, EventData::StartGlide(start.column)),
+                LocatedEvent::from_position(end, EventData::EndGlide(start.column)),
+            ]
+        };
 
         module.push_edit(Edit::PatternData {
             remove: add.iter().map(|e| e.position()).collect(),
-            add: add.to_vec(),
+            add,
         });
     }
 
@@ -603,18 +601,40 @@ impl PatternEditor {
             with_alpha(0.5, ui.style.theme.accent2_fg()),
         ];
 
+        // TODO: would be better to only collect events once
         for col in 0..3 {
             let interp: Vec<_> = channel.interp_by_col(col).collect();
             let x = ui.cursor_x + ui.style.margin - 1.0 - LINE_THICKNESS * 0.5
                 + column_x(col, &ui.style);
+            let mut depth = 0;
+            let mut start_tick = 0;
 
-            for chunk in interp.chunks_exact(2) {
-                if let [start, end] = chunk {
-                    let y1 = ui.cursor_y + (*start + tpr / 4) as f32
-                        / TICKS_PER_BEAT as f32 * beat_height;
-                    let y2 = ui.cursor_y + (*end + tpr * 3 / 4) as f32
-                        / TICKS_PER_BEAT as f32 * beat_height;
-                    ui.push_line(x, y1, x, y2, colors[col as usize]);
+            let mut draw_line = |start: u32, end: u32| {
+                let y1 = ui.cursor_y + (start + tpr / 4) as f32
+                    / TICKS_PER_BEAT as f32 * beat_height;
+                let y2 = ui.cursor_y + (end + tpr * 3 / 4) as f32
+                    / TICKS_PER_BEAT as f32 * beat_height;
+                ui.push_line(x, y1, x, y2, colors[col as usize]);
+            };
+            
+            for event in interp {
+                match event.data {
+                    EventData::StartGlide(_) => {
+                        if depth == 0 {
+                            start_tick = event.tick;
+                        }
+                        depth += 1;
+                    }
+                    EventData::EndGlide(_) => {
+                        depth -= 1;
+                        if depth == 0 {
+                            draw_line(start_tick, event.tick);
+                        }
+                    }
+                    EventData::TickGlide(_) => if depth == 0 {
+                        draw_line(event.tick, event.tick);
+                    }
+                    _ => panic!("expected glide event"),
                 }
             }
         }
@@ -773,7 +793,9 @@ impl PatternEditor {
                 | EventData::InterpolatedPressure(_)
                 | EventData::InterpolatedModulation(_)
                 => panic!("interpolated event in pattern"),
-            EventData::ToggleInterpolation(_) => return,
+            EventData::StartGlide(_)
+                | EventData::EndGlide(_)
+                | EventData::TickGlide(_) => return,
         };
         ui.push_text(x, y, text, color);
     }

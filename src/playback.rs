@@ -1,8 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::mpsc::{self, Receiver}, thread};
+use std::{path::PathBuf, sync::mpsc::{self, Receiver}, thread};
 
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, Position, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, pitch::Tuning, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f64 = 10.0;
@@ -19,7 +19,6 @@ pub struct Player {
     looped: bool,
     metronome: bool,
     sample_rate: f32,
-    interps: HashMap<Position, Interpolation>, // use 0 for tick
 }
 
 impl Player {
@@ -34,7 +33,6 @@ impl Player {
             looped: false,
             metronome: false,
             sample_rate,
-            interps: HashMap::new(),
         }
     }
 
@@ -48,7 +46,6 @@ impl Player {
         self.playtime = 0.0;
         self.tempo = DEFAULT_TEMPO;
         self.looped = false;
-        self.interps.clear();
     }
 
     pub fn get_tick(&self) -> u32 {
@@ -85,9 +82,12 @@ impl Player {
     pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
         for edit in edits {
             match edit {
-                TrackEdit::Insert(i) =>
-                    self.synths.insert(i, Synth::new(self.sample_rate)),
-                TrackEdit::Remove(i) => { self.synths.remove(i); }
+                TrackEdit::Insert(i) => {
+                    self.synths.insert(i, Synth::new(self.sample_rate));
+                }
+                TrackEdit::Remove(i) => {
+                    self.synths.remove(i);
+                }
             }
         }
     }
@@ -158,40 +158,60 @@ impl Player {
 
         for (track_i, track) in module.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
+                let mut prev_data = [None, None, None];
+                let mut next_event = [None, None, None];
+                let mut start_tick = [0, 0, 0];
+                let mut glide_depth = [0, 0, 0];
+
                 for event in &channel.events {
-                    if event.tick >= prev_tick && event.tick < self.tick {
-                        events.push(LocatedEvent {
-                            event: event.clone(),
-                            track: track_i,
-                            channel: channel_i,
-                        });
+                    if event.tick < self.tick {
+                        if event.tick >= prev_tick {
+                            events.push(LocatedEvent {
+                                event: event.clone(),
+                                track: track_i,
+                                channel: channel_i,
+                            });
+                        }
+
+                        // TODO: tick glide
+                        match event.data {
+                            EventData::StartGlide(i) => glide_depth[i as usize] += 1,
+                            EventData::EndGlide(i) => glide_depth[i as usize] -= 1,
+                            _ => (),
+                        }
+                    }
+
+                    let col = event.data.logical_column();
+                    if event.tick < self.tick {
+                        if let Some(v) = prev_data.get_mut(col as usize) {
+                            *v = Some(&event.data);
+                        }
+                        start_tick[event.data.spatial_column() as usize] = event.tick;
+                    } else if event.tick > self.tick {
+                        if let Some(v) = next_event.get_mut(col as usize) {
+                            if v.is_none() {
+                                *v = Some(event);
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        // generate events from interpolation
-        for (track_i, track) in module.tracks.iter().enumerate() {
-            for (channel_i, channel) in track.channels.iter().enumerate() {
-                let mut push_event = |data| events.push(LocatedEvent {
-                    track: track_i,
-                    channel: channel_i,
-                    event: Event {
-                        tick: self.tick,
-                        data,
-                    },
-                });
-                if let Some(v) = channel.interpolate_tempo(self.tick) {
-                    push_event(EventData::Tempo(v));
-                }
-                if let Some(pitch) = channel.interpolate_pitch(self.tick, &module.tuning) {
-                    push_event(EventData::InterpolatedPitch(pitch));
-                }
-                if let Some(v) = channel.interpolate_pressure(self.tick) {
-                    push_event(EventData::InterpolatedPressure(v));
-                }
-                if let Some(v) = channel.interpolate_modulation(self.tick) {
-                    push_event(EventData::InterpolatedModulation(v));
+                for i in 0..prev_data.len() {
+                    if glide_depth[i] > 0 {
+                        if let Some(data) = interpolate_events(
+                            prev_data[i], next_event[i], start_tick[i], self.tick,
+                            &module.tuning
+                        ) {
+                            events.push(LocatedEvent {
+                                track: track_i,
+                                channel: channel_i,
+                                event: Event {
+                                    tick: self.tick,
+                                    data,
+                                },
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -260,8 +280,8 @@ impl Player {
                     EventData::NoteOff => active_note = None,
                     EventData::Tempo(t) => self.tempo = t,
                     EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
-                    EventData::End | EventData::Loop
-                        | EventData::ToggleInterpolation(_) => (),
+                    EventData::End | EventData::Loop | EventData::StartGlide(_)
+                        | EventData::EndGlide(_) | EventData::TickGlide(_) => (),
                     EventData::InterpolatedPitch(_)
                         | EventData::InterpolatedPressure(_)
                         | EventData::InterpolatedModulation(_)
@@ -366,7 +386,8 @@ impl Player {
             } else {
                 self.stop();
             },
-            EventData::Loop | EventData::ToggleInterpolation(_) => (),
+            EventData::Loop | EventData::StartGlide(_) | EventData::EndGlide(_)
+                | EventData::TickGlide(_) => (),
             EventData::InterpolatedPitch(pitch) => self.bend_to(track, key, pitch),
             EventData::InterpolatedPressure(v) =>
                 self.channel_pressure(track, channel as u8, v),
@@ -441,4 +462,53 @@ pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
     });
 
     rx
+}
+
+fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
+    start: u32, tick: u32, tuning: &Tuning
+) -> Option<EventData> {
+    if let Some(next) = next {
+        let t = (tick - start) as f32 / (next.tick - start) as f32;
+
+        match next.data {
+            EventData::Pitch(b) => {
+                if let Some(EventData::Pitch(a)) = prev {
+                    let a = tuning.midi_pitch(a);
+                    let b = tuning.midi_pitch(&b);
+                    Some(EventData::InterpolatedPitch(lerp(a, b, t)))
+                } else {
+                    None
+                }
+            }
+            EventData::Tempo(b) => {
+                let a = if let Some(EventData::Tempo(a)) = prev {
+                    *a
+                } else {
+                    DEFAULT_TEMPO
+                };
+                Some(EventData::Tempo(lerp(a, b, t)))
+            }
+            EventData::Pressure(b) => {
+                let a = if let Some(EventData::Pressure(a)) = prev {
+                    *a as f32 / EventData::DIGIT_MAX as f32
+                } else {
+                    DEFAULT_PRESSURE
+                };
+                let b = b as f32 / EventData::DIGIT_MAX as f32;
+                Some(EventData::InterpolatedPressure(lerp(a, b, t)))
+            }
+            EventData::Modulation(b) => {
+                let a = if let Some(EventData::Modulation(a)) = prev {
+                    *a as f32 / EventData::DIGIT_MAX as f32
+                } else {
+                    0.0
+                };
+                let b = b as f32 / EventData::DIGIT_MAX as f32;
+                Some(EventData::InterpolatedModulation(lerp(a, b, t)))
+            }
+            _ => None,
+        }
+    } else {
+        None
+    }
 }

@@ -2,10 +2,9 @@
 
 use std::{collections::HashSet, error::Error, fs, path::PathBuf};
 
-use fundsp::math::{delerp, lerp};
 use serde::{Deserialize, Serialize};
 
-use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::{Patch, DEFAULT_PRESSURE}};
+use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch};
 
 pub const TICKS_PER_BEAT: u32 = 120;
 
@@ -127,45 +126,41 @@ impl Module {
 
         for (track_i, track) in self.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
-                let mut interp_on = [false, false, false];
                 let mut interp_events = [Vec::new(), Vec::new(), Vec::new()];
 
                 for evt in &channel.events {
                     let tuple = (track_i, channel_i, evt.data.spatial_column());
-                    let collect = tick_range.contains(&evt.tick)
-                        && tuple >= start_tuple && tuple <= end_tuple;
-
-                    if let EventData::ToggleInterpolation(i) = evt.data {
-                        let i = i as usize;
-                        if collect {
-                            interp_events[i].push(LocatedEvent {
-                                track: track_i,
-                                channel: channel_i,
-                                event: evt.clone(),
-                            });
-                        } else {
-                            interp_on[i] = !interp_on[i];
+                    if tick_range.contains(&evt.tick)
+                        && tuple >= start_tuple && tuple <= end_tuple {
+                        match evt.data {
+                            EventData::StartGlide(i) | EventData::EndGlide(i)
+                                | EventData::TickGlide(i) => {
+                                interp_events[i as usize].push(LocatedEvent {
+                                    track: track_i,
+                                    channel: channel_i,
+                                    event: evt.clone(),
+                                });
+                            }
+                            _ => {
+                                events.push(LocatedEvent {
+                                    track: track_i,
+                                    channel: channel_i,
+                                    event: evt.clone(),
+                                });
+                            }
                         }
-                    } else if collect {
-                        events.push(LocatedEvent {
-                            track: track_i,
-                            channel: channel_i,
-                            event: evt.clone(),
-                        });
                     }
                 }
 
-                for (i, es) in interp_events.iter_mut().enumerate() {
+                // TODO: this doesn't account for nested glides
+                for es in &mut interp_events {
                     if pair_interp {
-                        // if interp is on at the start of the collection period,
-                        // the first event is an off -- discard it.
-                        if interp_on[i] && !es.is_empty() {
+                        if let Some(EventData::EndGlide(_))
+                            = es.get(0).map(|x| &x.event.data) {
                             es.remove(0);
                         }
-    
-                        // if we now have an uneven event count, the last will be
-                        // an on -- discard it.
-                        if es.len() % 2 != 0 {
+                        if let Some(EventData::StartGlide(_))
+                            = es.iter().last().map(|x| &x.event.data) {
                             es.pop();
                         }
                     }
@@ -588,94 +583,38 @@ impl Channel {
         self.events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
     }
 
-    pub fn interp_by_col(&self, col: u8) -> impl Iterator<Item = u32> + use<'_> {
+    pub fn interp_by_col(&self, col: u8) -> impl Iterator<Item = &Event> + use<'_> {
         self.events.iter().filter_map(move |e| match e.data {
-            EventData::ToggleInterpolation(i) if i == col => Some(e.tick),
+            EventData::StartGlide(i)
+                | EventData::EndGlide(i)
+                | EventData::TickGlide(i) if i == col => Some(e),
             _ => None,
         })
     }
 
     pub fn is_interpolated(&self, col: u8, tick: u32) -> bool {
-        let interp = self.interp_by_col(col);
-        interp.filter(|x| *x < tick).count() % 2 == 1
-    }
+        let mut depth = 0;
 
-    /// Returns an interpolated value from the given parameters.
-    fn interp_values(&self, col: u8, tick: u32, default_value: Option<f32>,
-        filter_fn: impl Fn(&&Event) -> bool, extract_fn: impl Fn(&EventData) -> Option<f32>,
-    ) -> Option<f32> {
-        let interp: Vec<_> = self.interp_by_col(col).collect();
-        if let Some(i) = interp.iter().position(|t| *t >= tick) {
-            if i % 2 == 1 {
-                let start = interp[i - 1];
-                let end = interp[i];
-                let events: Vec<_> = self.events.iter().filter(filter_fn).collect();
-                if let Some(i) = events.iter().position(|e| e.tick >= tick) {
-                    let next_event = events[i];
-                    if next_event.tick <= end {
-                        let end = end.min(next_event.tick);
-                        let (prev, start) = if i > 0 {
-                            let prev_event = events[i - 1];
-                            let start = start.max(prev_event.tick);
-                            (extract_fn(&prev_event.data), start)
-                        } else {
-                            (default_value, start)
-                        };
-                        if let Some(prev) = prev {
-                            if let Some(next) = extract_fn(&next_event.data) {
-                                let t = delerp(start as f32, end as f32, tick as f32);
-                                return Some(lerp(prev, next, t))
-                            }
-                        }
-                    }
+        for event in self.interp_by_col(col) {
+            if event.tick > tick {
+                break
+            }
+
+            match event.data {
+                EventData::StartGlide(_) => if event.tick < tick {
+                    depth += 1
                 }
+                EventData::EndGlide(_) => if event.tick < tick {
+                    depth -= 1
+                }
+                EventData::TickGlide(_) => if event.tick == tick {
+                    return true;
+                }
+                _ => panic!("expected glide event"),
             }
         }
-        None
-    }
 
-    /// Returns the interpolated MIDI pitch at a given tick.
-    pub fn interpolate_pitch(&self, tick: u32, tuning: &Tuning) -> Option<f32> {
-        self.interp_values(NOTE_COLUMN, tick, None, |e| match e.data {
-            EventData::Pitch(_) => true,
-            _ => false,
-        }, |data| match data {
-            EventData::Pitch(note) => Some(tuning.midi_pitch(&note)),
-            _ => None,
-        })
-    }
-
-    /// Returns the interpolated pressure at a given tick.
-    pub fn interpolate_pressure(&self, tick: u32) -> Option<f32> {
-        self.interp_values(VEL_COLUMN, tick, Some(DEFAULT_PRESSURE), |e| match e.data {
-            EventData::Pressure(_) => true,
-            _ => false,
-        }, |data| match data {
-            EventData::Pressure(v) => Some(*v as f32 / EventData::DIGIT_MAX as f32),
-            _ => None,
-        })
-    }
-
-    /// Returns the interpolated modulation at a given tick.
-    pub fn interpolate_modulation(&self, tick: u32) -> Option<f32> {
-        self.interp_values(MOD_COLUMN, tick, Some(0.0), |e| match e.data {
-            EventData::Modulation(_) => true,
-            _ => false,
-        }, |data| match data {
-            EventData::Modulation(v) => Some(*v as f32 / EventData::DIGIT_MAX as f32),
-            _ => None,
-        })
-    }
-
-    /// Returns the interpolated tempo at a given tick.
-    pub fn interpolate_tempo(&self, tick: u32) -> Option<f32> {
-        self.interp_values(NOTE_COLUMN, tick, Some(DEFAULT_TEMPO), |e| match e.data {
-            EventData::Tempo(_) => true,
-            _ => false,
-        }, |data| match data {
-            EventData::Tempo(v) => Some(*v),
-            _ => None,
-        })
+        depth > 0
     }
 }
 
@@ -698,7 +637,9 @@ pub enum EventData {
     InterpolatedPitch(f32),
     InterpolatedPressure(f32),
     InterpolatedModulation(f32),
-    ToggleInterpolation(u8), // column
+    StartGlide(u8),
+    EndGlide(u8),
+    TickGlide(u8),
 }
 
 impl EventData {
@@ -713,7 +654,8 @@ impl EventData {
         match *self {
             Self::Pressure(_) => VEL_COLUMN,
             Self::Modulation(_) => MOD_COLUMN,
-            Self::ToggleInterpolation(col) => col | Self::INTERP_COL_FLAG,
+            Self::StartGlide(col) | Self::EndGlide(col) | Self::TickGlide(col)
+                => col | Self::INTERP_COL_FLAG,
             _ => NOTE_COLUMN,
         }
     }
