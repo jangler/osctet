@@ -142,45 +142,6 @@ impl Module {
         events
     }
 
-    /// Return references to pattern events between two locations.
-    pub fn modify_events(&mut self, start: Position, end: Position) -> Vec<&mut Event> {
-        let tick_range = start.tick..=end.tick;
-        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
-        let mut events = Vec::new();
-
-        for (track_i, track) in self.tracks.iter_mut().enumerate() {
-            for (channel_i, channel) in track.channels.iter_mut().enumerate() {
-                for evt in &mut channel.events {
-                    let tuple = (track_i, channel_i, evt.data.spatial_column());
-                    if tick_range.contains(&evt.tick)
-                        && tuple >= start_tuple && tuple <= end_tuple {
-                        events.push(evt);
-                    }
-                }
-            }
-        }
-
-        events
-    }
-
-    pub fn modify_channels(&mut self, start: Position, end: Position) -> Vec<&mut Channel> {
-        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
-        let start_tuple = (start_tuple.0, start_tuple.1);
-        let end_tuple = (end_tuple.0, end_tuple.1);
-        let mut channels = Vec::new();
-        
-        for (track_i, track) in self.tracks.iter_mut().enumerate() {
-            for (channel_i, channel) in track.channels.iter_mut().enumerate() {
-                let tuple = (track_i, channel_i);
-                if tuple >= start_tuple && tuple <= end_tuple {
-                    channels.push(channel);
-                }
-            }
-        }
-
-        channels
-    }
-
     pub fn event_at(&mut self, pos: Position) -> Option<&mut Event> {
         if let Some(track) = self.tracks.get_mut(pos.track) {
             if let Some(channel) = track.channels.get_mut(pos.channel) {
