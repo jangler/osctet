@@ -291,12 +291,12 @@ impl PatternEditor {
         }
 
         let interp_event_at_start = module.event_at(Position {
-            column: end.column | EventData::INTERP_COL_FLAG,
-            ..end
-        }).map(|e| e.data.clone());
-        let interp_event_at_end = module.event_at(Position {
             column: start.column | EventData::INTERP_COL_FLAG,
             ..start
+        }).map(|e| e.data.clone());
+        let interp_event_at_end = module.event_at(Position {
+            column: end.column | EventData::INTERP_COL_FLAG,
+            ..end
         }).map(|e| e.data.clone());
 
         let add = if start.tick == end.tick {
@@ -311,7 +311,8 @@ impl PatternEditor {
         let edit = match (interp_event_at_start, interp_event_at_end) {
             // if we're over an existing span, just delete it
             (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
-                | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_))) =>
+                | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_)))
+                | (Some(EventData::TickGlide(_)), Some(EventData::TickGlide(_)))=>
                 Edit::PatternData {
                     remove: add.iter().map(|e| e.position()).collect(),
                     add: Vec::new(),
