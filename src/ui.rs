@@ -160,7 +160,7 @@ pub struct UI {
     focused_note: Option<String>,
     pub note_queue: Vec<(Key, EventData)>,
     instrument_edit_index: Option<usize>,
-    mouse_consumed: bool,
+    mouse_consumed: Option<String>,
     scrollbar_grabbed: bool,
     notification: Option<Notification>,
     text_clipboard: Option<String>,
@@ -196,7 +196,7 @@ impl UI {
             focused_note: None,
             note_queue: Vec::new(),
             instrument_edit_index: None,
-            mouse_consumed: false,
+            mouse_consumed: None,
             scrollbar_grabbed: false,
             notification: None,
             text_clipboard: None,
@@ -239,7 +239,7 @@ impl UI {
 
         if !is_mouse_button_down(MouseButton::Left)
             && !is_mouse_button_released(MouseButton::Left) {
-            self.mouse_consumed = false;
+            self.mouse_consumed = None;
         }
 
         if self.focused_slider.is_some() && is_mouse_button_released(MouseButton::Left) {
@@ -462,7 +462,7 @@ impl UI {
             h,
             ..trough
         };
-        let hit = self.mouse_hits(trough);
+        let hit = self.mouse_hits(trough, "vertical_scrollbar");
         self.push_rect(handle, self.style.theme.control_bg_click(), None);
 
         if is_mouse_button_pressed(MouseButton::Left) && hit {
@@ -482,8 +482,8 @@ impl UI {
     }
 
     /// Check whether the mouse is within the rect and unoccluded.
-    fn mouse_hits(&self, rect: Rect) -> bool {
-        if self.mouse_consumed || self.dialog.is_some() {
+    fn mouse_hits(&self, rect: Rect, id: &str) -> bool {
+        if self.mouse_consumed.as_ref().is_some_and(|s| s != id) || self.dialog.is_some() {
             return false
         }
 
@@ -547,7 +547,7 @@ impl UI {
             w: self.style.atlas.text_width(label) + self.style.margin * 2.0,
             h: self.style.line_height(),
         };
-        let mouse_hit = self.mouse_hits(rect) && enabled;
+        let mouse_hit = self.mouse_hits(rect, "text_rect") && enabled;
 
         // draw fill based on mouse state
         let (fill, stroke) = if mouse_hit {
@@ -692,7 +692,7 @@ impl UI {
                 gfx.push(Graphic::Rect(hit_rect, self.style.theme.panel_bg_hover(), None));
                 if lmb {
                     return_val = Some(i);
-                    self.mouse_consumed = true;
+                    self.mouse_consumed = Some(state.id.clone());
                 }
             }
             gfx.push(Graphic::Text(hit_rect.x - 1.0, hit_rect.y - 1.0,
@@ -743,7 +743,7 @@ impl UI {
             // fill background
             let color = if i == selected_index {
                 self.style.theme.panel_bg()
-            } else if self.mouse_hits(r) {
+            } else if self.mouse_hits(r, "tab_menu") {
                 if is_mouse_button_pressed(MouseButton::Left) {
                     self.tabs.insert(id.to_owned(), i);
                     selected_index = i;
@@ -826,11 +826,11 @@ impl UI {
             h: h + self.style.margin * 2.0,
         };
         let mouse_pos = mouse_position_vec2();
-        let hit = enabled && self.mouse_hits(hit_rect);
+        let hit = enabled && self.mouse_hits(hit_rect, id);
         if hit {
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.focused_slider = Some(id.to_string());
-                self.mouse_consumed = true;
+                self.mouse_consumed = Some(id.to_string());
             }
             if is_mouse_button_pressed(MouseButton::Right) {
                 let text = display(*val).trim_start_matches('x')
@@ -938,7 +938,7 @@ impl UI {
         };
 
         let focused = self.focused_text.as_ref().is_some_and(|x| x.id == id);
-        let hit = self.mouse_hits(box_rect);
+        let hit = self.mouse_hits(box_rect, id);
 
         // focus/unfocus
         if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
@@ -1009,7 +1009,7 @@ impl UI {
         for (i, option) in options.iter().enumerate() {
             if i == *index {
                 self.push_rect(hit_rect, self.style.theme.content_bg_click(), None);
-            } else if self.mouse_hits(hit_rect) {
+            } else if self.mouse_hits(hit_rect, "instrument_list") {
                 self.push_rect(hit_rect, self.style.theme.content_bg_hover(), None);
                 if lmb {
                     *index = i;
@@ -1030,7 +1030,8 @@ impl UI {
                     }
                 }
             } else {
-                if self.mouse_hits(hit_rect) && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
+                if self.mouse_hits(hit_rect, "instrument_list")
+                    && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
                     let text = option.clone();
                     self.focused_text = Some(TextEditState::new(id.to_string(), text));
                     self.instrument_edit_index = Some(i);
@@ -1048,7 +1049,7 @@ impl UI {
 
     /// Primitive that draws the currently focused text and handles edit input.
     fn editable_text(&mut self, rect: Rect) -> bool {
-        let hit = self.mouse_hits(rect);
+        let hit = self.mouse_hits(rect, "editable_text");
         let margin = self.style.margin;
 
         if let Some(state) = self.focused_text.as_mut() {
@@ -1156,7 +1157,7 @@ impl UI {
             w: self.style.atlas.text_width(&label) + margin * 2.0,
             h: self.style.line_height(),
         };
-        let mouse_hit = self.mouse_hits(rect);
+        let mouse_hit = self.mouse_hits(rect, id);
 
         if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             self.focused_note = Some(id.to_owned());
@@ -1202,7 +1203,7 @@ impl UI {
             w: self.style.atlas.text_width(&label) + margin * 2.0,
             h: self.style.line_height(),
         };
-        let mouse_hit = self.mouse_hits(rect);
+        let mouse_hit = self.mouse_hits(rect, "hotkey_input");
 
         if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
             self.focused_hotkey = Some(id.to_owned());
@@ -1264,7 +1265,7 @@ impl UI {
 
             if evt == MouseEvent::Pressed {
                 self.notification = None;
-                self.mouse_consumed = true;
+                self.mouse_consumed = Some(String::from("info_box"));
             }
         }
     }
