@@ -11,6 +11,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.cursor_z -= 1;
     ui.start_group();
 
+    ui.start_group();
     if ui.button("Save settings", true) {
         cfg.theme = Some(ui.style.theme.clone());
         match cfg.save() {
@@ -18,6 +19,10 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
             Err(e) => ui.report(e),
         }
     }
+    if ui.button("Reset to defaults", true) {
+        *cfg = Default::default();
+    }
+    ui.end_group();
 
     ui.space(2.0);
     ui.header("APPEARANCE");
