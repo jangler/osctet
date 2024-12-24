@@ -184,11 +184,23 @@ impl App {
                     Action::HalveDivision => self.pattern_editor.halve_division(),
                     Action::IncrementOctave => self.octave += 1,
                     Action::DecrementOctave => self.octave -= 1,
-                    Action::PlayFromStart => self.player.play_from(0, &self.module),
-                    Action::PlayFromScreen => self.player.play_from(
-                        self.pattern_editor.screen_beat_tick(), &self.module),
-                    Action::PlayFromCursor => self.player.play_from(
-                        self.pattern_editor.cursor_tick(), &self.module),
+                    Action::PlayFromStart => if self.player.is_playing() {
+                        self.player.stop()
+                    } else {
+                        self.player.play_from(0, &self.module)
+                    }
+                    Action::PlayFromScreen => if self.player.is_playing() {
+                        self.player.stop()
+                    } else {
+                        self.player.play_from(
+                            self.pattern_editor.screen_beat_tick(), &self.module)
+                    }
+                    Action::PlayFromCursor => if self.player.is_playing() {
+                        self.player.stop()
+                    } else {
+                        self.player.play_from(
+                            self.pattern_editor.cursor_tick(), &self.module)
+                    }
                     Action::StopPlayback => self.player.stop(),
                     Action::NewSong => self.new_module(), // TODO: prompt if unsaved
                     Action::OpenSong=> self.open_module(), // TODO: prompt if unsaved
