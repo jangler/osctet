@@ -267,6 +267,7 @@ impl PatternEditor {
             Action::MuteTrack => player.toggle_mute(module, self.cursor_track()),
             Action::SoloTrack => player.toggle_solo(module, self.cursor_track()),
             Action::UnmuteAllTracks => player.unmute_all(module),
+            Action::CycleNotation => self.cycle_notation(module),
             _ => (),
         }
     }
@@ -372,6 +373,25 @@ impl PatternEditor {
                     event: Event {
                         data: EventData::Modulation(
                             v.saturating_add_signed(offset).min(EventData::DIGIT_MAX)),
+                        ..evt.event
+                    },
+                    ..evt.clone()
+                }),
+                _ => None,
+            }
+        }).collect();
+
+        module.push_edit(Edit::ReplaceEvents(replacements));
+    }
+
+    fn cycle_notation(&self, module: &mut Module) {
+        let (start, end) = self.selection_corners();
+
+        let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
+            match evt.event.data {
+                EventData::Pitch(note) => Some(LocatedEvent {
+                    event: Event {
+                        data: EventData::Pitch(note.cycle_notation(&module.tuning)),
                         ..evt.event
                     },
                     ..evt.clone()

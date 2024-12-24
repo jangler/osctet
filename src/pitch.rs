@@ -298,7 +298,7 @@ impl Note {
     /// Returns the simplest notation for the next/previous note of the tuning.
     /// Positive offsets prefer sharps; negative offsets prefer flats.
     pub fn step_shift(&self, steps: isize, tuning: &Tuning) -> Note {
-        let mut index = tuning.scale_index(&self).0 as isize + steps;
+        let mut index = tuning.scale_index(self).0 as isize + steps;
         let mut equave = self.equave;
         let n = tuning.size() as isize;
 
@@ -311,7 +311,7 @@ impl Note {
             equave -= 1;
         }
 
-        let notes = tuning.notation(index as usize, equave + tuning.octave_offet(&self));
+        let notes = tuning.notation(index as usize, equave + tuning.octave_offet(self));
 
         if steps > 0 {
             if let Some(note) = notes.iter().filter(|n| n.sharps >= 0).next() {
@@ -324,6 +324,18 @@ impl Note {
         }
 
         notes[0]
+    }
+
+    /// Returns the next note in the set of simplest equivalent notations.
+    pub fn cycle_notation(&self, tuning: &Tuning) -> Note {
+        let (index, equave) = tuning.scale_index(self);
+        let options = tuning.notation(index, equave);
+
+        if let Some(i) = options.iter().position(|x| x == self) {
+            options[(i + 1) % options.len()]
+        } else {
+            *options.get(0).unwrap_or(self)
+        }
     }
 }
 
