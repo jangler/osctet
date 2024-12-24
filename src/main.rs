@@ -3,7 +3,7 @@
 
 use std::{env, error::Error, fs, panic};
 
-use macroquad::{miniquad::conf::Icon, prelude::Conf, texture::Image};
+use macroquad::{input::prevent_quit, miniquad::conf::Icon, prelude::Conf, texture::Image};
 
 use osctet::{APP_NAME, run};
 
@@ -31,6 +31,8 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() -> Result<(), Box<dyn Error>> {
+    prevent_quit();
+
     if cfg!(not(debug_assertions)) {
         panic::set_hook(Box::new(|info| {
             let message = if let Some(location) = info.location() {

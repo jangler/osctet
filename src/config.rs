@@ -51,7 +51,8 @@ impl Config {
         Ok(c)
     }
 
-    pub fn save(&self) -> Result<(), Box<dyn Error>> {
+    pub fn save(&mut self, theme: Theme) -> Result<(), Box<dyn Error>> {
+        self.theme = Some(theme);
         let s = toml::to_string_pretty(self)?;
         std::fs::write(config_path()?, s)?;
         Ok(())

@@ -90,7 +90,6 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
                 .set_file_name(patch.name.clone())
                 .save_file() {
                 cfg.patch_folder = config::dir_as_string(&path);
-                let _ = cfg.save();
                 if let Err(e) = patch.save(&path) {
                     ui.report(e);
                 }
@@ -117,7 +116,6 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
                     Err(e) => ui.report(e),
                 }
             }
-            let _ = cfg.save();
         }
     }
     ui.end_group();
@@ -405,7 +403,6 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config) {
             .unwrap_or(String::from(".")))
         .pick_file() {
         cfg.sample_folder = config::dir_as_string(&path);
-        let _ = cfg.save();
         match PcmData::load(path) {
             Ok(result) => *data = Some(result),
             Err(e) => ui.report(e),

@@ -137,7 +137,6 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
             .set_directory(cfg.scale_folder.clone().unwrap_or(String::from(".")))
             .pick_file() {
             cfg.scale_folder = config::dir_as_string(&path);
-            let _ = cfg.save();
             match Tuning::load(path, tuning.root) {
                 Ok(t) => *tuning = t,
                 Err(e) => ui.report(e),

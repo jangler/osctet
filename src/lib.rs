@@ -402,9 +402,6 @@ impl App {
                     }
                     self.midi.port_name = self.midi.port_selection.clone();
                     self.config.default_midi_input = self.midi.port_name.clone();
-                    if let Err(e) = self.config.save() {
-                        self.ui.report(e);
-                    };
                 },
                 Err(e) => {
                     self.midi.port_selection = None;
@@ -414,7 +411,15 @@ impl App {
         }
     }
 
-    fn frame(&mut self) {
+    /// Returns false if it's quitting time.
+    fn frame(&mut self) -> bool {
+        if is_quit_requested() {
+            if let Err(e) = self.config.save(self.ui.style.theme.clone()) {
+                eprintln!("error saving config: {}", e);
+            }
+            return false
+        }
+
         if self.ui.accepting_keyboard_input() {
             self.player.clear_notes_with_origin(KeyOrigin::Keyboard);
         } else {
@@ -428,6 +433,8 @@ impl App {
         self.check_midi_reconnect();
         self.process_ui();
         self.player.frame(&self.module, get_frame_time().into());
+
+        true
     }
 
     fn handle_render_updates(&mut self) {
@@ -483,9 +490,6 @@ impl App {
             let mut v = self.config.midi_send_pressure.unwrap_or(true);
             if self.ui.checkbox("Use aftertouch", &mut v, self.midi.port_name.is_some()) {
                 self.config.midi_send_pressure = Some(v);
-                if let Err(e) = self.config.save() {
-                    self.ui.report(e);
-                }
             }
         } else {
             self.ui.label("No MIDI device");
@@ -518,7 +522,6 @@ impl App {
                 .set_file_name(self.module.title.clone())
                 .save_file() {
                 self.config.render_folder = config::dir_as_string(&path);
-                let _ = self.config.save();
                 self.render_channel = Some(playback::render(self.module.clone(), path));
             }
 
@@ -552,7 +555,6 @@ impl App {
             .set_file_name(self.module.title.clone())
             .save_file() {
             self.config.module_folder = config::dir_as_string(&path);
-            let _ = self.config.save();
             if let Err(e) = self.module.save(&path) {
                 self.ui.report(e);
             } else {
@@ -569,7 +571,6 @@ impl App {
                 .unwrap_or(String::from(".")))
             .pick_file() {
             self.config.module_folder = config::dir_as_string(&path);
-            let _ = self.config.save();
             match Module::load(&path) {
                 Ok(module) => {
                     self.load_module(module);
@@ -643,8 +644,9 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    loop {
-        app.frame();
+    while app.frame() {
         next_frame().await
     }
+
+    Ok(())
 }
