@@ -69,7 +69,8 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     let comp = &mut settings.comp;
     let mut commit = false;
 
-    if ui.slider("gain", "Gain", &mut comp.gain, 0.0..=2.0, None, 2, true) {
+    if ui.formatted_slider("gain", "Gain", &mut comp.gain,
+        0.0..=2.0, 2, true, |x| format!("{:+.1} dB", amp_db(x)), db_amp) {
         commit = true;
     }
     if ui.formatted_slider("threshold", "Threshold", &mut comp.threshold,
