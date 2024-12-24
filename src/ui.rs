@@ -883,7 +883,7 @@ impl UI {
             self.push_rect(r, Color { a: 0.0, ..Default::default() }, None);
         };
 
-        if grabbed {
+        if hit {
             let text = display(*val);
             self.tooltip(&text, handle_rect.x,
                 self.cursor_y - (h + self.style.margin * 2.0));
