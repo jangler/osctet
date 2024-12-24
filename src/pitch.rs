@@ -296,7 +296,7 @@ impl Note {
     }
 
     /// Returns the simplest notation for the next/previous note of the tuning.
-    /// Positive offsets prefer sharps; negative offsets prefer flats.
+    /// Prefers notes with the same nominal.
     pub fn step_shift(&self, steps: isize, tuning: &Tuning) -> Note {
         let mut index = tuning.scale_index(self).0 as isize + steps;
         let mut equave = self.equave;
@@ -313,14 +313,8 @@ impl Note {
 
         let notes = tuning.notation(index as usize, equave + tuning.octave_offet(self));
 
-        if steps > 0 {
-            if let Some(note) = notes.iter().filter(|n| n.sharps >= 0).next() {
-                return *note
-            }
-        } else if steps < 0 {
-            if let Some(note) = notes.iter().filter(|n| n.sharps <= 0).next() {
-                return *note
-            }
+        if let Some(note) = notes.iter().filter(|n| n.nominal == self.nominal).next() {
+            return *note
         }
 
         notes[0]
@@ -484,6 +478,13 @@ mod tests {
         assert_eq!(Note::new(0, Nominal::B, 0, 4).step_shift(1, &t), Note {
             nominal: Nominal::C,
             equave: 5,
+            ..A4
+        });
+
+        let t = Tuning::divide(2.0, 41, 1).unwrap();
+        assert_eq!(Note::new(0, Nominal::E, 0, 4).step_shift(-1, &t), Note {
+            nominal: Nominal::E,
+            arrows: -1,
             ..A4
         });
     }
