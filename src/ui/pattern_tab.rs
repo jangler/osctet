@@ -352,6 +352,14 @@ impl PatternEditor {
 
         let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
             match evt.event.data {
+                EventData::Pitch(note) => Some(LocatedEvent {
+                    event: Event {
+                        data: EventData::Pitch(
+                            note.step_shift(offset as isize, &module.tuning)),
+                        ..evt.event
+                    },
+                    ..evt.clone()
+                }),
                 EventData::Pressure(v) => Some(LocatedEvent {
                     event: Event {
                         data: EventData::Pressure(

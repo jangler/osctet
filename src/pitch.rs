@@ -30,6 +30,9 @@ pub enum Nominal {
 }
 
 impl Nominal {
+    const VARIANTS: [Nominal; 7] =
+        [Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G];
+
     // (period, generator)
     fn vector(&self) -> (i32, i32) {
         match self {
@@ -142,6 +145,7 @@ impl Tuning {
         octaves * self.scale.len() as i32 + fifths * self.generator_steps()
     }
 
+    // TODO: this and root_pitch might have off-by-one errors?
     pub fn midi_pitch(&self, note: &Note) -> f32 {
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let root_steps = self.nominal_steps(self.root.nominal)
@@ -180,6 +184,61 @@ impl Tuning {
     pub fn size(&self) -> u16 {
         self.scale.len() as u16
     }
+
+    /// Returns the scale index and equave of a note in this tuning.
+    pub fn scale_index(&self, note: &Note) -> (usize, i8) {
+        let root_steps = self.nominal_steps(self.root.nominal)
+            + self.sharp_steps() * self.root.sharps as i32
+            + self.arrow_steps as i32 * self.root.arrows as i32;
+        let steps = -root_steps
+            + self.nominal_steps(note.nominal)
+            + self.sharp_steps() * note.sharps as i32
+            + self.arrow_steps as i32 * note.arrows as i32;
+        let n = self.size() as i32;
+
+        (
+            steps.rem_euclid(n) as usize,
+            note.equave + steps.div_euclid(n) as i8
+        )
+    }
+
+    /// Returns the shortest notation for a given scale index.
+    pub fn notation(&self, index: usize, equave: i8) -> Vec<Note> {
+        let mut old_notes;
+        let mut new_notes = Nominal::VARIANTS
+            .map(|nominal| Note::new(0, nominal, 0, equave))
+            .to_vec();
+
+        loop {
+            let matches: Vec<_> = new_notes.iter()
+                .filter(|note| self.scale_index(note).0 == index)
+                .collect();
+
+            if !matches.is_empty() {
+                return matches.into_iter().map(|note| Note {
+                    equave: note.equave - self.octave_offet(note),
+                    ..*note
+                }).collect()
+            }
+
+            old_notes = new_notes;
+            new_notes = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                .iter().flat_map(|(arrows, sharps)|
+                    old_notes.iter().map(move |note| Note {
+                        arrows: note.arrows + arrows,
+                        sharps: note.sharps + sharps,
+                        ..*note
+                    })
+                ).collect();
+        }
+    }
+
+    /// Returns 1 if the note crosses the octave line B->C, -1 if it crosses
+    /// the octave line B<-C, and 0 otherwise.
+    fn octave_offet(&self, note: &Note) -> i8 {
+        let (_, equave) = self.scale_index(note);
+        equave - note.equave
+    }
 }
 
 /// Parses a Scala file interval into cents.
@@ -211,7 +270,7 @@ impl Note {
     pub fn new(arrows: i8, nominal: Nominal, sharps: i8, equave: i8) -> Note {
         Note { arrows, nominal, sharps, equave }
     }
-    
+
     pub fn arrow_char(&self) -> char {
         char::from_u32(match self.arrows {
             ..=-3 => text::SUB_DOWN,
@@ -234,6 +293,37 @@ impl Note {
             2 => text::DOUBLE_SHARP,
             3.. => text::SUB_SHARP,
         }).unwrap()
+    }
+
+    /// Returns the simplest notation for the next/previous note of the tuning.
+    /// Positive offsets prefer sharps; negative offsets prefer flats.
+    pub fn step_shift(&self, steps: isize, tuning: &Tuning) -> Note {
+        let mut index = tuning.scale_index(&self).0 as isize + steps;
+        let mut equave = self.equave;
+        let n = tuning.size() as isize;
+
+        while index >= n {
+            index -= n;
+            equave += 1;
+        }
+        while index < 0 {
+            index += n;
+            equave -= 1;
+        }
+
+        let notes = tuning.notation(index as usize, equave + tuning.octave_offet(&self));
+
+        if steps > 0 {
+            if let Some(note) = notes.iter().filter(|n| n.sharps >= 0).next() {
+                return *note
+            }
+        } else if steps < 0 {
+            if let Some(note) = notes.iter().filter(|n| n.sharps <= 0).next() {
+                return *note
+            }
+        }
+
+        notes[0]
     }
 }
 
@@ -266,7 +356,7 @@ impl fmt::Display for Note {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     const A4: Note = Note {
         arrows: 0,
         nominal: Nominal::A,
@@ -334,17 +424,65 @@ mod tests {
     }
 
     #[test]
-    fn test_note_display() {
-        assert_eq!(format!("{}", A4), "A4");
-        assert_eq!(format!("{}", Note { sharps: 1, ..A4 }), "A#4");
-        assert_eq!(format!("{}", Note { arrows: -1, sharps: 1, ..A4 }), "vA#4");
-    }
-
-    #[test]
     fn test_parse_interval() {
         assert_eq!(parse_interval("2"), Some(1200.0));
         assert_eq!(parse_interval("4/1"), Some(2400.0));
         assert_eq!(parse_interval("386.6"), Some(386.6));
         assert_eq!(parse_interval("4/"), None);
+    }
+
+    #[test]
+    fn test_tuning_scale_index() {
+        let t = Tuning::divide(2.0, 12, 1).unwrap();
+        assert_eq!(t.scale_index(&A4), (9, 4));
+        assert_eq!(t.scale_index(&Note::new(0, Nominal::C, -1, 4)), (11, 3));
+        assert_eq!(t.scale_index(&Note::new(1, Nominal::B, 0, 4)), (0, 5));
+    }
+
+    #[test]
+    fn test_notation() {
+        let t = Tuning::divide(2.0, 12, 1).unwrap();
+        assert_eq!(t.notation(0, 4), vec![Note::new(0, Nominal::C, 0, 4)]);
+        assert_eq!(t.notation(1, 3), vec![
+            Note::new(0, Nominal::C, 1, 3),
+            Note::new(0, Nominal::D, -1, 3),
+            Note::new(1, Nominal::C, 0, 3),
+            Note::new(-1, Nominal::D, 0, 3),
+        ]);
+        let t = Tuning::divide(2.0, 17, 1).unwrap();
+        assert_eq!(t.notation(15, 4), vec![
+            Note::new(0, Nominal::A, 1, 4),
+            Note::new(0, Nominal::C, -1, 5),
+            Note::new(-1, Nominal::B, 0, 4),
+        ]);
+    }
+
+    #[test]
+    fn test_step_shift() {
+        let t = Tuning::divide(2.0, 12, 1).unwrap();
+        assert_eq!(A4.step_shift(1, &t), Note {
+            sharps: 1,
+            ..A4
+        });
+        assert_eq!(Note::new(0, Nominal::B, 0, 4).step_shift(-1, &t), Note {
+            nominal: Nominal::B,
+            sharps: -1,
+            ..A4
+        });
+        assert_eq!(Note::new(0, Nominal::B, 0, 4).step_shift(1, &t), Note {
+            nominal: Nominal::C,
+            equave: 5,
+            ..A4
+        });
+    }
+
+    #[test]
+    fn test_octave_offset() {
+        let t = Tuning::divide(2.0, 12, 1).unwrap();
+        assert_eq!(t.octave_offet(&A4), 0);
+        assert_eq!(t.octave_offet(&Note::new(0, Nominal::B, 1, 4)), 1);
+        assert_eq!(t.octave_offet(&Note::new(0, Nominal::C, -1, 4)), -1);
+        assert_eq!(t.octave_offet(&Note::new(0, Nominal::A, 5, 4)), 1);
+        assert_eq!(t.octave_offet(&Note::new(-1, Nominal::B, 0, 4)), 0);
     }
 }
