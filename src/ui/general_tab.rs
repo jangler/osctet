@@ -7,10 +7,10 @@ use super::*;
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
     ui.header("METADATA");
-    if let Some(s) = ui.edit_box("Title", 20, module.title.clone()) {
+    if let Some(s) = ui.edit_box("Title", 40, module.title.clone()) {
         module.title = s;
     }
-    if let Some(s) = ui.edit_box("Author", 20, module.author.clone()) {
+    if let Some(s) = ui.edit_box("Author", 40, module.author.clone()) {
         module.author = s;
     }
     fx_controls(ui, &mut module.fx, fx);
