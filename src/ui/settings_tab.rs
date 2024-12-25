@@ -32,7 +32,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
         if ui.slider("gamma", "Gamma", &mut g, 1.5..=2.5, None, 1, true) {
             ui.style.theme.gamma = g;
         }
-        ui.color_table(ui.style.theme.gamma_table().collect::<Vec<_>>());
+        ui.color_table(ui.style.theme.color_table());
         ui.end_group();
     }
     ui.end_group();

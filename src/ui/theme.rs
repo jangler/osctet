@@ -6,13 +6,15 @@ use serde::{Deserialize, Serialize};
 
 const DEFAULT_ACCENT1_HUE: f32 = 180.0;
 const DEFAULT_ACCENT2_HUE: f32 = -90.0;
-const DEFAULT_ACCENT_CHROMA: f32 = 60.0;
+const DEFAULT_ACCENT_CHROMA: f32 = 45.0;
 
 const PANEL_L_OFFSET: f32 = 2.0;
 const CONTROL_L_OFFSET: f32 = 4.0;
 const HOVER_L_OFFSET: f32 = 3.0;
 const CLICK_L_OFFSET: f32 = 6.0;
-const ACCENT_L_OFFSET: f32 = 12.0;
+const ACCENT_L_OFFSET: f32 = 15.0;
+
+const ACCENT_BG_CHROMA_MULTIPLIER: f32 = 1.0/3.0;
 
 // TODO: cache generated colors and only regenerate when needed
 
@@ -61,7 +63,7 @@ impl Theme {
     pub fn accent1_bg(&self) -> Color {
         let sign = if self.is_light() { -1.0 } else { 1.0 };
         let c = Lchuv::new(self.bg.l + sign * ACCENT_L_OFFSET,
-            self.accent1.chroma * 0.25, self.accent1.hue);
+            self.accent1.chroma * ACCENT_BG_CHROMA_MULTIPLIER, self.accent1.hue);
         self.color_from_lchuv(c)
     }
 
@@ -75,7 +77,7 @@ impl Theme {
     pub fn accent2_bg(&self) -> Color {
         let sign = if self.is_light() { -1.0 } else { 1.0 };
         let c = Lchuv::new(self.bg.l + sign * ACCENT_L_OFFSET,
-            self.accent2.chroma * 0.25, self.accent2.hue);
+            self.accent2.chroma * ACCENT_BG_CHROMA_MULTIPLIER, self.accent2.hue);
         self.color_from_lchuv(c)
     }
 
@@ -155,6 +157,19 @@ impl Theme {
 
     pub fn gamma_table(&self) -> impl Iterator<Item = Color> + use<'_> {
         (0..=10).map(|i| self.color_from_lchuv(Lchuv::new(i as f32 * 10.0, 0.0, 0.0)))
+    }
+
+    pub fn color_table(&self) -> Vec<Color> {
+        vec![
+            self.fg(),
+            self.border_unfocused(),
+            self.control_bg_click(),
+            self.content_bg(),
+            self.accent1_fg(),
+            self.accent1_bg(),
+            self.accent2_fg(),
+            self.accent2_bg(),
+        ]
     }
 }
 
