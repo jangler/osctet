@@ -8,15 +8,11 @@ const DEFAULT_ACCENT1_HUE: f32 = 180.0;
 const DEFAULT_ACCENT2_HUE: f32 = -90.0;
 const DEFAULT_ACCENT_CHROMA: f32 = 60.0;
 
-// turns out Lchuv is not actually perceptually uniform --
-// these need to be scaled up in dark themes
 const PANEL_L_OFFSET: f32 = 2.0;
 const CONTROL_L_OFFSET: f32 = 4.0;
 const HOVER_L_OFFSET: f32 = 3.0;
 const CLICK_L_OFFSET: f32 = 6.0;
 const ACCENT_L_OFFSET: f32 = 12.0;
-
-const DARK_CONTRAST_SCALE: f32 = 2.25;
 
 // TODO: cache generated colors and only regenerate when needed
 
@@ -28,26 +24,29 @@ pub struct Theme {
     pub bg: Lchuv,
     pub accent1: Lchuv,
     pub accent2: Lchuv, // TODO: use this for focused controls?
+    pub gamma: f32,
 }
 
 impl Theme {
     /// Returns the default light theme.
-    pub fn light() -> Theme {
+    pub fn light(gamma: f32) -> Theme {
         Theme {
-            fg: Lchuv::new(20.0, 0.0, 0.0),
-            bg: Lchuv::new(100.0, 0.0, 0.0),
+            fg: Lchuv::new(10.0, 0.0, 0.0),
+            bg: Lchuv::new(95.0, 0.0, 0.0),
             accent1: Lchuv::new(50.0, DEFAULT_ACCENT_CHROMA, DEFAULT_ACCENT1_HUE),
             accent2: Lchuv::new(50.0, DEFAULT_ACCENT_CHROMA, DEFAULT_ACCENT2_HUE),
+            gamma,
         }
     }
 
     /// Returns the default dark theme.
-    pub fn dark() -> Theme {
+    pub fn dark(gamma: f32) -> Theme {
         Theme {
             fg: Lchuv::new(90.0, 0.0, 0.0),
-            bg: Lchuv::new(10.0, 0.0, 0.0),
+            bg: Lchuv::new(5.0, 0.0, 0.0),
             accent1: Lchuv::new(50.0, DEFAULT_ACCENT_CHROMA, DEFAULT_ACCENT1_HUE),
             accent2: Lchuv::new(50.0, DEFAULT_ACCENT_CHROMA, DEFAULT_ACCENT2_HUE),
+            gamma,
         }
     }
 
@@ -56,45 +55,45 @@ impl Theme {
     }
 
     pub fn fg(&self) -> Color {
-        color_from_lchuv(self.fg)
+        self.color_from_lchuv(self.fg)
     }
 
     pub fn accent1_bg(&self) -> Color {
-        let sign = if self.is_light() { -1.0 } else { DARK_CONTRAST_SCALE };
+        let sign = if self.is_light() { -1.0 } else { 1.0 };
         let c = Lchuv::new(self.bg.l + sign * ACCENT_L_OFFSET,
             self.accent1.chroma * 0.25, self.accent1.hue);
-        color_from_lchuv(c)
+        self.color_from_lchuv(c)
     }
 
     pub fn accent1_fg(&self) -> Color {
-        let sign = if self.is_light() { -DARK_CONTRAST_SCALE } else { 1.0 };
+        let sign = if self.is_light() { -1.0 } else { 1.0 };
         let c = Lchuv::new(self.fg.l - sign * ACCENT_L_OFFSET,
             self.accent1.chroma, self.accent1.hue);
-        color_from_lchuv(c)
+        self.color_from_lchuv(c)
     }
 
     pub fn accent2_bg(&self) -> Color {
-        let sign = if self.is_light() { -1.0 } else { DARK_CONTRAST_SCALE };
+        let sign = if self.is_light() { -1.0 } else { 1.0 };
         let c = Lchuv::new(self.bg.l + sign * ACCENT_L_OFFSET,
             self.accent2.chroma * 0.25, self.accent2.hue);
-        color_from_lchuv(c)
+        self.color_from_lchuv(c)
     }
 
     pub fn accent2_fg(&self) -> Color {
-        let sign = if self.is_light() { -DARK_CONTRAST_SCALE } else { 1.0 };
+        let sign = if self.is_light() { -1.0 } else { 1.0 };
         let c = Lchuv::new(self.fg.l - sign * ACCENT_L_OFFSET,
             self.accent2.chroma, self.accent2.hue);
-        color_from_lchuv(c)
+        self.color_from_lchuv(c)
     }
 
     fn bg_plus(&self, offset: f32) -> Color {
-        let sign = if self.is_light() { -1.0 } else { DARK_CONTRAST_SCALE };
+        let sign = if self.is_light() { -1.0 } else { 1.0 };
         let bg = Lchuv::new(self.bg.l + sign * offset, self.bg.chroma, self.bg.hue);
-        color_from_lchuv(bg)
+        self.color_from_lchuv(bg)
     }
 
     pub fn content_bg(&self) -> Color {
-        color_from_lchuv(self.bg)
+        self.color_from_lchuv(self.bg)
     }
 
     pub fn content_bg_hover(&self) -> Color {
@@ -134,19 +133,33 @@ impl Theme {
             (self.bg.l + self.fg.l) * 0.5,
             (self.bg.chroma + self.fg.chroma) * 0.5,
             self.bg.hue);
-        color_from_lchuv(c)
+        self.color_from_lchuv(c)
     }
 
     pub fn border_focused(&self) -> Color {
-        color_from_lchuv(self.fg)
+        self.color_from_lchuv(self.fg)
     }
 
     pub fn border_disabled(&self) -> Color {
         self.control_bg_click()
     }
+
+    fn color_from_lchuv(&self, lchuv: Lchuv) -> Color {
+        let lchuv = Lchuv {
+            l: (lchuv.l * 0.01).powf(1.0/self.gamma) * 100.0,
+            ..lchuv
+        };
+        let rgb = Srgb::from_color(lchuv);
+        Color::new(rgb.red, rgb.green, rgb.blue, 1.0)
+    }
+
+    pub fn gamma_table(&self) -> impl Iterator<Item = Color> + use<'_> {
+        (0..=10).map(|i| self.color_from_lchuv(Lchuv::new(i as f32 * 10.0, 0.0, 0.0)))
+    }
 }
 
-fn color_from_lchuv(lchuv: Lchuv) -> Color {
-    let rgb = Srgb::from_color(lchuv);
-    Color::new(rgb.red, rgb.green, rgb.blue, 1.0)
+impl Default for Theme {
+    fn default() -> Self {
+        Self::light(1.8)
+    }
 }

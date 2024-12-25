@@ -13,6 +13,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
 
     if ui.button("Reset to defaults", true) {
         *cfg = Default::default();
+        ui.style.theme = Default::default();
     }
 
     ui.space(2.0);
@@ -25,14 +26,23 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     color_controls(ui, "Background", false, |t| &mut t.bg);
     color_controls(ui, "Accent 1", true, |t| &mut t.accent1);
     color_controls(ui, "Accent 2", true, |t| &mut t.accent2);
+    {
+        ui.start_group();
+        let mut g = ui.style.theme.gamma;
+        if ui.slider("gamma", "Gamma", &mut g, 1.5..=2.5, None, 1, true) {
+            ui.style.theme.gamma = g;
+        }
+        ui.color_table(ui.style.theme.gamma_table().collect::<Vec<_>>());
+        ui.end_group();
+    }
     ui.end_group();
 
     ui.start_group();
     if ui.button("Reset (light)", true) {
-        ui.style.theme = Theme::light();
+        ui.style.theme = Theme::light(ui.style.theme.gamma);
     }
     if ui.button("Reset (dark)", true) {
-        ui.style.theme = Theme::dark();
+        ui.style.theme = Theme::dark(ui.style.theme.gamma);
     }
     ui.end_group();
 

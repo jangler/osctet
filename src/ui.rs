@@ -178,7 +178,7 @@ impl UI {
             style: Style {
                 margin: atlas.max_height() - atlas.cap_height(),
                 atlas,
-                theme: theme.unwrap_or(Theme::light()),
+                theme: theme.unwrap_or_default(),
             },
             open_combo_box: None,
             tabs: HashMap::new(),
@@ -911,6 +911,32 @@ impl UI {
             self.focused_text = None;
         }
         changed
+    }
+
+    pub fn color_table(&mut self, colors: Vec<Color>) {
+        let dim = self.style.line_height();
+        let margin = self.style.margin;
+        self.start_widget();
+
+        let rect = Rect {
+            x: self.cursor_x + margin - 1.0,
+            y: self.cursor_y + margin - 1.0,
+            w: dim * colors.len() as f32 + 2.0,
+            h: dim + 2.0,
+        };
+        self.push_rect(rect, WHITE, Some(self.style.theme.border_unfocused()));
+
+        for (i, fill) in colors.into_iter().enumerate() {
+            let rect = Rect {
+                x: self.cursor_x + margin + i as f32 * dim,
+                y: self.cursor_y + margin,
+                w: dim,
+                h: dim,
+            };
+            self.push_rect(rect, fill, None);
+        }
+
+        self.end_widget();
     }
 
     /// Widget for editing a value as text.
