@@ -1,7 +1,8 @@
 //! Definitions for all stored module data except patches.
 
-use std::{collections::HashSet, error::Error, fs, path::PathBuf};
+use std::{collections::HashSet, error::Error, fs::File, io::{BufReader, Read, Write}, path::PathBuf};
 
+use flate2::{bufread::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
 use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch};
@@ -58,7 +59,9 @@ impl Module {
     }
 
     pub fn load(path: &PathBuf) -> Result<Self, Box<dyn Error>> {
-        let input = fs::read(path)?;
+        let file = File::open(path)?;
+        let mut input = Vec::new();
+        GzDecoder::new(BufReader::new(file)).read_to_end(&mut input)?;
         let mut module = rmp_serde::from_slice::<Self>(&input)?;
         module.init_pcm();
         Ok(module)
@@ -72,7 +75,8 @@ impl Module {
 
     pub fn save(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
-        fs::write(path, contents)?;
+        let file = File::create(path)?;
+        GzEncoder::new(file, Default::default()).write_all(&contents)?;
         self.has_unsaved_changes = false;
         Ok(())
     }
