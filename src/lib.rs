@@ -510,6 +510,9 @@ impl App {
             }
         }
 
+        self.ui.shared_slider("pan_polarity", "Pan polarity",
+            &mut self.player.pan_polarity, -1.0..=1.0, None, 1, true);
+
         self.ui.end_bottom_panel();
     }
 

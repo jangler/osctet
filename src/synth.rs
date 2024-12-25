@@ -33,7 +33,7 @@ const PITCH_FLOOR: f32 = 20.0;
 const PITCH_CEILING: f32 = 5000.0;
 pub const PITCH_MOD_BASE: f32 = 16.0;
 
-const SMOOTH_TIME: f32 = 0.01;
+pub const SMOOTH_TIME: f32 = 0.01;
 
 const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 
@@ -53,6 +53,12 @@ impl From<f32> for Parameter {
 impl Into<f32> for Parameter {
     fn into(self) -> f32 {
         self.0.value()
+    }
+}
+
+impl Default for Parameter {
+    fn default() -> Self {
+        Parameter(shared(1.0))
     }
 }
 
@@ -414,7 +420,7 @@ impl Synth {
 
     /// If pressure is None, use memory.
     pub fn note_on(&mut self, key: Key, pitch: f32, pressure: Option<f32>,
-        patch: &Patch, seq: &mut Sequencer
+        patch: &Patch, seq: &mut Sequencer, pan_polarity: &Shared,
     ) {
         if self.muted {
             return
@@ -471,7 +477,8 @@ impl Synth {
                 self.pressure_memory[channel]
             };
             self.active_voices.insert(key, Voice::new(pitch, bend, pressure,
-                self.mod_memory[channel], self.prev_freq, &patch, seq, self.sample_rate));
+                self.mod_memory[channel], self.prev_freq, &patch, seq, self.sample_rate,
+                pan_polarity));
             self.check_truncate_voices(channel, seq);
             self.prev_freq = Some(midi_hz(pitch));
         }
@@ -1202,7 +1209,7 @@ struct Voice {
 
 impl Voice {
     fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, prev_freq: Option<f32>,
-        settings: &Patch, seq: &mut Sequencer, rate: f32,
+        settings: &Patch, seq: &mut Sequencer, rate: f32, pan_polarity: &Shared,
     ) -> Self {
         let gate = shared(1.0);
         let vars = VoiceVars {
@@ -1233,7 +1240,7 @@ impl Voice {
             >> shape(Clip(1.0));
 
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
-            | var(&settings.pan.0) >> follow(SMOOTH_TIME)
+            | (var(&settings.pan.0) * var(pan_polarity)) >> follow(SMOOTH_TIME)
                 + settings.dsp_component(&vars, ModTarget::Pan, &[]) * 2.0
                     >> shape_fn(|x| clamp11(x)))
             >> panner() >> multisplit::<U2, U2>()

@@ -19,6 +19,7 @@ pub struct Player {
     looped: bool,
     metronome: bool,
     sample_rate: f32,
+    pub pan_polarity: Shared,
 }
 
 impl Player {
@@ -33,6 +34,7 @@ impl Player {
             looped: false,
             metronome: false,
             sample_rate,
+            pan_polarity: shared(1.0),
         }
     }
 
@@ -96,7 +98,7 @@ impl Player {
         pitch: f32, pressure: Option<f32>, patch: &Patch
     ) {
         if let Some(synth) = self.synths.get_mut(track) {
-            synth.note_on(key, pitch, pressure, patch, &mut self.seq);
+            synth.note_on(key, pitch, pressure, patch, &mut self.seq, &self.pan_polarity);
         }
     }
 
