@@ -19,7 +19,9 @@ impl TextEditState {
 
     /// Handles text editing input. `mouse_i` is the character index of the
     /// mouse cursor, if the mouse cursor is over the text area.
-    pub fn handle_input(&mut self, mouse_i: Option<usize>, clipboard: &mut Option<String>) {
+    pub fn handle_input(&mut self, mouse_i: Option<usize>, clipboard: &mut Option<String>,
+        max_width: usize
+    ) {
         if let Some(i) = mouse_i {
             let i = i.min(self.text.chars().count());
             if is_mouse_button_pressed(MouseButton::Left) {
@@ -31,7 +33,7 @@ impl TextEditState {
 
         while let Some(c) = get_char_pressed() {
             if !c.is_ascii_control() {
-                self.insert(&c.to_string());
+                self.insert(&c.to_string(), max_width);
             }
         }
 
@@ -44,7 +46,7 @@ impl TextEditState {
                     }
                     KeyCode::C => *clipboard = Some(self.selected_text().to_owned()),
                     KeyCode::V => if let Some(s) = clipboard {
-                        self.insert(&s)
+                        self.insert(&s, max_width)
                     }
                     _ => (),
                 }
@@ -82,10 +84,18 @@ impl TextEditState {
     }
 
     /// Insert text into the string at the cursor position.
-    fn insert(&mut self, s: &str) {
+    fn insert(&mut self, s: &str, max_width: usize) {
         if self.cursor != self.anchor {
             self.delete(0);
         }
+        let s = {
+            let n = self.text.chars().count();
+            if n + s.chars().count() > max_width {
+                &s.chars().take(max_width - n).collect::<String>()
+            } else {
+                s
+            }
+        };
         self.text.insert_str(self.cursor, s);
         self.cursor += s.chars().count();
         self.anchor = self.cursor;
@@ -111,7 +121,7 @@ impl TextEditState {
                     None
                 }
             }).collect();
-        
+
         self.cursor = start;
         self.anchor = start;
     }

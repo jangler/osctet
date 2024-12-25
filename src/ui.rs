@@ -899,7 +899,8 @@ impl UI {
         // another silly little dance for the borrow checker
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
-        if self.text_box(id, label, SLIDER_WIDTH + self.style.margin * 2.0, &mut text) {
+        let w = SLIDER_WIDTH + self.style.margin * 2.0;
+        if self.text_box(id, label, w, &mut text, 10) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = convert(f).max(*range.start()).min(*range.end());
@@ -919,7 +920,7 @@ impl UI {
         let w = chars_wide as f32 * self.style.atlas.char_width()
             + self.style.margin * 2.0;
 
-        if self.text_box(label, label, w, &text) {
+        if self.text_box(label, label, w, &text, chars_wide) {
             let s = self.focused_text.as_ref().map(|x| x.text.clone());
             self.focused_text = None;
             s
@@ -929,7 +930,8 @@ impl UI {
     }
 
     /// Returns true if the text was submitted (i.e. Enter was pressed).
-    fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str) -> bool {
+    fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str, max_width: usize
+    ) -> bool {
         let box_rect = Rect {
             x: self.cursor_x + self.style.margin,
             y: self.cursor_y + self.style.margin,
@@ -959,7 +961,7 @@ impl UI {
 
         // draw text
         let submit = if focused {
-            self.editable_text(box_rect)
+            self.editable_text(box_rect, max_width)
         } else {
             self.push_text(box_rect.x, box_rect.y, text.to_string(),
                 self.style.theme.fg());
@@ -1023,7 +1025,7 @@ impl UI {
             }
 
             if Some(i) == self.instrument_edit_index {
-                if self.editable_text(hit_rect) {
+                if self.editable_text(hit_rect, 20) {
                     if let Some(state) = self.focused_text.take() {
                         return_val = Some(state.text);
                         self.instrument_edit_index = None;
@@ -1048,7 +1050,7 @@ impl UI {
     }
 
     /// Primitive that draws the currently focused text and handles edit input.
-    fn editable_text(&mut self, rect: Rect) -> bool {
+    fn editable_text(&mut self, rect: Rect, max_width: usize) -> bool {
         let hit = self.mouse_hits(rect, "editable_text");
         let margin = self.style.margin;
 
@@ -1060,7 +1062,7 @@ impl UI {
             } else {
                 None
             };
-            state.handle_input(mouse_i, &mut self.text_clipboard);
+            state.handle_input(mouse_i, &mut self.text_clipboard, max_width);
 
             let text_h = self.style.atlas.cap_height();
             let f = |i| rect.x + char_w * i as f32 + margin + LINE_THICKNESS * 0.5;
