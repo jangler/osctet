@@ -11,7 +11,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.cursor_z -= 1;
     ui.start_group();
 
-    if ui.button("Reset to defaults", true) {
+    if ui.button("Reset to defaults", true, Info::ResetSettings) {
         *cfg = Default::default();
         ui.style.theme = Default::default();
     }
@@ -38,20 +38,21 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.end_group();
 
     ui.start_group();
-    if ui.button("Reset (light)", true) {
+    if ui.button("Reset (light)", true, Info::ResetTheme("light")) {
         ui.style.theme = Theme::light(ui.style.theme.gamma);
     }
-    if ui.button("Reset (dark)", true) {
+    if ui.button("Reset (dark)", true, Info::ResetTheme("dark")) {
         ui.style.theme = Theme::dark(ui.style.theme.gamma);
     }
     ui.end_group();
 
     ui.start_group();
     ui.offset_label("Font size");
-    if ui.button("-", cfg.font_size > 0) {
+    if ui.button("-", cfg.font_size > 0, Info::FontSize("Increase")) {
         set_font(cfg, ui, cfg.font_size - 1);
     }
-    if ui.button("+", cfg.font_size < text::FONT_BYTES.len() - 1) {
+    if ui.button("+", cfg.font_size < text::FONT_BYTES.len() - 1,
+        Info::FontSize("Decrease")) {
         set_font(cfg, ui, cfg.font_size + 1);
     }
     ui.end_group();

@@ -584,14 +584,21 @@ impl UI {
     }
 
     /// Draws a button and returns true if it was clicked this frame.
-    pub fn button(&mut self, label: &str, enabled: bool) -> bool {
+    pub fn button(&mut self, label: &str, enabled: bool, info: Info) -> bool {
         self.start_widget();
+
         let (_, event) = self.text_rect(label, enabled,
             self.cursor_x + self.style.margin, self.cursor_y + self.style.margin,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
-        self.end_widget();
+
+        if let Some(rect) = self.end_widget() {
+            if self.mouse_hits(rect, "button") {
+                self.info = info;
+            }
+        }
+
         event == MouseEvent::Released
     }
 
@@ -1294,7 +1301,7 @@ impl UI {
             if s.is_empty() {
                 None
             } else {
-                Some(s.to_owned())
+                Some(s)
             }
         };
         if note_expired {

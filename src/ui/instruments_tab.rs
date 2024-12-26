@@ -68,12 +68,12 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     };
 
     ui.start_group();
-    if ui.button("Add", true) {
+    if ui.button("Add", true, Info::Add("a new patch with default settings")) {
         edits.push(Edit::InsertPatch(patches.len(), Patch::new()));
         *patch_index = Some(patches.len());
     }
 
-    if ui.button("Remove", patch_index.is_some()) {
+    if ui.button("Remove", patch_index.is_some(), Info::Remove("the selected patch")) {
         if let Some(index) = patch_index {
             edits.push(Edit::RemovePatch(*index));
         }
@@ -82,7 +82,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 
     ui.start_group();
     let patches = &mut module.patches;
-    if ui.button("Save", patch_index.is_some()) {
+    if ui.button("Save", patch_index.is_some(), Info::SavePatch) {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
             if let Some(path) = super::new_file_dialog()
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
@@ -96,7 +96,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
             }
         }
     }
-    if ui.button("Load", true) {
+    if ui.button("Load", true, Info::LoadPatch) {
         if let Some(paths) = super::new_file_dialog()
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
             .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
@@ -120,7 +120,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     }
     ui.end_group();
 
-    if ui.button("Duplicate", patch_index.is_some()) {
+    if ui.button("Duplicate", patch_index.is_some(), Info::DuplicatePatch) {
         if let Some(index) = patch_index {
             if let Some(p) = patches.get(*index).map(|p| p.duplicate().ok()).flatten() {
                 edits.push(Edit::InsertPatch(patches.len(), p));
@@ -183,7 +183,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
 
         labeled_group(ui, "", |ui| {
             for i in 0..module.kit.len() {
-                if ui.button("X", true) {
+                if ui.button("X", true, Info::Remove("this mapping")) {
                     removed_index = Some(i);
                 }
             }
@@ -195,7 +195,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
         ui.end_group();
     }
 
-    if ui.button("+", !module.patches.is_empty()) {
+    if ui.button("+", !module.patches.is_empty(), Info::Add("a new mapping")) {
         module.kit.push(Default::default());
     }
 }
@@ -257,7 +257,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
             if let Waveform::Pcm(data) = &mut osc.waveform {
                 ui.start_group();
 
-                if ui.button("Load sample", true) {
+                if ui.button("Load sample", true, Info::LoadSample) {
                     load_pcm(data, ui, cfg);
                 }
 
@@ -265,14 +265,14 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 
                 if let Some(data) = data {
                     // these are two separate if-lets for ownership reasons
-                    if data.path.is_some() && ui.button("Prev", true) {
+                    if data.path.is_some() && ui.button("Prev", true, Info::PrevSample) {
                         load_pcm_offset(data, -1, ui);
                     }
-                    if data.path.is_some() && ui.button("Next", true) {
+                    if data.path.is_some() && ui.button("Next", true, Info::NextSample) {
                         load_pcm_offset(data, 1, ui);
                     }
 
-                    if ui.button("Detect pitch", true) {
+                    if ui.button("Detect pitch", true, Info::DetectPitch) {
                         match data.detect_pitch() {
                             Some(freq) => {
                                 osc.freq_ratio.0.set(midi_hz(60.0) / freq as f32);
@@ -377,7 +377,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         for (i, osc) in patch.oscs.iter().enumerate() {
             if patch.oscs.len() < 2 {
                 ui.offset_label(""); // can't delete the only osc
-            } else if ui.button("X", true) {
+            } else if ui.button("X", true, Info::Remove("this generator")) {
                 removed_osc = Some(i);
             }
 
@@ -392,7 +392,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     }
     ui.end_group();
 
-    if ui.button("+", true) {
+    if ui.button("+", true, Info::Add("a generator")) {
         patch.oscs.push(Oscillator::new());
     }
 }
@@ -473,7 +473,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
 
         labeled_group(ui, "", |ui| {
             for i in 0..patch.filters.len() {
-                if ui.button("X", true) {
+                if ui.button("X", true, Info::Remove("this filter")) {
                     removed_filter = Some(i);
                 }
             }
@@ -485,7 +485,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         ui.end_group();
     }
 
-    if ui.button("+", true) {
+    if ui.button("+", true, Info::Add("a filter")) {
         patch.filters.push(Filter::new());
     }
 }
@@ -529,7 +529,7 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
 
         labeled_group(ui, "", |ui| {
             for i in 0..patch.envs.len() {
-                if ui.button("X", true) {
+                if ui.button("X", true, Info::Remove("this envelope")) {
                     removed_env = Some(i);
                 }
             }
@@ -541,7 +541,7 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
         ui.end_group();
     }
 
-    if ui.button("+", true) {
+    if ui.button("+", true, Info::Add("an envelope")) {
         patch.envs.push(ADSR::new());
     }
 }
@@ -582,7 +582,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
 
         labeled_group(ui, "", |ui| {
             for i in 0..patch.lfos.len() {
-                if ui.button("X", true) {
+                if ui.button("X", true, Info::Remove("this LFO")) {
                     removed_lfo = Some(i);
                 }
             }
@@ -594,7 +594,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
         ui.end_group();
     }
 
-    if ui.button("+", true) {
+    if ui.button("+", true, Info::Add("an LFO")) {
         patch.lfos.push(LFO::new());
     }
 }
@@ -641,7 +641,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
 
         labeled_group(ui, "", |ui| {
             for i in 0..patch.mod_matrix.len() {
-                if ui.button("X", true) {
+                if ui.button("X", true, Info::Remove("this modulation")) {
                     removed_mod = Some(i);
                 }
             }
@@ -654,7 +654,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
         }
     }
 
-    if ui.button("+", true) {
+    if ui.button("+", true, Info::Add("a modulation")) {
         patch.mod_matrix.push(Modulation::default());
     }
 }
