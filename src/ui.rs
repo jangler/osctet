@@ -267,12 +267,10 @@ impl UI {
     /// area of pushed graphics.
     pub fn start_group(&mut self) {
         self.flip_layout();
-        self.start_widget();
+        self.start_raw_group();
     }
 
-    /// A widget is just like a group, but doesn't change the layout axis.
-    fn start_widget(&mut self) {
-        self.widget_on_stack = true;
+    fn start_raw_group(&mut self) {
         self.group_rects.push(Rect {
             x: self.cursor_x,
             y: self.cursor_y,
@@ -281,18 +279,7 @@ impl UI {
         });
     }
 
-    /// Ending a group changes the layout axis and offsets the cursor along the
-    /// new axis by the width or height of the graphics in the group.
-    pub fn end_group(&mut self) -> Option<Rect> {
-        if !self.group_rects.is_empty() {
-            self.flip_layout();
-        }
-        self.end_widget()
-    }
-
-    /// A widget is just like a group, but doesn't change the layout axis.
-    pub fn end_widget(&mut self) -> Option<Rect> {
-        self.widget_on_stack = false;
+    fn end_raw_group(&mut self) -> Option<Rect> {
         let rect = self.group_rects.pop();
         if let Some(rect) = rect {
             match self.layout {
@@ -304,6 +291,34 @@ impl UI {
                     self.cursor_x = rect.x;
                     self.cursor_y = rect.y + rect.h;
                 },
+            }
+        }
+        rect
+    }
+
+    /// A widget is a group that doesn't change the layout axis, and may have
+    /// info text.
+    fn start_widget(&mut self) {
+        self.widget_on_stack = true;
+        self.start_raw_group();
+    }
+
+    /// Ending a group changes the layout axis and offsets the cursor along the
+    /// new axis by the width or height of the graphics in the group.
+    pub fn end_group(&mut self) -> Option<Rect> {
+        if !self.group_rects.is_empty() {
+            self.flip_layout();
+        }
+        self.end_raw_group()
+    }
+
+    /// End a widget group, returning the occupied rect.
+    pub fn end_widget(&mut self, id: &str, info: Info) -> Option<Rect> {
+        self.widget_on_stack = false;
+        let rect = self.end_raw_group();
+        if let Some(rect) = rect {
+            if self.mouse_hits(rect, id) {
+                self.info = info;
             }
         }
         rect
@@ -517,7 +532,7 @@ impl UI {
     pub fn colored_label(&mut self, label: &str, color: Color) {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y, label.to_owned(), color);
-        self.end_widget();
+        self.end_widget("label", Info::None);
     }
 
     /// An offset label is a label offset in the y direction to align with
@@ -526,7 +541,7 @@ impl UI {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y + self.style.margin,
             label.to_owned(), self.style.theme.fg());
-        self.end_widget();
+        self.end_widget("label", Info::None);
     }
 
     pub fn header(&mut self, label: &str) {
@@ -540,7 +555,7 @@ impl UI {
         self.push_rect(rect, self.style.theme.accent1_bg(), None);
         self.push_text(self.cursor_x, self.cursor_y,
             label.to_owned(), self.style.theme.fg());
-        self.end_widget();
+        self.end_widget("header", Info::None);
     }
 
     fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,
@@ -593,17 +608,13 @@ impl UI {
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
 
-        if let Some(rect) = self.end_widget() {
-            if self.mouse_hits(rect, "button") {
-                self.info = info;
-            }
-        }
-
+        self.end_widget("button", info);
         event == MouseEvent::Released
     }
 
     /// Draws a checkbox and returns true if it was changed this frame.
-    pub fn checkbox(&mut self, label: &str, value: &mut bool, enabled: bool) -> bool {
+    pub fn checkbox(&mut self, label: &str, value: &mut bool, enabled: bool, info: Info
+    ) -> bool {
         let button_text = if *value { "X" } else { " " };
         self.start_widget();
         let (rect, event) = self.text_rect(button_text, enabled,
@@ -622,7 +633,7 @@ impl UI {
         if clicked {
             *value = !*value;
         }
-        self.end_widget();
+        self.end_widget("checkbox", info);
         clicked
     }
 
@@ -676,7 +687,7 @@ impl UI {
             self.open_combo_box = None;
         }
 
-        self.end_widget();
+        self.end_widget(id, Info::None);
         return_val
     }
 
@@ -902,12 +913,7 @@ impl UI {
                 self.cursor_y - (h + self.style.margin * 2.0));
         }
 
-        if let Some(rect) = self.end_widget() {
-            if self.mouse_hits(rect, id) {
-                self.info = info;
-            }
-        }
-
+        self.end_widget(id, info);
         changed
     }
 
@@ -954,7 +960,7 @@ impl UI {
             self.push_rect(rect, fill, None);
         }
 
-        self.end_widget();
+        self.end_widget("color_table", Info::None);
     }
 
     /// Widget for editing a value as text.
@@ -1019,11 +1025,7 @@ impl UI {
                 label.to_owned(), self.style.theme.fg());
         }
 
-        if let Some(rect) = self.end_widget() {
-            if self.mouse_hits(rect, id) {
-                self.info = info;
-            }
-        }
+        self.end_widget(id, info);
         submit
     }
 
@@ -1094,7 +1096,7 @@ impl UI {
             hit_rect.y += hit_rect.h;
         }
 
-        self.end_widget();
+        self.end_widget("instrument_list", Info::None);
         return_val
     }
 
@@ -1199,7 +1201,7 @@ impl UI {
     }
 
     /// Returns the key that set the new note value.
-    pub fn note_input(&mut self, id: &str, note: &mut Note) -> Option<Key> {
+    pub fn note_input(&mut self, id: &str, note: &mut Note, info: Info) -> Option<Key> {
         let label = note.to_string();
         let margin = self.style.margin;
 
@@ -1239,7 +1241,7 @@ impl UI {
         self.start_widget();
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
-        self.end_widget();
+        self.end_widget(id, info);
 
         key
     }
@@ -1284,7 +1286,7 @@ impl UI {
         self.start_widget();
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
-        self.end_widget();
+        self.end_widget("hotkey_input", Info::None);
 
         changed
     }

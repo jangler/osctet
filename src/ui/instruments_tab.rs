@@ -153,7 +153,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
         labeled_group(ui, "Note in", |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let label = format!("kit_{}_input", i);
-                ui.note_input(&label, &mut entry.input_note);
+                ui.note_input(&label, &mut entry.input_note, Info::KitNoteIn);
             }
         });
 
@@ -172,7 +172,8 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
         labeled_group(ui, "Note out", |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let label = format!("kit_{}_output", i);
-                if let Some(key) = ui.note_input(&label, &mut entry.patch_note) {
+                let key = ui.note_input(&label, &mut entry.patch_note, Info::KitNoteOut);
+                if let Some(key) = key {
                     if let Some(patch) = module.patches.get(entry.patch_index) {
                         let pitch = module.tuning.midi_pitch(&entry.patch_note);
                         player.note_on(0, key, pitch, None, patch);
@@ -283,7 +284,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                     }
 
                     let mut on = data.loop_point.is_some();
-                    if ui.checkbox("Loop", &mut on, true) {
+                    if ui.checkbox("Loop", &mut on, true, Info::None) {
                         data.loop_point = if on {
                             Some(0)
                         } else {

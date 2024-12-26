@@ -43,6 +43,10 @@ pub enum Info {
     ResetTheme(&'static str),
     FontSize(&'static str),
     ResetSettings,
+    Aftertouch,
+    TuningRoot,
+    KitNoteIn,
+    KitNoteOut,
 }
 
 impl Info {
@@ -151,6 +155,16 @@ harmonic spectra and strong fundamentals.".to_string(),
                 format!("Reset colors to the default {} theme.", variant),
             Self::FontSize(op) => format!("{} font size.", op),
             Self::ResetSettings => "Reset all settings to defaults.".to_string(),
+            Self::Aftertouch =>
+"If enabled, convert channel pressure and key pressure
+messages to pressure values. If disabled, only
+velocity is converted.".to_string(),
+            Self::TuningRoot =>
+"Determines which note is mapped to the start of
+the loaded scale. For equal-step scales, this has
+no effect.".to_string(),
+            Self::KitNoteIn => "The note that activates this kit mapping.".to_string(),
+            Self::KitNoteOut => "The pitch that this kit mapping plays at.".to_string(),
         }
     }
 }
