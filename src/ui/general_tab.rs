@@ -1,4 +1,5 @@
 use fundsp::math::{amp_db, db_amp};
+use info::Info;
 
 use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, module::Module, pitch::Tuning};
 
@@ -7,10 +8,10 @@ use super::*;
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
     ui.header("METADATA");
-    if let Some(s) = ui.edit_box("Title", 40, module.title.clone()) {
+    if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::Title) {
         module.title = s;
     }
-    if let Some(s) = ui.edit_box("Author", 40, module.author.clone()) {
+    if let Some(s) = ui.edit_box("Author", 40, module.author.clone(), Info::Author) {
         module.author = s;
     }
     fx_controls(ui, &mut module.fx, fx);
@@ -106,7 +107,9 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
 fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
     ui.space(2.0);
     ui.header("TUNING");
-    if let Some(s) = ui.edit_box("Equave", 8, tuning.equave().to_string()) {
+    if let Some(s) = ui.edit_box("Octave", 8, tuning.equave().to_string(),
+        Info::OctaveRatio
+    ) {
         match s.parse() {
             Ok(ratio) => match Tuning::divide(ratio, tuning.size(), tuning.arrow_steps) {
                 Ok(t) => *tuning = t,
@@ -115,7 +118,9 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
             Err(e) => ui.report(e),
         }
     }
-    if let Some(s) = ui.edit_box("Steps to equave", 4, tuning.scale.len().to_string()) {
+    if let Some(s) = ui.edit_box("Steps to octave", 4, tuning.scale.len().to_string(),
+        Info::OctaveSteps
+    ) {
         match s.parse() {
             Ok(steps) => match Tuning::divide(tuning.equave(), steps, tuning.arrow_steps) {
                 Ok(t) => *tuning = t,
@@ -124,7 +129,9 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
             Err(e) => ui.report(e),
         }
     }
-    if let Some(s) = ui.edit_box("Steps to arrow", 4, tuning.arrow_steps.to_string()) {
+    if let Some(s) = ui.edit_box("Steps to arrow", 4, tuning.arrow_steps.to_string(),
+        Info::ArrowSteps
+    ) {
         match s.parse() {
             Ok(steps) => tuning.arrow_steps = steps,
             Err(e) => ui.report(e),

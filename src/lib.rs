@@ -25,6 +25,7 @@ pub mod playback;
 mod dsp;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
+use ui::info::Info;
 use ui::instruments_tab::fix_patch_index;
 use ui::pattern_tab::PatternEditor;
 
@@ -497,14 +498,17 @@ impl App {
         }
 
         if let Some(n) = self.ui.edit_box("Division", 3,
-            self.pattern_editor.beat_division.to_string()) {
+            self.pattern_editor.beat_division.to_string(), Info::Division
+        ) {
             match n.parse::<u8>() {
                 Ok(n) => self.pattern_editor.set_division(n),
                 Err(e) => self.ui.report(e),
             }
         }
 
-        if let Some(n) = self.ui.edit_box("Octave", 2, self.octave.to_string()) {
+        if let Some(n) = self.ui.edit_box("Octave", 2, self.octave.to_string(),
+            Info::Octave
+        ) {
             match n.parse::<i8>() {
                 Ok(n) => self.octave = n,
                 Err(e) => self.ui.report(e),

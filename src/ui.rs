@@ -6,6 +6,7 @@
 use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
+use info::Info;
 use macroquad::prelude::*;
 use rfd::FileDialog;
 use text::GlyphAtlas;
@@ -21,6 +22,7 @@ pub mod settings_tab;
 pub mod theme;
 pub mod text;
 mod textedit;
+pub mod info;
 
 const LINE_THICKNESS: f32 = 1.0;
 const SLIDER_WIDTH: f32 = 100.0;
@@ -166,6 +168,7 @@ pub struct UI {
     text_clipboard: Option<String>,
     group_ignores_geometry: bool,
     widget_on_stack: bool,
+    info: Info,
 }
 
 impl UI {
@@ -202,6 +205,7 @@ impl UI {
             text_clipboard: None,
             group_ignores_geometry: false,
             widget_on_stack: false,
+            info: Info::None,
         }
     }
 
@@ -249,6 +253,7 @@ impl UI {
         clear_background(self.style.theme.panel_bg());
 
         self.info_box();
+        self.info = Info::None;
     }
 
     fn flip_layout(&mut self) {
@@ -900,7 +905,7 @@ impl UI {
         let mut text = self.focused_text.as_ref().unwrap().text.clone();
         let mut changed = false;
         let w = SLIDER_WIDTH + self.style.margin * 2.0;
-        if self.text_box(id, label, w, &mut text, 10) {
+        if self.text_box(id, label, w, &mut text, 10, Info::None) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = convert(f).max(*range.start()).min(*range.end());
@@ -941,12 +946,12 @@ impl UI {
 
     /// Widget for editing a value as text.
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
-        text: String
+        text: String, info: Info
     ) -> Option<String> {
         let w = chars_wide as f32 * self.style.atlas.char_width()
             + self.style.margin * 2.0;
 
-        if self.text_box(label, label, w, &text, chars_wide) {
+        if self.text_box(label, label, w, &text, chars_wide, info) {
             let s = self.focused_text.as_ref().map(|x| x.text.clone());
             self.focused_text = None;
             s
@@ -956,7 +961,8 @@ impl UI {
     }
 
     /// Returns true if the text was submitted (i.e. Enter was pressed).
-    fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str, max_width: usize
+    fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str, max_width: usize,
+        info: Info
     ) -> bool {
         let box_rect = Rect {
             x: self.cursor_x + self.style.margin,
@@ -1000,7 +1006,11 @@ impl UI {
                 label.to_owned(), self.style.theme.fg());
         }
 
-        self.end_widget();
+        if let Some(rect) = self.end_widget() {
+            if self.mouse_hits(rect, id) {
+                self.info = info;
+            }
+        }
         submit
     }
 
@@ -1273,28 +1283,43 @@ impl UI {
             note_expired = note.time_remaining <= 0.0;
             Some(note.message.clone())
         } else {
-            None
+            let s = self.info.text();
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_owned())
+            }
         };
         if note_expired {
             self.notification = None;
         }
 
         if let Some(text) = text {
-            let w = self.style.atlas.text_width(&text);
-            let h = self.style.atlas.cap_height() + self.style.line_height();
-            self.cursor_z += TOOLTIP_Z_OFFSET;
-            let (_, evt) = self.text_rect(&text, true,
-                self.bounds.x + self.bounds.w - w - self.style.margin * 3.0,
-                self.bounds.y + self.bounds.h - h - self.style.margin * 5.0,
-                &self.style.theme.panel_bg(),
-                &self.style.theme.panel_bg(),
-                &self.style.theme.panel_bg());
-            self.cursor_z -= TOOLTIP_Z_OFFSET;
+            let lines: Vec<_> = text.lines().collect();
+            let w = self.style.atlas.char_width() * lines.iter()
+                .map(|s| s.chars().count())
+                .max()
+                .unwrap_or_default() as f32 + self.style.margin * 2.0;
+            let h = self.style.line_height() * lines.len() as f32;
+            let rect = Rect {
+                x: self.bounds.x + self.bounds.w - w - self.style.margin,
+                y: self.bounds.y + self.bounds.h - h - self.style.line_height()
+                    - self.style.margin * 3.0,
+                w,
+                h,
+            };
 
-            if evt == MouseEvent::Pressed {
-                self.notification = None;
-                self.mouse_consumed = Some(String::from("info_box"));
+            self.cursor_z += TOOLTIP_Z_OFFSET;
+            self.push_rect(rect, self.style.theme.panel_bg(),
+                Some(self.style.theme.border_unfocused()));
+            for (i, line) in lines.into_iter().enumerate() {
+                self.push_text(
+                    rect.x,
+                    rect.y + self.style.line_height() * i as f32,
+                    line.to_string(),
+                    self.style.theme.fg());
             }
+            self.cursor_z -= TOOLTIP_Z_OFFSET;
         }
     }
 
