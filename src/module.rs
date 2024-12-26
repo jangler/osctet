@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch};
 
-pub const TICKS_PER_BEAT: u32 = 120;
+pub const TICKS_PER_BEAT: u32 = 5040;
 
 pub const GLOBAL_COLUMN: u8 = 0;
 pub const NOTE_COLUMN: u8 = 0;
