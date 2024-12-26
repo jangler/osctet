@@ -225,6 +225,7 @@ impl App {
                     },
                     Action::NextTab => self.ui.next_tab(MAIN_TAB_ID, TABS.len()),
                     Action::PrevTab => self.ui.prev_tab(MAIN_TAB_ID, TABS.len()),
+                    Action::Panic => self.player.panic(),
                     _ => if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
                         self.pattern_editor.action(*action,
                             &mut self.module, &self.config, &mut self.player);

@@ -520,6 +520,18 @@ impl Synth {
         }
     }
 
+    /// Cuts all notes.
+    pub fn panic(&mut self, seq: &mut Sequencer) {
+        for (_, voice) in self.active_voices.drain() {
+            voice.cut(seq);
+        }
+        for channel in &mut self.released_voices {
+            for voice in channel.drain(..) {
+                voice.cut(seq);
+            }
+        }
+    }
+
     pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
         self.expand_memory(channel as usize);
         self.bend_memory[channel as usize] = bend;

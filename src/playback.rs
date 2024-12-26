@@ -146,6 +146,14 @@ impl Player {
         }
     }
 
+    /// Turns off all notes and stops playback.
+    pub fn panic(&mut self) {
+        self.stop();
+        for synth in self.synths.iter_mut() {
+            synth.panic(&mut self.seq);
+        }
+    }
+
     pub fn frame(&mut self, module: &Module, dt: f64) {
         if !self.playing {
             return

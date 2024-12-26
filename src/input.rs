@@ -501,6 +501,7 @@ pub enum Action {
     SoloTrack,
     UnmuteAllTracks,
     CycleNotation,
+    Panic,
 }
 
 impl Action {
@@ -567,6 +568,7 @@ impl Action {
             Self::SoloTrack => "Solo track",
             Self::UnmuteAllTracks => "Unmute all tracks",
             Self::CycleNotation => "Cycle notation",
+            Self::Panic => "Panic (stop all notes)",
         }
     }
 }
