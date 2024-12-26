@@ -1281,11 +1281,11 @@ impl UI {
 
         if let Some(text) = text {
             let w = self.style.atlas.text_width(&text);
-            let h = self.style.atlas.cap_height();
+            let h = self.style.atlas.cap_height() + self.style.line_height();
             self.cursor_z += TOOLTIP_Z_OFFSET;
             let (_, evt) = self.text_rect(&text, true,
                 self.bounds.x + self.bounds.w - w - self.style.margin * 3.0,
-                self.bounds.y + self.bounds.h - h - self.style.margin * 3.0,
+                self.bounds.y + self.bounds.h - h - self.style.margin * 5.0,
                 &self.style.theme.panel_bg(),
                 &self.style.theme.panel_bg(),
                 &self.style.theme.panel_bg());
