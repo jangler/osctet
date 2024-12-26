@@ -516,7 +516,7 @@ impl App {
         }
 
         self.ui.shared_slider("stereo_width", "Stereo width",
-            &mut self.player.stereo_width, -1.0..=1.0, None, 1, true);
+            &mut self.player.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
 
         self.ui.end_bottom_panel();
     }

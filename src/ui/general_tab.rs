@@ -8,10 +8,10 @@ use super::*;
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config) {
     ui.layout = Layout::Vertical;
     ui.header("METADATA");
-    if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::Title) {
+    if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::None) {
         module.title = s;
     }
-    if let Some(s) = ui.edit_box("Author", 40, module.author.clone(), Info::Author) {
+    if let Some(s) = ui.edit_box("Author", 40, module.author.clone(), Info::None) {
         module.author = s;
     }
     fx_controls(ui, &mut module.fx, fx);
@@ -32,29 +32,34 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     match &mut settings.spatial {
         SpatialFx::None => (),
         SpatialFx::Reverb { level, predelay, room_size, decay_time } => {
-            if ui.slider("reverb_level", "Level", level, 0.0..=1.0, None, 2, true) {
+            if ui.slider("reverb_level", "Level", level,
+                0.0..=1.0, None, 2, true, Info::None) {
                 commit = true;
             }
-            if ui.slider("predelay", "Predelay", predelay, 0.0..=0.1, Some("s"), 2, true) {
+            if ui.slider("predelay", "Predelay", predelay,
+                0.0..=0.1, Some("s"), 2, true, Info::Predelay) {
                 commit = true;
             }
             if ui.slider("room_size", "Room size", room_size,
-                10.0..=30.0, Some("m"), 2, true) {
+                10.0..=30.0, Some("m"), 2, true, Info::None) {
                 commit = true;
             }
             if ui.slider("decay_time", "Decay time", decay_time,
-                0.0..=5.0, Some("s"), 2, true) {
+                0.0..=5.0, Some("s"), 2, true, Info::None) {
                 commit = true;
             }
         },
         SpatialFx::Delay { level, time, feedback } => {
-            if ui.slider("delay_level", "Level", level, 0.01..=1.0, Some("s"), 2, true) {
+            if ui.slider("delay_level", "Level", level,
+                0.01..=1.0, Some("s"), 2, true, Info::None) {
                 commit = true;
             }
-            if ui.slider("delay_time", "Time", time, 0.01..=1.0, Some("s"), 2, true) {
+            if ui.slider("delay_time", "Time", time,
+                0.01..=1.0, Some("s"), 2, true, Info::DelayTime) {
                 commit = true;
             }
-            if ui.slider("feedback", "Feedback", feedback, 0.0..=1.0, None, 1, true) {
+            if ui.slider("feedback", "Feedback", feedback,
+                0.0..=1.0, None, 1, true, Info::DelayFeedback) {
                 commit = true;
             }
         }
@@ -71,15 +76,17 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     let mut commit = false;
 
     if ui.formatted_slider("gain", "Gain", &mut comp.gain,
-        0.0..=2.0, 2, true, |x| format!("{:+.1} dB", amp_db(x)), db_amp) {
+        0.0..=2.0, 2, true, Info::CompGain,
+        |x| format!("{:+.1} dB", amp_db(x)), db_amp) {
         commit = true;
     }
     if ui.formatted_slider("threshold", "Threshold", &mut comp.threshold,
-        0.0..=1.0, 1, true, |x| format!("{:.1} dB", amp_db(x)), db_amp) {
+        0.0..=1.0, 1, true, Info::CompThreshold,
+        |x| format!("{:.1} dB", amp_db(x)), db_amp) {
         commit = true;
     }
     if ui.formatted_slider("ratio", "Ratio", &mut comp.slope,
-        0.0..=1.0, 1, true, |x| format!("{:.1}:1", if x == 1.0 {
+        0.0..=1.0, 1, true, Info::CompRatio, |x| format!("{:.1}:1", if x == 1.0 {
             f32::INFINITY
         } else {
             1.0 / (1.0 - x)
@@ -91,11 +98,11 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
         commit = true;
     }
     if ui.slider("comp_attack", "Attack", &mut comp.attack,
-        0.0..=1.0, Some("s"), 2, true) {
+        0.0..=1.0, Some("s"), 2, true, Info::CompAttack) {
         commit = true;
     }
     if ui.slider("comp_release", "Release", &mut comp.release,
-        0.0..=1.0, Some("s"), 2, true) {
+        0.0..=1.0, Some("s"), 2, true, Info::CompRelease) {
         commit = true;
     }
 

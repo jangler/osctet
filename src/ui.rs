@@ -800,14 +800,15 @@ impl UI {
 
     /// Draws a slider and returns true if the value was changed.
     pub fn slider(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool
+        range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool,
+        info: Info
     ) -> bool {
-        self.formatted_slider(id, label, val, range, power, enabled,
+        self.formatted_slider(id, label, val, range, power, enabled, info,
             display_unit(unit), |x| x)
     }
 
     pub fn formatted_slider(&mut self, id: &str, label: &str, val: &mut f32,
-        range: RangeInclusive<f32>, power: i32, enabled: bool,
+        range: RangeInclusive<f32>, power: i32, enabled: bool, info: Info,
         display: impl Fn(f32) -> String, convert: impl FnOnce(f32) -> f32,
     ) -> bool {
         // are we in text entry mode?
@@ -894,7 +895,12 @@ impl UI {
                 self.cursor_y - (h + self.style.margin * 2.0));
         }
 
-        self.end_widget();
+        if let Some(rect) = self.end_widget() {
+            if self.mouse_hits(rect, id) {
+                self.info = info;
+            }
+        }
+
         changed
     }
 
@@ -1134,17 +1140,18 @@ impl UI {
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
         range: RangeInclusive<f32>, unit: Option<&'static str>, power: i32, enabled: bool,
+        info: Info,
     ) {
-        self.formatted_shared_slider(id, label, param, range, power, enabled,
+        self.formatted_shared_slider(id, label, param, range, power, enabled, info,
             display_unit(unit), |x| x);
     }
 
     pub fn formatted_shared_slider(&mut self, id: &str, label: &str, param: &Shared,
-        range: RangeInclusive<f32>, power: i32, enabled: bool,
+        range: RangeInclusive<f32>, power: i32, enabled: bool, info: Info,
         display: impl Fn(f32) -> String, convert: impl FnOnce(f32) -> f32,
     ) {
         let mut val = param.value();
-        if self.formatted_slider(id, label, &mut val, range, power, enabled,
+        if self.formatted_slider(id, label, &mut val, range, power, enabled, info,
             display, convert) {
             param.set(val);
         }

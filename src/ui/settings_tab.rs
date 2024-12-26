@@ -2,7 +2,7 @@ use palette::Lchuv;
 
 use crate::config::Config;
 
-use super::{text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
+use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.layout = Layout::Horizontal;
@@ -29,7 +29,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     {
         ui.start_group();
         let mut g = ui.style.theme.gamma;
-        if ui.slider("gamma", "Gamma", &mut g, 1.5..=2.5, None, 1, true) {
+        if ui.slider("gamma", "Gamma", &mut g, 1.5..=2.5, None, 1, true, Info::Gamma) {
             ui.style.theme.gamma = g;
         }
         ui.color_table(ui.style.theme.color_table());
@@ -80,16 +80,16 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
 
     if !accent {
         if ui.slider(&format!("{}_l", label), "Lightness", &mut l,
-            0.0..=100.0, None, 1, true) {
+            0.0..=100.0, None, 1, true, Info::None) {
             f(&mut ui.style.theme).l = l;
         }
     }
     if ui.slider(&format!("{}_chroma", label), "Chroma",
-        &mut chroma, 0.0..=180.0, None, 1, true) {
+        &mut chroma, 0.0..=180.0, None, 1, true, Info::Chroma) {
         f(&mut ui.style.theme).chroma = chroma;
     }
     if ui.slider(&format!("{}_hue", label), "Hue", &mut hue,
-        -180.0..=180.0, Some("degrees"), 1, true) {
+        -180.0..=180.0, Some("degrees"), 1, true, Info::None) {
         f(&mut ui.style.theme).hue = hue.into();
     }
 
