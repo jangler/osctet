@@ -542,11 +542,11 @@ impl UI {
 
     /// An offset label is a label offset in the y direction to align with
     /// control labels.
-    pub fn offset_label(&mut self, label: &str) {
+    pub fn offset_label(&mut self, label: &str, info: Info) {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y + self.style.margin,
             label.to_owned(), self.style.theme.fg());
-        self.end_widget("label", Info::None, ControlInfo::None);
+        self.end_widget("label", info, ControlInfo::None);
     }
 
     pub fn header(&mut self, label: &str) {
@@ -1252,7 +1252,7 @@ impl UI {
     }
 
     // TODO: code duplication with note_input
-    pub fn hotkey_input(&mut self, id: usize, hotkey: &mut Hotkey) -> bool {
+    pub fn hotkey_input(&mut self, id: usize, hotkey: &mut Hotkey, info: Info) -> bool {
         let label = hotkey.to_string();
         let margin = self.style.margin;
 
@@ -1291,7 +1291,7 @@ impl UI {
         self.start_widget();
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
-        self.end_widget("hotkey_input", Info::None, ControlInfo::Hotkey);
+        self.end_widget("hotkey_input", info, ControlInfo::Hotkey);
 
         changed
     }

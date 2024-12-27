@@ -535,11 +535,11 @@ impl Action {
             Self::NextChannel => "Next channel",
             Self::PrevChannel => "Previous channel",
             Self::Delete => "Delete",
-            Self::NoteOff => "Insert note off",
-            Self::End => "Insert end point",
-            Self::Loop => "Insert loop point",
-            Self::TapTempo => "Insert tap tempo",
-            Self::RationalTempo => "Insert rational tempo",
+            Self::NoteOff => "Note off",
+            Self::End => "Mark end",
+            Self::Loop => "Mark loop",
+            Self::TapTempo => "Tap tempo",
+            Self::RationalTempo => "Rational tempo",
             Self::InsertRows => "Insert rows",
             Self::DeleteRows => "Delete rows",
             Self::NudgeArrowUp => "Transpose arrow up",
@@ -568,7 +568,7 @@ impl Action {
             Self::SoloTrack => "Solo track",
             Self::UnmuteAllTracks => "Unmute all tracks",
             Self::CycleNotation => "Cycle notation",
-            Self::Panic => "Panic (stop all notes)",
+            Self::Panic => "Panic",
         }
     }
 }

@@ -996,21 +996,23 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
 
         // track name & delete button
         let name = track_name(track.target, &module.patches);
-        if let TrackTarget::Patch(_) | TrackTarget::None = track.target {
-            ui.start_group();
-            if let Some(j) = ui.combo_box(&format!("track_{}", i), "", name,
-                || track_targets(&module.patches)) {
-                edit = Some(Edit::RemapTrack(i, match j {
-                    0 => TrackTarget::None,
-                    j => TrackTarget::Patch(j - 1),
-                }));
+        match track.target {
+            TrackTarget::Patch(_) | TrackTarget::None => {
+                ui.start_group();
+                if let Some(j) = ui.combo_box(&format!("track_{}", i), "", name,
+                    || track_targets(&module.patches)) {
+                    edit = Some(Edit::RemapTrack(i, match j {
+                        0 => TrackTarget::None,
+                        j => TrackTarget::Patch(j - 1),
+                    }));
+                }
+                if ui.button("X", true, Info::Remove("this track")) {
+                    edit = Some(Edit::RemoveTrack(i));
+                }
+                ui.end_group();
             }
-            if ui.button("X", true, Info::Remove("this track")) {
-                edit = Some(Edit::RemoveTrack(i));
-            }
-            ui.end_group();
-        } else {
-            ui.offset_label(name);
+            TrackTarget::Global => ui.offset_label(name, Info::GlobalTrack),
+            TrackTarget::Kit => ui.offset_label(name, Info::KitTrack),
         }
 
         // chanel add/remove buttons

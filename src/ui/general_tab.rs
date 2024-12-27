@@ -158,5 +158,5 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
         }
     }
     ui.note_input("root", &mut tuning.root, Info::TuningRoot);
-    ui.offset_label("Scale root");
+    ui.offset_label("Scale root", Info::TuningRoot);
 }

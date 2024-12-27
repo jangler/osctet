@@ -242,10 +242,10 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 
     labeled_group(ui, "#", |ui| {
         for (i, osc) in patch.oscs.iter().enumerate() {
-            ui.offset_label(&(i + 1).to_string());
+            ui.offset_label(&(i + 1).to_string(), Info::None);
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("", Info::None);
             }
         }
     });
@@ -316,7 +316,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 0.0..=1.0, None, 1, osc.waveform.uses_tone(), Info::Tone);
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("", Info::None);
             }
         }
     });
@@ -328,7 +328,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 osc.waveform.uses_freq(), Info::FreqRatio);
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("" , Info::None);
             }
         }
     });
@@ -340,7 +340,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 |f| format!("{:+.1} cents", f * 100.0), |f| f * 0.01);
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("", Info::None);
             }
         }
     });
@@ -354,7 +354,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
             }
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("" , Info::None);
             }
         }
     });
@@ -369,7 +369,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
             }
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("", Info::None);
             }
         }
     });
@@ -377,13 +377,13 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     labeled_group(ui, "", |ui| {
         for (i, osc) in patch.oscs.iter().enumerate() {
             if patch.oscs.len() < 2 {
-                ui.offset_label(""); // can't delete the only osc
+                ui.offset_label("", Info::None); // can't delete the only osc
             } else if ui.button("X", true, Info::Remove("this generator")) {
                 removed_osc = Some(i);
             }
 
             if let Waveform::Pcm(_) = osc.waveform {
-                ui.offset_label("");
+                ui.offset_label("", Info::None);
             }
         }
     });
@@ -664,7 +664,7 @@ fn index_group(ui: &mut UI, len: usize) {
     ui.start_group();
     ui.label("#");
     for i in 0..len {
-        ui.offset_label(&(i + 1).to_string());
+        ui.offset_label(&(i + 1).to_string(), Info::None);
     }
     ui.end_group();
 }

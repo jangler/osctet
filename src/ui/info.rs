@@ -50,6 +50,9 @@ pub enum Info {
     TuningRoot,
     KitNoteIn,
     KitNoteOut,
+    Action(Action),
+    GlobalTrack,
+    KitTrack,
 }
 
 /// Info text types for widget categories.
@@ -193,6 +196,111 @@ no effect.".to_string(),
             text = "The note that activates this kit mapping.".to_string(),
         Info::KitNoteOut =>
             text = "The pitch that this kit mapping plays at.".to_string(),
+        Info::Action(action) => match action {
+            Action::CycleNotation =>
+                text = "Cycle selected notes through alternative notations.".to_string(),
+            Action::IncrementOctave =>
+                text = "Increment the octave used for note input.".to_string(),
+            Action::DecrementOctave =>
+                text = "Decrement the octave used for note input.".to_string(),
+            Action::PlayFromStart =>
+                text = "Play/stop from the beginning of the song.".to_string(),
+            Action::PlayFromScreen =>
+                text = "Play/stop from the top beat in the pattern view.".to_string(),
+            Action::PlayFromCursor =>
+                text = "Play/stop from the pattern cursor.".to_string(),
+            Action::RenderSong => text = "Render song to WAV.".to_string(),
+            Action::Undo => text = "Undo last pattern action.".to_string(),
+            Action::Redo => text = "Redo last undone pattern action.".to_string(),
+            Action::MixPaste => text =
+"Paste pattern data. Blank space in paste data
+will not overwrite events.".to_string(),
+            Action::NoteOff =>
+                text = "Note off events trigger envelope release.".to_string(),
+            Action::End => text =
+"Mark the end point of the song. Can only be placed
+in a Ctrl channel.".to_string(),
+            Action::Loop => text =
+"Mark the beginning loop point of the song. If this
+marker is present, the song will return to it when
+the End marker is reached. Can only be placed in a
+Ctrl channel.".to_string(),
+            Action::TapTempo => text =
+"Insert a tempo change event. Tap in time to set
+tempo. Can only be placed in a Ctrl channel.".to_string(),
+            Action::RationalTempo => text =
+"Insert a tempo change event. Tempo will change so
+that the selected timespan will receive the same
+time that 1 beat previously received. Can only be
+placed in a Ctrl channel.".to_string(),
+            Action::InsertRows =>
+                text = "Push pattern events by inserting rows.".to_string(),
+            Action::DeleteRows =>
+                text = "Pull pattern events by deleting rows.".to_string(),
+            Action::NudgeArrowUp => text =
+"Tranpose the selected notes up by one arrow. Can
+also be held to transpose note input.".to_string(),
+            Action::NudgeArrowDown => text =
+"Tranpose the selected notes down by one arrow. Can
+also be held to transpose note input.".to_string(),
+            Action::NudgeSharp => text =
+"Transpose the selected notes up by one sharp. Can
+also be held to transpose note input.".to_string(),
+            Action::NudgeFlat => text =
+"Transpose the selected notes down by one flat. Can
+also be held to transpose note input.".to_string(),
+            Action::NudgeOctaveUp => text =
+"Transpose the selected notes up by one octave. Can
+also be held to transpose note input.".to_string(),
+            Action::NudgeOctaveDown => text =
+"Transpose the selected notes down by one octave. Can
+also be held to transpose note input.".to_string(),
+            Action::NudgeEnharmonic => text =
+"Replace the selected notes with enharmonic
+alternatives. Can also be held to remap note input.
+Enharmonic notes have unequal values in most tunings.".to_string(),
+            Action::ToggleFollow => text =
+"Toggle whether the pattern view tracks the playhead.".to_string(),
+            Action::SelectAllChannels =>
+                text = "Expand the pattern selection to all channels.".to_string(),
+            Action::PlaceEvenly => text =
+"Place selected events evenly across the selected
+timespan.".to_string(),
+            Action::PrevBeat =>
+                text = "Move the pattern cursor up by 1 beat.".to_string(),
+            Action::NextBeat =>
+                text = "Move the pattern cursor down by 1 beat.".to_string(),
+            Action::PrevEvent => text =
+"Move the pattern cursor to the previous event in
+the channel.".to_string(),
+            Action::NextEvent => text =
+"Move the pattern cursor to the next event in the
+channel.".to_string(),
+            Action::PatternStart => text = "Move the cursor to beat 1.".to_string(),
+            Action::PatternEnd =>
+                text = "Move the cursor to the time of the final event.".to_string(),
+            Action::IncrementValues =>
+                text = "Increment selected pattern values by 1 step.".to_string(),
+            Action::DecrementValues =>
+                text = "Decrement selected pattern values by 1 step.".to_string(),
+            Action::Interpolate => text =
+"Smoothly transition between two pitches, pressure
+levels, or modulation levels. If a timespan is
+selected, interpolate over that timespan. Otherwise,
+interpolate from the cursor position to the next
+column event.".to_string(),
+            Action::MuteTrack => text = "Toggle muting the current track.".to_string(),
+            Action::SoloTrack => text =
+"Toggle muting all tracks except for the current
+track.".to_string(),
+            Action::Panic => text = "Cut all notes and stop playback.".to_string(),
+            _ => (),
+        }
+        Info::GlobalTrack =>
+            text = "Holds control events like tempo, loop, and end.".to_string(),
+        Info::KitTrack => text =
+"Uses the patch & note mappings from the Kit entry
+in the Instruments tab.".to_string(),
     };
 
     if !actions.is_empty() {
@@ -221,7 +329,7 @@ no effect.".to_string(),
             push_if_nonempty("\n\n");
             text.push_str(
 "Note input. Click to focus, then enter a note
-using the keyboard.");
+using the keyboard.")
         }
         ControlInfo::Hotkey => {
             push_if_nonempty("\n\n");

@@ -47,7 +47,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.end_group();
 
     ui.start_group();
-    ui.offset_label("Font size");
+    ui.offset_label("Font size", Info::None);
     if ui.button("-", cfg.font_size > 0, Info::FontSize("Increase")) {
         set_font(cfg, ui, cfg.font_size - 1);
     }
@@ -112,14 +112,15 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
     for chunk in keymap.chunks_mut(entries_per_col) {
         ui.start_group();
         for (_, action) in chunk.iter() {
-            ui.offset_label(action.name());
+            // TODO: this should use Info::Action, but mouseover is broken for align_right
+            ui.offset_label(action.name(), Info::None);
         }
         ui.align_right(chunk.len());
         ui.end_group();
 
         ui.start_group();
-        for (hotkey, _) in chunk.iter_mut() {
-            if ui.hotkey_input(id, hotkey) {
+        for (hotkey, action) in chunk.iter_mut() {
+            if ui.hotkey_input(id, hotkey, Info::Action(*action)) {
                 changed = true;
             }
             id += 1;
@@ -147,14 +148,14 @@ fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
         // TODO: duplication with hotkey_controls
         ui.start_group();
         for (_, note) in chunk.iter() {
-            ui.offset_label(&note.to_string());
+            ui.offset_label(&note.to_string(), Info::None);
         }
         ui.align_right(chunk.len());
         ui.end_group();
 
         ui.start_group();
         for (hotkey, _) in chunk.iter_mut() {
-            ui.hotkey_input(hotkey_input_id, hotkey);
+            ui.hotkey_input(hotkey_input_id, hotkey, Info::None);
             hotkey_input_id += 1;
         }
         ui.end_group();
