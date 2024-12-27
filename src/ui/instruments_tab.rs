@@ -20,7 +20,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 
     ui.layout = Layout::Horizontal;
     ui.start_group();
-    patch_list(ui, module, patch_index, cfg);
+    patch_list(ui, module, patch_index, cfg, player);
     ui.end_group();
     let old_y = ui.cursor_y;
 
@@ -30,7 +30,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     ui.start_group();
     if let Some(index) = patch_index {
         if let Some(patch) = module.patches.get_mut(*index) {
-            patch_controls(ui, patch, cfg);
+            patch_controls(ui, patch, cfg, player);
         }
     } else {
         kit_controls(ui, module, player);
@@ -43,7 +43,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 }
 
 fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
-    cfg: &mut Config
+    cfg: &mut Config, player: &mut Player
 ) {
     let mut edits = Vec::new();
     let patches = &mut module.patches;
@@ -84,7 +84,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     let patches = &mut module.patches;
     if ui.button("Save", patch_index.is_some(), Info::SavePatch) {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
-            if let Some(path) = super::new_file_dialog()
+            if let Some(path) = super::new_file_dialog(player)
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
                 .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
                 .set_file_name(patch.name.clone())
@@ -97,7 +97,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
         }
     }
     if ui.button("Load", true, Info::LoadPatch) {
-        if let Some(paths) = super::new_file_dialog()
+        if let Some(paths) = super::new_file_dialog(player)
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
             .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
             .pick_files() {
@@ -201,7 +201,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
     }
 }
 
-fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
+fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
     ui.header("GENERAL");
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 2, true, Info::None);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1, true, Info::None);
@@ -219,7 +219,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
         &patch.fx_send.0, 0.0..=1.0, None, 1, true, Info::FxSend);
 
     ui.space(2.0);
-    oscillator_controls(ui, patch, cfg);
+    oscillator_controls(ui, patch, cfg, player);
     ui.space(2.0);
     filter_controls(ui, patch);
     ui.space(2.0);
@@ -231,7 +231,9 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     ui.space(2.0);
 }
 
-fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
+fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
+    player: &mut Player
+) {
     ui.header("GENERATORS");
 
     ui.start_group();
@@ -259,7 +261,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
                 ui.start_group();
 
                 if ui.button("Load sample", true, Info::LoadSample) {
-                    load_pcm(data, ui, cfg);
+                    load_pcm(data, ui, cfg, player);
                 }
 
                 ui.group_ignores_geometry = true;
@@ -398,8 +400,10 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
     }
 }
 
-fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config) {
-    if let Some(path) = super::new_file_dialog()
+fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config,
+    player: &mut Player
+) {
+    if let Some(path) = super::new_file_dialog(player)
         .add_filter("Audio file", &PcmData::FILE_EXTENSIONS)
         .set_directory(cfg.sample_folder.clone()
             .unwrap_or(String::from(".")))

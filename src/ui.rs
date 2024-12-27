@@ -13,7 +13,7 @@ use text::GlyphAtlas;
 use textedit::TextEditState;
 use theme::Theme;
 
-use crate::{config::Config, input::{Hotkey, Modifiers}, module::EventData, pitch::Note, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{config::Config, input::{Hotkey, Modifiers}, module::EventData, pitch::Note, playback::Player, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -33,7 +33,7 @@ const COMBO_Z_OFFSET: i8 = 20;
 const TOOLTIP_Z_OFFSET: i8 = 30;
 
 /// Return a new file dialog. Use this instead of using `rfd` directly.
-pub fn new_file_dialog() -> FileDialog {
+pub fn new_file_dialog(player: &mut Player) -> FileDialog {
     // macroquad currently doesn't handle focus lost events, which means that
     // whatever keys were pressed to open the file dialog will be considered
     // to be down until they're released *when the macroquad window has focus*.
@@ -41,7 +41,8 @@ pub fn new_file_dialog() -> FileDialog {
     // dialog.
     reset_input_state();
 
-    rfd::FileDialog::new()
+    player.stop(); // file dialog is sync, events will hang
+    FileDialog::new()
 }
 
 enum Dialog {

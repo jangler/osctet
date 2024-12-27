@@ -461,7 +461,7 @@ impl App {
 
         match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
             TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut self.module,
-                &mut self.fx, &mut self.config),
+                &mut self.fx, &mut self.config, &mut self.player),
             TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut self.module,
                 &mut self.player, &mut self.pattern_editor),
             TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut self.module,
@@ -524,7 +524,7 @@ impl App {
 
     fn render_and_save(&mut self) {
         if self.module.ends() {
-            if let Some(path) = ui::new_file_dialog()
+            if let Some(path) = ui::new_file_dialog(&mut self.player)
                 .add_filter("WAV file", &["wav"])
                 .set_directory(self.config.render_folder.clone()
                     .unwrap_or(String::from(".")))
@@ -557,7 +557,7 @@ impl App {
     }
 
     fn save_module_as(&mut self) {
-        if let Some(path) = ui::new_file_dialog()
+        if let Some(path) = ui::new_file_dialog(&mut self.player)
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .set_directory(self.config.module_folder.clone()
                 .unwrap_or(String::from(".")))
@@ -574,7 +574,7 @@ impl App {
     }
 
     fn open_module(&mut self) {
-        if let Some(path) = ui::new_file_dialog()
+        if let Some(path) = ui::new_file_dialog(&mut self.player)
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .set_directory(self.config.module_folder.clone()
                 .unwrap_or(String::from(".")))

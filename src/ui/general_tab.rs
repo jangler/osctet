@@ -5,7 +5,9 @@ use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, modul
 
 use super::*;
 
-pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config) {
+pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
+    player: &mut Player
+) {
     ui.layout = Layout::Vertical;
     ui.header("METADATA");
     if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::None) {
@@ -15,7 +17,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
         module.author = s;
     }
     fx_controls(ui, &mut module.fx, fx);
-    tuning_controls(ui, &mut module.tuning, cfg);
+    tuning_controls(ui, &mut module.tuning, cfg, player);
 }
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
@@ -111,7 +113,9 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     }
 }
 
-fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
+fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
+    player: &mut Player
+) {
     ui.space(2.0);
     ui.header("TUNING");
     if let Some(s) = ui.edit_box("Octave", 8, tuning.equave().to_string(),
@@ -146,7 +150,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config) {
     }
     ui.layout = Layout::Horizontal;
     if ui.button("Load scale", true, Info::LoadScale) {
-        if let Some(path) = super::new_file_dialog()
+        if let Some(path) = super::new_file_dialog(player)
             .add_filter("Scala scale file", &["scl"])
             .set_directory(cfg.scale_folder.clone().unwrap_or(String::from(".")))
             .pick_file() {
