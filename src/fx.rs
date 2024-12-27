@@ -129,7 +129,7 @@ impl SpatialFx {
 
     fn make_node(&self) -> Box<dyn AudioUnit> {
         match self {
-            Self::None => Box::new(pass() | pass()),
+            Self::None => Box::new(mul(0.0) | mul(0.0)),
             Self::Reverb { level, predelay, room_size, decay_time } => {
                 Box::new((delay(*predelay) | delay(*predelay))
                     >> *level * reverb2_stereo(*room_size, *decay_time, 0.5, 0.5,
