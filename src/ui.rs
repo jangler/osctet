@@ -170,6 +170,7 @@ pub struct UI {
     widget_on_stack: bool,
     info: Info,
     ctrl_info: ControlInfo,
+    bottom_right_corner: Vec2,
 }
 
 impl UI {
@@ -208,6 +209,7 @@ impl UI {
             widget_on_stack: false,
             info: Info::None,
             ctrl_info: ControlInfo::None,
+            bottom_right_corner: Vec2::ZERO,
         }
     }
 
@@ -352,6 +354,11 @@ impl UI {
         // drain input queues
         while let Some(_) = get_char_pressed() {}
         self.note_queue.clear();
+
+        self.bottom_right_corner = Vec2 {
+            x: self.bounds.x + self.bounds.w,
+            y: self.bounds.y + self.bounds.h,
+        };
     }
 
     pub fn space(&mut self, scale: f32) {
@@ -1323,9 +1330,8 @@ impl UI {
                 .unwrap_or_default() as f32 + self.style.margin * 2.0;
             let h = self.style.line_height() * lines.len() as f32;
             let rect = Rect {
-                x: self.bounds.x + self.bounds.w - w - self.style.margin,
-                y: self.bounds.y + self.bounds.h - h - self.style.line_height()
-                    - self.style.margin * 3.0,
+                x: self.bottom_right_corner.x - w - self.style.margin,
+                y: self.bottom_right_corner.y - h - self.style.margin,
                 w,
                 h,
             };
