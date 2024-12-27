@@ -78,6 +78,14 @@ impl Config {
     pub fn update_hotkeys(&mut self) {
         self.key_map = self.keys.iter().cloned().collect();
     }
+
+    pub fn hotkey_string(&self, action: Action) -> String {
+        let key_string = self.keys.iter()
+            .find(|(_, a)| *a == action)
+            .map(|(k, _)| k.to_string())
+            .unwrap_or(String::from("(no hotkey)"));
+        format!("{} - {}", key_string, action.name())
+    }
 }
 
 impl Default for Config {

@@ -455,7 +455,7 @@ impl App {
     }
 
     fn process_ui(&mut self) {
-        self.ui.start_frame();
+        self.ui.start_frame(&self.config);
 
         self.bottom_panel();
 

@@ -6,14 +6,14 @@
 use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
-use info::Info;
+use info::{ControlInfo, Info};
 use macroquad::prelude::*;
 use rfd::FileDialog;
 use text::GlyphAtlas;
 use textedit::TextEditState;
 use theme::Theme;
 
-use crate::{input::{Hotkey, Modifiers}, module::EventData, pitch::Note, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{config::Config, input::{Hotkey, Modifiers}, module::EventData, pitch::Note, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -169,6 +169,7 @@ pub struct UI {
     group_ignores_geometry: bool,
     widget_on_stack: bool,
     info: Info,
+    ctrl_info: ControlInfo,
 }
 
 impl UI {
@@ -206,6 +207,7 @@ impl UI {
             group_ignores_geometry: false,
             widget_on_stack: false,
             info: Info::None,
+            ctrl_info: ControlInfo::None,
         }
     }
 
@@ -229,7 +231,7 @@ impl UI {
         self.tabs.get(key).copied()
     }
 
-    pub fn start_frame(&mut self) {
+    pub fn start_frame(&mut self, conf: &Config) {
         self.bounds = Rect {
             x: 0.0,
             y: 0.0,
@@ -252,8 +254,9 @@ impl UI {
 
         clear_background(self.style.theme.panel_bg());
 
-        self.info_box();
+        self.info_box(conf);
         self.info = Info::None;
+        self.ctrl_info = ControlInfo::None;
     }
 
     fn flip_layout(&mut self) {
@@ -313,12 +316,14 @@ impl UI {
     }
 
     /// End a widget group, returning the occupied rect.
-    pub fn end_widget(&mut self, id: &str, info: Info) -> Option<Rect> {
+    pub fn end_widget(&mut self, id: &str, info: Info, ctrl_info: ControlInfo
+    ) -> Option<Rect> {
         self.widget_on_stack = false;
         let rect = self.end_raw_group();
         if let Some(rect) = rect {
             if self.mouse_hits(rect, id) {
                 self.info = info;
+                self.ctrl_info = ctrl_info;
             }
         }
         rect
@@ -532,7 +537,7 @@ impl UI {
     pub fn colored_label(&mut self, label: &str, color: Color) {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y, label.to_owned(), color);
-        self.end_widget("label", Info::None);
+        self.end_widget("label", Info::None, ControlInfo::None);
     }
 
     /// An offset label is a label offset in the y direction to align with
@@ -541,7 +546,7 @@ impl UI {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y + self.style.margin,
             label.to_owned(), self.style.theme.fg());
-        self.end_widget("label", Info::None);
+        self.end_widget("label", Info::None, ControlInfo::None);
     }
 
     pub fn header(&mut self, label: &str) {
@@ -555,7 +560,7 @@ impl UI {
         self.push_rect(rect, self.style.theme.accent1_bg(), None);
         self.push_text(self.cursor_x, self.cursor_y,
             label.to_owned(), self.style.theme.fg());
-        self.end_widget("header", Info::None);
+        self.end_widget("header", Info::None, ControlInfo::None);
     }
 
     fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,
@@ -608,7 +613,7 @@ impl UI {
             &self.style.theme.control_bg_hover(),
             &self.style.theme.control_bg_click());
 
-        self.end_widget("button", info);
+        self.end_widget("button", info, ControlInfo::None);
         event == MouseEvent::Released
     }
 
@@ -633,7 +638,7 @@ impl UI {
         if clicked {
             *value = !*value;
         }
-        self.end_widget("checkbox", info);
+        self.end_widget("checkbox", info, ControlInfo::None);
         clicked
     }
 
@@ -687,7 +692,7 @@ impl UI {
             self.open_combo_box = None;
         }
 
-        self.end_widget(id, Info::None);
+        self.end_widget(id, Info::None, ControlInfo::None);
         return_val
     }
 
@@ -913,7 +918,7 @@ impl UI {
                 self.cursor_y - (h + self.style.margin * 2.0));
         }
 
-        self.end_widget(id, info);
+        self.end_widget(id, info, ControlInfo::Slider);
         changed
     }
 
@@ -960,7 +965,7 @@ impl UI {
             self.push_rect(rect, fill, None);
         }
 
-        self.end_widget("color_table", Info::None);
+        self.end_widget("color_table", Info::None, ControlInfo::None);
     }
 
     /// Widget for editing a value as text.
@@ -1025,7 +1030,7 @@ impl UI {
                 label.to_owned(), self.style.theme.fg());
         }
 
-        self.end_widget(id, info);
+        self.end_widget(id, info, ControlInfo::None);
         submit
     }
 
@@ -1096,7 +1101,7 @@ impl UI {
             hit_rect.y += hit_rect.h;
         }
 
-        self.end_widget("instrument_list", Info::None);
+        self.end_widget("instrument_list", Info::None, ControlInfo::None);
         return_val
     }
 
@@ -1241,7 +1246,7 @@ impl UI {
         self.start_widget();
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
-        self.end_widget(id, info);
+        self.end_widget(id, info, ControlInfo::Note);
 
         key
     }
@@ -1286,12 +1291,12 @@ impl UI {
         self.start_widget();
         self.push_rect(rect, fill, Some(stroke));
         self.push_text(rect.x, rect.y, label, self.style.theme.fg());
-        self.end_widget("hotkey_input", Info::None);
+        self.end_widget("hotkey_input", Info::None, ControlInfo::Hotkey);
 
         changed
     }
 
-    fn info_box(&mut self) {
+    fn info_box(&mut self, conf: &Config) {
         // notification
         let mut note_expired = false;
         let text = if let Some(note) = &mut self.notification {
@@ -1299,7 +1304,7 @@ impl UI {
             note_expired = note.time_remaining <= 0.0;
             Some(note.message.clone())
         } else {
-            let s = self.info.text();
+            let s = info::text(&self.info, &self.ctrl_info, conf);
             if s.is_empty() {
                 None
             } else {
