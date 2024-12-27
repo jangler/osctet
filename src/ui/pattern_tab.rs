@@ -944,7 +944,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.push_rect(viewport, ui.style.theme.content_bg(), None);
     draw_beats(ui, left_x, beat_height);
     ui.cursor_z += 1;
-    draw_playhead(ui, player.get_tick(), left_x, beat_height);
+    if player.is_playing() {
+        draw_playhead(ui, player.get_tick(), left_x, beat_height);
+    }
     pe.draw_cursor(ui, &track_xs);
 
     // draw channel data
