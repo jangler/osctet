@@ -335,9 +335,9 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config) {
 
     labeled_group(ui, "Finetune", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
-            ui.shared_slider(&format!("osc_{}_tune", i),
-                "", &osc.fine_pitch.0, -0.5..=0.5, Some("semitones"), 1,
-                osc.waveform.uses_freq(), Info::None);
+            ui.formatted_shared_slider(&format!("osc_{}_tune", i),
+                "", &osc.fine_pitch.0, -0.5..=0.5, 1, osc.waveform.uses_freq(), Info::None,
+                |f| format!("{:+.1} cents", f * 100.0), |f| f * 0.01);
 
             if let Waveform::Pcm(_) = osc.waveform {
                 ui.offset_label("");
