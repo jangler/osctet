@@ -174,7 +174,7 @@ impl Waveform {
 
         let au: Box<dyn AudioUnit> = match self {
             Self::Sawtooth => Box::new(base >> saw().phase(0.0)),
-            Self::Pulse => Box::new((base | tone * 0.5 + 0.5) >> pulse().phase(0.0)),
+            Self::Pulse => Box::new((base | tone) >> pulse().phase(0.0)),
             Self::Triangle => Box::new(base >> triangle().phase(0.0)),
             Self::Sine => Box::new(base >> sine().phase(0.0)),
             Self::Hold => Box::new((noise().seed(random()) | base) >> hold(0.0)),
@@ -635,6 +635,10 @@ impl Patch {
                     }
                 }
             }
+
+            if let Waveform::Pulse = osc.waveform {
+                osc.tone.0.set(osc.tone.0.value() * 0.5 + 0.5);
+            }
         }
     }
 
@@ -907,7 +911,7 @@ impl Oscillator {
     pub fn new() -> Self {
         Self {
             level: Parameter(shared(1.0)),
-            tone: Parameter(shared(0.0)),
+            tone: Parameter(shared(0.5)),
             freq_ratio: Parameter(shared(1.0)),
             fine_pitch: Parameter(shared(0.0)),
             waveform: Waveform::Sine,
