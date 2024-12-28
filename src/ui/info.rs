@@ -228,8 +228,8 @@ no effect.".to_string(),
             Action::MixPaste => text =
 "Paste pattern data. Blank space in paste data
 will not overwrite events.".to_string(),
-            Action::NoteOff =>
-                text = "Note off events trigger envelope release.".to_string(),
+            Action::NoteOff => text =
+"Insert a note off event to trigger envelope release.".to_string(),
             Action::End => text =
 "Mark the end point of the song. Can only be placed
 in a Ctrl channel.".to_string(),
@@ -315,7 +315,36 @@ clipboard.".to_string(),
             Action::ToggleTempLoop => text =
 "Set playback to loop over the selected timespan,
 or clear temporary loop points.".to_string(),
-            _ => (),
+            Action::IncrementDivision => text = "Increase beat division by 1.".to_string(),
+            Action::DecrementDivision => text = "Decrease beat division by 1.".to_string(),
+            Action::DoubleDivision => text = "Double the beat division.".to_string(),
+            Action::HalveDivision => text = "Halve the beat division.".to_string(),
+            Action::StopPlayback => text = "Stop song playback.".to_string(),
+            Action::NewSong => text = "Close the open song and start a new one.".to_string(),
+            Action::OpenSong => text = "Load a song from disk.".to_string(),
+            Action::SaveSong => text =
+"Save the open song, using the path it was last
+saved to or loaded from.".to_string(),
+            Action::SaveSongAs => text =
+"Save the open song using a file dialog.".to_string(),
+            Action::Cut =>
+                text = "Delete and copy selection to the internal clipboard.".to_string(),
+            Action::Copy =>
+                text = "Copy selection to the internal clipboard.".to_string(),
+            Action::Paste => text = "Paste data from the internal clipboard.".to_string(),
+            Action::NextRow => text = "Move pattern cursor down 1 row.".to_string(),
+            Action::PrevRow => text = "Move pattern cursor up 1 row.".to_string(),
+            Action::NextColumn => text = "Move pattern cursor right 1 column.".to_string(),
+            Action::PrevColumn => text = "Move pattern cursor left 1 column.".to_string(),
+            Action::NextChannel =>
+                text = "Move pattern cursor right 1 channel.".to_string(),
+            Action::PrevChannel =>
+                text = "Move pattern cursor left 1 channel.".to_string(),
+            Action::Delete => text = "Delete selected data.".to_string(),
+            Action::NextTab => text = "View the next UI tab.".to_string(),
+            Action::PrevTab => text = "View the previous UI tab.".to_string(),
+            Action::UnmuteAllTracks => text = "Unmute all muted tracks.".to_string(),
+            Action::ToggleRecord => text = "".to_string(),
         }
         Info::GlobalTrack =>
             text = "Holds control events like tempo, loop, and end.".to_string(),
