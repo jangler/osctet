@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::mpsc::{self, Receiver}, thread};
 
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, pitch::Tuning, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f64 = 10.0;
@@ -207,8 +207,7 @@ impl Player {
                 for i in 0..prev_data.len() {
                     if glide_depth[i] > 0 {
                         if let Some(data) = interpolate_events(
-                            prev_data[i], next_event[i], start_tick[i], self.tick,
-                            &module.tuning
+                            prev_data[i], next_event[i], start_tick[i], self.tick, &module
                         ) {
                             events.push(LocatedEvent {
                                 track: track_i,
@@ -473,7 +472,7 @@ pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
 }
 
 fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
-    start: u32, tick: u32, tuning: &Tuning
+    start: u32, tick: u32, module: &Module
 ) -> Option<EventData> {
     if let Some(next) = next {
         let t = (tick - start) as f32 / (next.tick - start) as f32;
@@ -481,18 +480,18 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
         match next.data {
             EventData::Pitch(b) => {
                 if let Some(EventData::Pitch(a)) = prev {
-                    let a = tuning.midi_pitch(a);
-                    let b = tuning.midi_pitch(&b);
+                    let a = module.tuning.midi_pitch(a);
+                    let b = module.tuning.midi_pitch(&b);
                     Some(EventData::InterpolatedPitch(lerp(a, b, t)))
                 } else {
                     None
                 }
             }
             EventData::Tempo(b) => {
-                let a = if let Some(EventData::Tempo(a)) = prev {
-                    *a
-                } else {
-                    DEFAULT_TEMPO
+                let a = match prev {
+                    Some(EventData::Tempo(a)) => *a,
+                    Some(EventData::RationalTempo(..)) => module.tempo_at(start),
+                    _ => DEFAULT_TEMPO,
                 };
                 Some(EventData::Tempo(lerp(a, b, t)))
             }
