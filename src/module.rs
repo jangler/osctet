@@ -620,6 +620,13 @@ impl Channel {
 
         depth > 0
     }
+
+    /// Returns the last event before `tick` in `column`.
+    pub fn prev_event(&self, column: u8, tick: u32) -> Option<&Event> {
+        self.events.iter()
+            .filter(|e| e.tick < tick && e.data.logical_column() == column)
+            .last()
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

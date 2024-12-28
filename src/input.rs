@@ -500,6 +500,7 @@ pub enum Action {
     UnmuteAllTracks,
     CycleNotation,
     Panic,
+    UseLastNote,
 }
 
 impl Action {
@@ -568,6 +569,7 @@ impl Action {
             Self::UnmuteAllTracks => "Unmute all tracks",
             Self::CycleNotation => "Cycle notation",
             Self::Panic => "Panic",
+            Self::UseLastNote => "Use last note",
         }
     }
 }

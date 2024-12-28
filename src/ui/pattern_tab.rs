@@ -273,6 +273,7 @@ impl PatternEditor {
             Action::SoloTrack => player.toggle_solo(module, self.cursor_track()),
             Action::UnmuteAllTracks => player.unmute_all(module),
             Action::CycleNotation => self.cycle_notation(module),
+            Action::UseLastNote => self.use_last_note(module),
             _ => (),
         }
     }
@@ -872,6 +873,24 @@ impl PatternEditor {
                 | EventData::TickGlide(_) => return,
         };
         ui.push_text(x, y, text, color);
+    }
+
+    fn use_last_note(&self, module: &mut Module) {
+        let cursor = self.edit_start;
+
+        if cursor.track == 0 || cursor.column != NOTE_COLUMN {
+            return
+        }
+
+        let note = module.tracks[cursor.track].channels[cursor.channel]
+            .prev_event(cursor.column, cursor.tick);
+
+        if let Some(note) = note {
+            module.insert_event(cursor.track, cursor.channel, Event {
+                tick: cursor.tick,
+                data: note.data.clone(),
+            });
+        }
     }
 }
 

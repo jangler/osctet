@@ -294,6 +294,11 @@ column event.".to_string(),
 "Toggle muting all tracks except for the current
 track.".to_string(),
             Action::Panic => text = "Cut all notes and stop playback.".to_string(),
+            Action::InsertPaste => text =
+"Paste, shifting existing events by the size of the
+clipboard.".to_string(),
+            Action::UseLastNote =>
+                text = "Insert a copy of the last note in the channel.".to_string(),
             _ => (),
         }
         Info::GlobalTrack =>
