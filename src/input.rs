@@ -14,8 +14,6 @@ pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
 
-const DEFAULT_EQUAVE: i8 = 4;
-
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
 }
@@ -42,7 +40,7 @@ pub fn note_from_key(key: Hotkey, t: &Tuning, equave: i8, cfg: &Config) -> Optio
             };
             let n = adjust_note_for_modifier_keys(n, cfg);
             Note {
-                equave: n.equave + equave - DEFAULT_EQUAVE,
+                equave: n.equave + equave,
                 ..n
             }
         })
@@ -57,7 +55,7 @@ pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
         arrows: 0,
         nominal,
         sharps: accidentals,
-        equave: DEFAULT_EQUAVE + offset,
+        equave: offset + 1,
     };
     vec![
         (f1(KeyCode::Z), f2(Nominal::C, 0, -1)),

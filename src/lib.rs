@@ -122,7 +122,7 @@ impl App {
         let module = Module::new(fx_settings);
         App {
             player: Player::new(seq, module.tracks.len(), sample_rate),
-            octave: 4,
+            octave: 3,
             midi,
             ui: ui::UI::new(config.theme.clone(), config.font_size),
             config,
