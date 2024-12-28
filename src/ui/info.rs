@@ -53,6 +53,17 @@ pub enum Info {
     Action(Action),
     GlobalTrack,
     KitTrack,
+    MidiInput,
+    SpatialFxType,
+    KitPatch,
+    PlayMode,
+    Waveform,
+    GenOutput,
+    FilterType,
+    FilterKeytrack,
+    ModSource,
+    ModDest,
+    TrackPatch,
 }
 
 /// Info text types for widget categories.
@@ -155,7 +166,9 @@ after note is released.".to_string(),
         Info::LfoDelay => text = "Time LFO takes to reach full amplitude.".to_string(),
         Info::ModDepth => text =
 "Amount of modulation. Scale varies depending on
-the destination.".to_string(),
+the destination. For gain/level controls, depth
+indicates the amount of attenuation rather than
+the amount of increase.".to_string(),
         Info::LoadScale => text =
 "Load a tuning from a Scala .scl file. The tuning
 will be notated the same as an equal temperament
@@ -309,6 +322,57 @@ or clear temporary loop points.".to_string(),
         Info::KitTrack => text =
 "Uses the patch & note mappings from the Kit entry
 in the Instruments tab.".to_string(),
+        Info::MidiInput => text = "MIDI input to use for note input.".to_string(),
+        Info::SpatialFxType => text =
+"Type of global spatial FX to use. Individual send
+levels can be set in patch settings.".to_string(),
+        Info::KitPatch => text = "The patch that plays this kit mapping.".to_string(),
+        Info::PlayMode => text = "".to_string(),
+        Info::Waveform => text =
+"Waveform used by the generator.
+
+- Sawtooth is bright with all harmonics.
+- Pulse is bright with adjustable harmonics.
+- Triangle is soft with odd harmonics only.
+- Sine is a pure tone.
+- S&H is periodically sampled white noise.
+- Noise is random pink-to-white noise.
+- PCM allows loading waveforms from audio files.".to_string(),
+        Info::GenOutput => text =
+"The destination for this generator's signal. The
+signal can be mixed with the final outputs of other
+generators, mixed with the previous generator, or
+used to modulate the previous generator.
+
+- AM (amplitude modulation) mixes the carrier with
+  the combination tones of the carrier and modulator.
+- RM (ring modulation) takes only the combination
+  tones of the carrier and modulator.
+- FM (frequency modulation) is similar to AM, but
+  creates a series of tones for each tone that AM
+  would create.".to_string(),
+        Info::FilterType => text =
+"Filter type.
+
+- Ladder is a 24 dB/oct lowpass filter that can
+  self-oscillate at high resonance settings.
+- Lowpass attenuates frequencies above the cutoff
+  at 12 dB/oct.
+- Highpass attenuates frequencies below the cutoff
+  at 12 dB/oct.
+- Bandpass attenuates frequencies on either side of
+  the cutoff at 12 dB/oct.
+- Notch is the inverse of a bandpass filter.".to_string(),
+        Info::FilterKeytrack => text =
+"How much the filter cutoff follows the fundamental
+of the note. The break-even point for key tracking
+is C4 (~261 Hz).".to_string(),
+        Info::ModSource => text =
+"The source used for this modulation. Most sources
+operate in the range 0..1, but LFOs oscillate in
+the range -1..1.".to_string(),
+        Info::ModDest => text = "The modulated parameter.".to_string(),
+        Info::TrackPatch => text = "The patch controlled by this track.".to_string(),
     };
 
     if !actions.is_empty() {

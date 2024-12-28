@@ -1053,7 +1053,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
             TrackTarget::Patch(_) | TrackTarget::None => {
                 ui.start_group();
                 if let Some(j) = ui.combo_box(&format!("track_{}", i), "", name,
-                    || track_targets(&module.patches)) {
+                    Info::TrackPatch, || track_targets(&module.patches)) {
                     edit = Some(Edit::RemapTrack(i, match j {
                         0 => TrackTarget::None,
                         j => TrackTarget::Patch(j - 1),

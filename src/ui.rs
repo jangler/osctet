@@ -652,7 +652,7 @@ impl UI {
 
     /// Draws a combo box. If a value was selected this frame, returns the value's index.
     pub fn combo_box(&mut self, id: &str, label: &str, button_text: &str,
-        get_options: impl Fn() -> Vec<String>
+        info: Info, get_options: impl Fn() -> Vec<String>
     ) -> Option<usize> {
         self.start_widget();
         let margin = self.style.margin;
@@ -700,7 +700,7 @@ impl UI {
             self.open_combo_box = None;
         }
 
-        self.end_widget(id, Info::None, ControlInfo::None);
+        self.end_widget(id, info, ControlInfo::None);
         return_val
     }
 

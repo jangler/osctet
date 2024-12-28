@@ -163,6 +163,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
                     .map(|x| x.name.as_ref())
                     .unwrap_or("");
                 if let Some(j) = ui.combo_box(&format!("kit_{}_patch", i), "", name,
+                    Info::KitPatch,
                     || module.patches.iter().map(|x| x.name.clone()).collect()) {
                     entry.patch_index = j;
                 }
@@ -208,7 +209,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut
     ui.slider("glide_time", "Glide time", &mut patch.glide_time,
         0.0..=0.5, Some("s"), 2, true, Info::GlideTime);
     if let Some(i) = ui.combo_box("play_mode",
-        "Play mode", patch.play_mode.name(),
+        "Play mode", patch.play_mode.name(), Info::PlayMode,
         || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
     ) {
         patch.play_mode = PlayMode::VARIANTS[i];
@@ -350,7 +351,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
     labeled_group(ui, "Waveform", |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             if let Some(i) = ui.combo_box(&format!("osc_{}_wave", i),
-                "", osc.waveform.name(),
+                "", osc.waveform.name(), Info::Waveform,
                 || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                 osc.waveform = Waveform::VARIANTS[i].clone();
             }
@@ -365,7 +366,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             let outputs = OscOutput::choices(i);
             if let Some(i) = ui.combo_box(&format!("osc_{}_output", i),
-                "", &osc.output.to_string(),
+                "", &osc.output.to_string(), Info::GenOutput,
                 || outputs.iter().map(|x| x.to_string()).collect()) {
                 osc.output = outputs[i];
             }
@@ -443,7 +444,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Type", |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("filter_{}_type", i),
-                    "", filter.filter_type.name(),
+                    "", filter.filter_type.name(), Info::FilterType,
                     || FilterType::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                     filter.filter_type = FilterType::VARIANTS[i];
                 }
@@ -469,7 +470,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Keytrack", |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("filter_{}_keytrack", i),
-                    "", filter.key_tracking.name(),
+                    "", filter.key_tracking.name(), Info::FilterKeytrack,
                     || KeyTracking::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                     filter.key_tracking = KeyTracking::VARIANTS[i];
                 }
@@ -563,7 +564,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Waveform", |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("lfo_{}_wave", i),
-                    "", lfo.waveform.name(),
+                    "", lfo.waveform.name(), Info::Waveform,
                     || Waveform::LFO_VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                     lfo.waveform = Waveform::LFO_VARIANTS[i].clone();
                 }
@@ -619,7 +620,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Source", |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("mod_{}_source", i),
-                    "", &m.source.to_string(),
+                    "", &m.source.to_string(), Info::ModSource,
                     || sources.iter().map(|x| x.to_string()).collect()) {
                     m.source = sources[i];
                 }
@@ -629,7 +630,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
         labeled_group(ui, "Target", |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("mod_{}_target", i),
-                    "", &m.target.to_string(),
+                    "", &m.target.to_string(), Info::ModDest,
                     || targets.iter().map(|x| x.to_string()).collect()) {
                     m.target = targets[i];
                 }

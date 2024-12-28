@@ -485,7 +485,7 @@ impl App {
                 "(none)"
             };
             if let Some(i) = self.ui.combo_box("midi_input", "MIDI input", s,
-                || input_names(self.midi.input.as_ref().unwrap())) {
+                Info::MidiInput, || input_names(self.midi.input.as_ref().unwrap())) {
                 self.midi.port_selection = input_names(self.midi.input.as_ref().unwrap()).get(i).cloned();
             }
 
