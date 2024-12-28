@@ -299,6 +299,9 @@ track.".to_string(),
 clipboard.".to_string(),
             Action::UseLastNote =>
                 text = "Insert a copy of the last note in the channel.".to_string(),
+            Action::ToggleTempLoop => text =
+"Set playback to loop over the selected timespan,
+or clear temporary loop points.".to_string(),
             _ => (),
         }
         Info::GlobalTrack =>

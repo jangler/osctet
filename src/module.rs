@@ -699,6 +699,10 @@ pub struct Position {
 }
 
 impl Position {
+    pub fn new(tick: u32, track: usize, channel: usize, column: u8) -> Self {
+        Self { tick, track, channel, column }
+    }
+
     pub fn beat(&self) -> f32 {
         self.tick as f32 / TICKS_PER_BEAT as f32
     }
