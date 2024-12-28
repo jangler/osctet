@@ -249,13 +249,14 @@ impl PatternEditor {
                 | Action::NudgeEnharmonic =>
                     nudge_notes(module, self.selection_corners(), cfg),
             Action::ToggleFollow => self.follow = !self.follow,
-            Action::ToggleRecord => if self.record {
-                player.stop();
-                self.record = false;
-            } else {
-                player.record_from(self.cursor_tick(), module);
-                self.record = true;
-            },
+            // TODO: re-enable this if & when recording is implemented
+            // Action::ToggleRecord => if self.record {
+            //     player.stop();
+            //     self.record = false;
+            // } else {
+            //     player.record_from(self.cursor_tick(), module);
+            //     self.record = true;
+            // },
             Action::SelectAllChannels => self.select_all_channels(module),
             Action::PlaceEvenly => self.place_events_evenly(module),
             Action::NextBeat => self.translate_cursor(TICKS_PER_BEAT as i64),

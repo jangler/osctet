@@ -56,7 +56,6 @@ pub enum Info {
     MidiInput,
     SpatialFxType,
     KitPatch,
-    PlayMode,
     Waveform,
     GenOutput,
     FilterType,
@@ -344,7 +343,6 @@ saved to or loaded from.".to_string(),
             Action::NextTab => text = "View the next UI tab.".to_string(),
             Action::PrevTab => text = "View the previous UI tab.".to_string(),
             Action::UnmuteAllTracks => text = "Unmute all muted tracks.".to_string(),
-            Action::ToggleRecord => text = "".to_string(),
         }
         Info::GlobalTrack =>
             text = "Holds control events like tempo, loop, and end.".to_string(),
@@ -356,9 +354,8 @@ in the Instruments tab.".to_string(),
 "Type of global spatial FX to use. Individual send
 levels can be set in patch settings.".to_string(),
         Info::KitPatch => text = "The patch that plays this kit mapping.".to_string(),
-        Info::PlayMode => text = "".to_string(),
         Info::Waveform => text =
-"Waveform used by the generator.
+"Waveform used by the generator or LFO.
 
 - Sawtooth is bright with all harmonics.
 - Pulse is bright with adjustable harmonics.

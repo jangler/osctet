@@ -208,12 +208,15 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1, true, Info::None);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time,
         0.0..=0.5, Some("s"), 2, true, Info::GlideTime);
-    if let Some(i) = ui.combo_box("play_mode",
-        "Play mode", patch.play_mode.name(), Info::PlayMode,
-        || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
-    ) {
-        patch.play_mode = PlayMode::VARIANTS[i];
-    }
+
+    // TODO: re-enable this if & when recording is implemented
+    // if let Some(i) = ui.combo_box("play_mode",
+    //     "Play mode", patch.play_mode.name(), Info::PlayMode,
+    //     || PlayMode::VARIANTS.map(|v| v.name().to_owned()).to_vec()
+    // ) {
+    //     patch.play_mode = PlayMode::VARIANTS[i];
+    // }
+
     ui.shared_slider("distortion", "Distortion",
         &patch.distortion.0, 0.0..=1.0, None, 1, true, Info::Distortion);
     ui.shared_slider("fx_send", "FX send",
