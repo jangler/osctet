@@ -12,7 +12,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.start_group();
 
     if ui.button("Reset to defaults", true, Info::ResetSettings) {
-        *cfg = Default::default();
+        cfg.reset();
         ui.style.theme = Default::default();
     }
 

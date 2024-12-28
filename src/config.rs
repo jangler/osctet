@@ -51,6 +51,18 @@ impl Config {
         Ok(c)
     }
 
+    /// Reset all settings except paths to defaults.
+    pub fn reset(&mut self) {
+        *self = Self {
+            module_folder: self.module_folder.clone(),
+            patch_folder: self.patch_folder.clone(),
+            render_folder: self.render_folder.clone(),
+            scale_folder: self.scale_folder.clone(),
+            sample_folder: self.sample_folder.clone(),
+            ..Default::default()
+        };
+    }
+
     pub fn save(&mut self, theme: Theme) -> Result<(), Box<dyn Error>> {
         self.theme = Some(theme);
         let s = toml::to_string_pretty(self)?;
