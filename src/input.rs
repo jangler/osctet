@@ -94,9 +94,6 @@ pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
         (f1(KeyCode::O), f2(Nominal::D, 0, 1)),
         (f1(KeyCode::Key0), f2(Nominal::D, 1, 1)),
         (f1(KeyCode::P), f2(Nominal::E, 0, 1)),
-        (f1(KeyCode::LeftBracket), f2(Nominal::F, 0, 1)),
-        (f1(KeyCode::Equal), f2(Nominal::F, 1, 1)),
-        (f1(KeyCode::RightBracket), f2(Nominal::G, 0, 1)),
     ]
 }
 
@@ -461,6 +458,7 @@ pub enum Action {
     Copy,
     Paste,
     MixPaste,
+    InsertPaste,
     NextRow,
     PrevRow,
     NextColumn,
@@ -528,6 +526,7 @@ impl Action {
             Self::Copy => "Copy",
             Self::Paste => "Paste",
             Self::MixPaste => "Mix paste",
+            Self::InsertPaste => "Insert paste",
             Self::NextRow => "Next row",
             Self::PrevRow => "Previous row",
             Self::NextColumn => "Next column",

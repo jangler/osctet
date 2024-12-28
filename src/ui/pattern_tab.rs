@@ -211,6 +211,11 @@ impl PatternEditor {
             Action::Copy => self.copy(module),
             Action::Paste => self.paste(module, false),
             Action::MixPaste => self.paste(module, true),
+            Action::InsertPaste => {
+                self.selection_to_clip(&module);
+                self.push_rows(module);
+                self.paste(module, false);
+            },
             Action::PrevRow => self.translate_cursor(
                 (TICKS_PER_BEAT / self.beat_division as u32) as i64 * -1),
             Action::NextRow => self.translate_cursor(
@@ -269,6 +274,24 @@ impl PatternEditor {
             Action::UnmuteAllTracks => player.unmute_all(module),
             Action::CycleNotation => self.cycle_notation(module),
             _ => (),
+        }
+    }
+
+    /// Expands the selection to the bounds of what would be pasted.
+    fn selection_to_clip(&mut self, module: &Module) {
+        if let Some(clip) = &self.clipboard {
+            let channel_offset = module.channels_between(clip.start, clip.end);
+            self.edit_end = Position {
+                tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
+                column: clip.end.column,
+                ..self.edit_start.add_channels(channel_offset, &module.tracks)
+                    .unwrap_or(Position {
+                        track: module.tracks.len(),
+                        channel: module.tracks.last().unwrap().channels.len() - 1,
+                        tick: 0,
+                        column: 0,
+                    })
+            };
         }
     }
 
