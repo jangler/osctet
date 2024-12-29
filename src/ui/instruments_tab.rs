@@ -692,7 +692,7 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
             Box::new(|d| format!("x{:.2}", MAX_ENV_SCALE.powf(d))),
         ModTarget::FilterCutoff(_) =>
             Box::new(|d| format!("{:+.2} octaves", d * FILTER_CUTOFF_MOD_BASE.log2())),
-        ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
+        ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Tone(_)
             | ModTarget::ModDepth(_) => Box::new(|d| format!("{:+.2}", d)),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|d| format!("{:+.1} cents", d * 50.0)),
@@ -702,6 +702,7 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
             Box::new(|d| format!("x{:.2}", (MAX_LFO_RATE/MIN_LFO_RATE).powf(d))),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
             Box::new(|d| format!("{:+.2} octaves", d * PITCH_MOD_BASE.log2())),
+        ModTarget::Pan => Box::new(|d| format!("{:+.2}", d * 2.0)),
     }
 }
 
@@ -711,7 +712,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
             Box::new(|f| f.log(MAX_ENV_SCALE)),
         ModTarget::FilterCutoff(_) =>
             Box::new(|f| f / FILTER_CUTOFF_MOD_BASE.log2()),
-        ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Pan | ModTarget::Tone(_)
+        ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Tone(_)
             | ModTarget::ModDepth(_) => Box::new(|f| f),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|f| f / 50.0),
@@ -721,6 +722,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
             Box::new(|f| f.log(MAX_LFO_RATE/MIN_LFO_RATE)),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
             Box::new(|f| f / PITCH_MOD_BASE.log2()),
+        ModTarget::Pan => Box::new(|f| f * 0.5),
     }
 }
 
