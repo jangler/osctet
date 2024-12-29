@@ -109,7 +109,6 @@ pub enum SpatialFx {
     None,
     Reverb {
         level: f32,
-        predelay: f32,
         room_size: f32,
         decay_time: f32,
     },
@@ -123,15 +122,15 @@ pub enum SpatialFx {
 impl SpatialFx {
     pub const DEFAULT_VARIANTS: [Self; 3] = [
         Self::None,
-        Self::Reverb { level: 0.1, predelay: 0.01, room_size: 20.0, decay_time: 0.2 },
+        Self::Reverb { level: 0.1, room_size: 20.0, decay_time: 0.2 },
         Self::Delay { level: 0.1, time: 0.5, feedback: 0.5 },
     ];
 
     fn make_node(&self) -> Box<dyn AudioUnit> {
         match self {
             Self::None => Box::new(mul(0.0) | mul(0.0)),
-            Self::Reverb { level, predelay, room_size, decay_time } => {
-                Box::new((delay(*predelay) | delay(*predelay))
+            Self::Reverb { level, room_size, decay_time } => {
+                Box::new((pass() | pass())
                     >> *level * reverb2_stereo(*room_size, *decay_time, 0.5, 0.5,
                         lowpole_hz(5000.0) >> highpole_hz(80.0)))
             }

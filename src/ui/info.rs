@@ -8,7 +8,6 @@ pub enum Info {
     ArrowSteps,
     Division,
     Octave,
-    Predelay,
     DelayTime,
     DelayFeedback,
     CompGain,
@@ -100,10 +99,6 @@ with one arrow.".to_string(),
             text = "Current octave for note input.".to_string();
             actions = vec![Action::IncrementOctave, Action::DecrementOctave];
         },
-        Info::Predelay => text =
-"Delay before the dry signal reaches the reverb.
-Can be used to avoid muddying transients, or to
-create a sense of spatial proximity.".to_string(),
         Info::DelayTime => text = "Time between echoes.".to_string(),
         Info::DelayFeedback => text =
 "Amount of self-feedback. Larger values create more

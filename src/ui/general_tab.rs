@@ -34,13 +34,9 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
 
     match &mut settings.spatial {
         SpatialFx::None => (),
-        SpatialFx::Reverb { level, predelay, room_size, decay_time } => {
+        SpatialFx::Reverb { level, room_size, decay_time } => {
             if ui.slider("reverb_level", "Level", level,
                 0.0..=1.0, None, 2, true, Info::None) {
-                commit = true;
-            }
-            if ui.slider("predelay", "Predelay", predelay,
-                0.0..=0.1, Some("s"), 2, true, Info::Predelay) {
                 commit = true;
             }
             if ui.slider("room_size", "Room size", room_size,
