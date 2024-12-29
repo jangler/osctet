@@ -1256,9 +1256,9 @@ impl Voice {
             >> shape(Clip(1.0));
 
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
-            | (var(&settings.pan.0) * var(pan_polarity)) >> follow(SMOOTH_TIME)
-                + settings.dsp_component(&vars, ModTarget::Pan, &[]) * 2.0
-                    >> shape_fn(|x| clamp11(x)))
+            | (var(&settings.pan.0) >> follow(SMOOTH_TIME)
+                + settings.dsp_component(&vars, ModTarget::Pan, &[]) * 2.0)
+                * var(pan_polarity) >> shape_fn(|x| clamp11(x)))
             >> panner() >> multisplit::<U2, U2>()
             >> (multipass::<U2>()
                 | multipass::<U2>() * (var(&settings.fx_send.0) >> split::<U2>()));
