@@ -40,7 +40,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
                 commit = true;
             }
             if ui.slider("room_size", "Room size", room_size,
-                10.0..=30.0, Some("m"), 2, true, Info::None) {
+                10.0..=30.0, Some("m"), 1, true, Info::None) {
                 commit = true;
             }
             if ui.slider("decay_time", "Decay time", decay_time,
@@ -50,7 +50,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
         },
         SpatialFx::Delay { level, time, feedback } => {
             if ui.slider("delay_level", "Level", level,
-                0.01..=1.0, Some("s"), 2, true, Info::None) {
+                0.01..=1.0, None, 2, true, Info::None) {
                 commit = true;
             }
             if ui.slider("delay_time", "Time", time,
