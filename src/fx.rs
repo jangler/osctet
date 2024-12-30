@@ -136,8 +136,7 @@ impl SpatialFx {
             }
             Self::Delay { level, time, feedback } => {
                 Box::new(*level * hacker32::feedback(
-                    (delay(*time) | delay(*time))
-                    >> reverse() * *feedback))
+                    (delay(*time) | delay(*time)) * *feedback))
             }
         }
     }
