@@ -938,7 +938,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     ui.start_group();
     let left_x = ui.cursor_x;
-    let track_xs = draw_track_headers(ui, module, player);
+    let track_xs = draw_track_headers(ui, module, player, pe);
     let rect = Rect {
         w: ui.bounds.w,
         ..ui.end_group().unwrap()
@@ -1037,7 +1037,9 @@ fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
 }
 
 /// Returns x positions of each track, plus one extra position.
-fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> Vec<f32> {
+fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player,
+    pe: &mut PatternEditor
+) -> Vec<f32> {
     let mut edit = None;
     ui.layout = Layout::Horizontal;
 
@@ -1102,6 +1104,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player) -> 
     if let Some(edit) = edit {
         module.push_edit(edit);
         player.update_synths(module.drain_track_history());
+        fix_cursors(pe, &module.tracks);
     }
 
     if ui.button("+", !module.patches.is_empty(), Info::Add("a new track")) {
