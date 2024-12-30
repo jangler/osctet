@@ -635,10 +635,6 @@ impl Patch {
                     }
                 }
             }
-
-            if let Waveform::Pulse = osc.waveform {
-                osc.tone.0.set(osc.tone.0.value() * 0.5 + 0.5);
-            }
         }
     }
 
