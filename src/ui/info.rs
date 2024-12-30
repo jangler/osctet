@@ -357,7 +357,7 @@ levels can be set in patch settings.".to_string(),
 - Triangle is soft with odd harmonics only.
 - Sine is a pure tone.
 - S&H is periodically sampled white noise.
-- Noise is random pink-to-white noise.
+- Noise is brown noise.
 - PCM allows loading waveforms from audio files.".to_string(),
         Info::GenOutput => text =
 "The destination for this generator's signal. The

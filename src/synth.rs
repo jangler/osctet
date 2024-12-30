@@ -148,10 +148,7 @@ impl Waveform {
 
     /// Returns true if this waveform makes uses of frequency controls.
     pub fn uses_freq(&self) -> bool {
-        match self {
-            Self::Noise => false,
-            _ => true,
-        }
+        true
     }
 
     fn make_osc_net(&self,
@@ -178,9 +175,8 @@ impl Waveform {
             Self::Triangle => Box::new(base >> triangle().phase(0.0)),
             Self::Sine => Box::new(base >> sine().phase(0.0)),
             Self::Hold => Box::new((noise().seed(random()) | base) >> hold(0.0)),
-            Self::Noise => Box::new(noise().seed(random())
-                >> (pinkpass() * (1.0 - tone.clone()) ^ pass() * tone)
-                >> join::<U2>()),
+            Self::Noise => Box::new((noise().seed(random()) | tone)
+                >> (pinkpass() * (1.0 - pass()) & pass() * pass())),
             Self::Pcm(data) => if let Some(data) = data {
                 let f = data.wave.sample_rate() as f32 / vars.rate / midi_hz::<f32>(60.0);
                 Box::new(base * f >>
@@ -207,7 +203,7 @@ impl Waveform {
             Self::Triangle => Box::new(f >> triangle().phase(p) * d),
             Self::Sine => Box::new(f >> sine().phase(p) * d),
             Self::Hold => Box::new((noise().seed((p * u64::MAX as f32) as u64) | f) >> hold(0.0) * d >> follow(0.01)),
-            Self::Noise => Box::new(pink().seed((p * u64::MAX as f32) as u64) * d),
+            Self::Noise => Box::new(brown().seed((p * u64::MAX as f32) as u64) * d),
             Self::Pcm(data) => if let Some(data) = data {
                 Box::new(wavech(&data.wave, 0, data.loop_point))
             } else {

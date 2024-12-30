@@ -163,7 +163,7 @@ impl PowShaper {
 }
 
 impl AudioNode for PowShaper {
-    const ID: u64 = 42;
+    const ID: u64 = 202;
     type Inputs = U1;
     type Outputs = U1;
 

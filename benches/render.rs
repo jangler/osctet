@@ -32,5 +32,14 @@ fn lfo(c: &mut Criterion) {
     render_module(c, "lfo.osctet");
 }
 
-criterion_group!(benches, scale_dry, scale_reverb, scale_delay, interpolation, lfo);
+fn noise(c: &mut Criterion) {
+    render_module(c, "noise.osctet");
+}
+
+fn lfo_noise(c: &mut Criterion) {
+    render_module(c, "lfo_noise.osctet");
+}
+
+criterion_group!(benches,
+    scale_dry, scale_reverb, scale_delay, interpolation, lfo, noise, lfo_noise);
 criterion_main!(benches);
