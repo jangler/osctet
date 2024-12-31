@@ -349,7 +349,7 @@ impl PatternEditor {
             // if we're over an existing span, just delete it
             (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
                 | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_)))
-                | (Some(EventData::TickGlide(_)), Some(EventData::TickGlide(_)))=>
+                | (Some(EventData::TickGlide(_)), Some(EventData::TickGlide(_))) =>
                 Edit::PatternData {
                     remove: add.iter().map(|e| e.position()).collect(),
                     add: Vec::new(),
@@ -359,7 +359,6 @@ impl PatternEditor {
                 remove: add.iter().map(|e| e.position()).collect(),
                 add,
             },
-            // TODO: other cases
         };
 
         module.push_edit(edit);
@@ -373,7 +372,7 @@ impl PatternEditor {
         for i in 0..n {
             start.channel = i;
             end.channel = i;
-            for event in module.scan_events(start, end, true) {
+            for event in module.scan_events(start, end) {
                 remove.push(event.position());
             }
         }
@@ -387,7 +386,7 @@ impl PatternEditor {
     fn shift_values(&self, offset: i8, module: &mut Module) {
         let (start, end) = self.selection_corners();
 
-        let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
+        let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
             match evt.event.data {
                 EventData::Pitch(note) => Some(LocatedEvent {
                     event: Event {
@@ -423,7 +422,7 @@ impl PatternEditor {
     fn cycle_notation(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
 
-        let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
+        let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
             match evt.event.data {
                 EventData::Pitch(note) => Some(LocatedEvent {
                     event: Event {
@@ -509,7 +508,7 @@ impl PatternEditor {
     fn place_events_evenly(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
         let tick_delta = end.tick - start.tick + self.ticks_per_row();
-        let events = module.scan_events(start, end, false);
+        let events = module.scan_events(start, end);
         let channels: HashSet<_> = events.iter().map(|e| (e.track, e.channel)).collect();
 
         module.push_edit(Edit::PatternData {
@@ -591,7 +590,7 @@ impl PatternEditor {
 
     fn copy(&mut self, module: &Module) {
         let (start, end) = self.selection_corners();
-        let events = module.scan_events(start, end, true).iter().map(|x| ClipEvent {
+        let events = module.scan_events(start, end).iter().map(|x| ClipEvent {
             channel_offset: module.channels_between(start, x.position()),
             event: x.event.clone(),
         }).collect();
@@ -617,7 +616,7 @@ impl PatternEditor {
                         column: 0,
                     })
             };
-            let event_positions: Vec<_> = module.scan_events(self.edit_start, end, true)
+            let event_positions: Vec<_> = module.scan_events(self.edit_start, end)
                 .iter().map(|x| x.position()).collect();
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
@@ -691,39 +690,58 @@ impl PatternEditor {
         // TODO: would be better to only collect events once
         for col in 0..3 {
             let interp: Vec<_> = channel.interp_by_col(col).collect();
+            let mut start_tick = None;
             let x = ui.cursor_x + ui.style.margin - 1.0 - LINE_THICKNESS * 0.5
                 + column_x(col, &ui.style);
-            let mut depth = 0;
-            let mut start_tick = 0;
+
+            let mut lines = Vec::new();
+            let mut marks = Vec::new();
 
             let mut draw_line = |start: u32, end: u32| {
                 let y1 = ui.cursor_y + (start + tpr / 4) as f32
                     / TICKS_PER_BEAT as f32 * beat_height;
                 let y2 = ui.cursor_y + (end + tpr * 3 / 4) as f32
                     / TICKS_PER_BEAT as f32 * beat_height;
-                ui.push_line(x, y1, x, y2, colors[col as usize]);
+                lines.push(Graphic::Line(x, y1, x, y2, colors[col as usize]));
+            };
+
+            let mut draw_dup = |tick: u32| {
+                let offset = ui.style.margin * 0.5;
+                let (x1, x2) = (x - offset, x + offset);
+                let y = (ui.cursor_y + (tick + tpr / 2) as f32
+                    / TICKS_PER_BEAT as f32 * beat_height).round() + LINE_THICKNESS * 0.5;
+                marks.push(Graphic::Line(x1, y, x2, y, colors[col as usize]));
             };
 
             for event in interp {
                 match event.data {
                     EventData::StartGlide(_) => {
-                        if depth == 0 {
-                            start_tick = event.tick;
+                        if start_tick.is_none() {
+                            start_tick = Some(event.tick);
+                        } else {
+                            draw_dup(event.tick);
                         }
-                        depth += 1;
                     }
                     EventData::EndGlide(_) => {
-                        depth -= 1;
-                        if depth == 0 {
+                        if let Some(start_tick) = start_tick.take() {
                             draw_line(start_tick, event.tick);
+                        } else {
+                            draw_dup(event.tick);
                         }
                     }
-                    EventData::TickGlide(_) => if depth == 0 {
+                    EventData::TickGlide(_) => if start_tick.is_none() {
                         draw_line(event.tick, event.tick);
                     }
                     _ => panic!("expected glide event"),
                 }
             }
+
+            if let Some(start_tick) = start_tick {
+                draw_line(start_tick, self.screen_tick_max);
+            }
+
+            ui.push_graphics(lines);
+            ui.push_graphics(marks);
         }
 
         ui.cursor_z += 1;
@@ -1124,7 +1142,7 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
 }
 
 fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Config) {
-    let replacements = module.scan_events(start, end, false).iter().filter_map(|evt| {
+    let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
         if let EventData::Pitch(note) = evt.event.data {
             Some(LocatedEvent {
                 event: Event {
@@ -1349,7 +1367,7 @@ fn clear_temp_loop(module: &mut Module) {
             column: GLOBAL_COLUMN,
         };
 
-        let ctrl_events = module.scan_events(start, end, false);
+        let ctrl_events = module.scan_events(start, end);
         let smallest_loop = ctrl_events.iter().filter_map(|a| match a.event.data {
             EventData::Loop => ctrl_events.iter()
                 .find(|b| match b.event.data {

@@ -121,55 +121,23 @@ impl Module {
     }
 
     /// Return copies of pattern events between two positions.
-    /// If `full_interp` is true, don't return unpaired interpolation poles.
-    pub fn scan_events(&self, start: Position, end: Position, pair_interp: bool
-    ) -> Vec<LocatedEvent> {
+    pub fn scan_events(&self, start: Position, end: Position) -> Vec<LocatedEvent> {
         let tick_range = start.tick..=end.tick;
         let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
         let mut events = Vec::new();
 
         for (track_i, track) in self.tracks.iter().enumerate() {
             for (channel_i, channel) in track.channels.iter().enumerate() {
-                let mut interp_events = [Vec::new(), Vec::new(), Vec::new()];
-
                 for evt in &channel.events {
                     let tuple = (track_i, channel_i, evt.data.spatial_column());
                     if tick_range.contains(&evt.tick)
                         && tuple >= start_tuple && tuple <= end_tuple {
-                        match evt.data {
-                            EventData::StartGlide(i) | EventData::EndGlide(i)
-                                | EventData::TickGlide(i) => {
-                                interp_events[i as usize].push(LocatedEvent {
-                                    track: track_i,
-                                    channel: channel_i,
-                                    event: evt.clone(),
-                                });
-                            }
-                            _ => {
-                                events.push(LocatedEvent {
-                                    track: track_i,
-                                    channel: channel_i,
-                                    event: evt.clone(),
-                                });
-                            }
-                        }
+                        events.push(LocatedEvent {
+                            track: track_i,
+                            channel: channel_i,
+                            event: evt.clone(),
+                        });
                     }
-                }
-
-                // TODO: this doesn't account for nested glides
-                for es in &mut interp_events {
-                    if pair_interp {
-                        if let Some(EventData::EndGlide(_))
-                            = es.get(0).map(|x| &x.event.data) {
-                            es.remove(0);
-                        }
-                        if let Some(EventData::StartGlide(_))
-                            = es.iter().last().map(|x| &x.event.data) {
-                            es.pop();
-                        }
-                    }
-
-                    events.extend_from_slice(&es);
                 }
             }
         }
@@ -189,7 +157,7 @@ impl Module {
 
     /// Delete pattern events between two positions.
     pub fn delete_events(&mut self, start: Position, end: Position) {
-        let remove: Vec<_> = self.scan_events(start, end, true).iter()
+        let remove: Vec<_> = self.scan_events(start, end).iter()
             .map(|x| x.position())
             .collect();
         if !remove.is_empty() {

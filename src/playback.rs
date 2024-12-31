@@ -171,7 +171,7 @@ impl Player {
                 let mut prev_data = [None, None, None];
                 let mut next_event = [None, None, None];
                 let mut start_tick = [0, 0, 0];
-                let mut glide_depth = [0, 0, 0];
+                let mut glide = [false, false, false];
 
                 for event in &channel.events {
                     let col = event.data.logical_column();
@@ -186,14 +186,19 @@ impl Player {
                         }
 
                         match event.data {
-                            EventData::StartGlide(i) => glide_depth[i as usize] += 1,
-                            EventData::EndGlide(i) => glide_depth[i as usize] -= 1,
+                            EventData::StartGlide(i) => if glide[i as usize] {
+                                continue
+                            } else {
+                                glide[i as usize] = true;
+                            }
+                            EventData::EndGlide(i) => glide[i as usize] = false,
                             _ => (),
                         }
 
                         if let Some(v) = prev_data.get_mut(col as usize) {
                             *v = Some(&event.data);
                         }
+
                         start_tick[event.data.spatial_column() as usize] = event.tick;
                     } else {
                         if let Some(v) = next_event.get_mut(col as usize) {
@@ -205,7 +210,7 @@ impl Player {
                 }
 
                 for i in 0..prev_data.len() {
-                    if glide_depth[i] > 0 {
+                    if glide[i] {
                         if let Some(data) = interpolate_events(
                             prev_data[i], next_event[i], start_tick[i], self.tick, &module
                         ) {
