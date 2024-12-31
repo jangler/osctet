@@ -115,7 +115,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
 ) {
     ui.space(2.0);
     ui.header("TUNING");
-    if let Some(s) = ui.edit_box("Octave", 8, tuning.equave().to_string(),
+    if let Some(s) = ui.edit_box("Octave ratio", 8, tuning.equave().to_string(),
         Info::OctaveRatio
     ) {
         match s.parse() {
