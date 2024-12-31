@@ -597,9 +597,9 @@ pub struct Patch {
 }
 
 impl Patch {
-    pub fn new() -> Self {
+    pub fn new(name: String) -> Self {
         Self {
-            name: String::from("init"),
+            name,
             gain: Parameter(shared(0.5)),
             fx_send: Parameter(shared(1.0)),
             distortion: Parameter(shared(0.0)),

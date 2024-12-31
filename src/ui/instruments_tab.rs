@@ -69,7 +69,13 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
 
     ui.start_group();
     if ui.button("Add", true, Info::Add("a new patch with default settings")) {
-        edits.push(Edit::InsertPatch(patches.len(), Patch::new()));
+        let mut name = String::from("Init");
+        let mut i = 0;
+        while names.contains(&name) {
+            i += 1;
+            name = format!("Init {}", i);
+        }
+        edits.push(Edit::InsertPatch(patches.len(), Patch::new(name)));
         *patch_index = Some(patches.len());
     }
 

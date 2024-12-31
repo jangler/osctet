@@ -45,7 +45,7 @@ impl Module {
             tuning: Tuning::divide(2.0, 12, 1).unwrap(),
             fx,
             kit: Vec::new(),
-            patches: vec![Patch::new()],
+            patches: vec![Patch::new(String::from("Init"))],
             tracks: vec![
                 Track::new(TrackTarget::Global),
                 Track::new(TrackTarget::Kit),
