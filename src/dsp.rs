@@ -10,6 +10,7 @@ pub fn adsr_scalable(
     decay: f32,
     sustain: f32,
     release: f32,
+    sqrt_attack: bool,
 ) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U2>) -> f32 + Clone, U2, f32>> {
     let neg1 = -1.0;
     let zero = 0.0;
@@ -32,7 +33,8 @@ pub fn adsr_scalable(
         } else if release_start.value() < zero && control <= zero {
             release_start.set_value(time);
         }
-        let ads_value = ads(attack, decay, sustain, time - attack_start.value());
+        let ads_value =
+            ads(attack, decay, sustain, time - attack_start.value(), sqrt_attack);
         if release_start.value() < zero {
             ads_value
         } else {
@@ -46,9 +48,14 @@ pub fn adsr_scalable(
     })
 }
 
-fn ads<F: Real>(attack: F, decay: F, sustain: F, time: F) -> F {
+fn ads<F: Real>(attack: F, decay: F, sustain: F, time: F, sqrt_attack: bool) -> F {
     if time < attack {
-        lerp(F::from_f64(0.0), F::from_f64(1.0), time / attack)
+        let level = lerp(F::from_f64(0.0), F::from_f64(1.0), time / attack);
+        if sqrt_attack {
+            level.sqrt()
+        } else {
+            level
+        }
     } else {
         let decay_time = time - attack;
         if decay_time < decay {

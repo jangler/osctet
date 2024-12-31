@@ -1034,13 +1034,14 @@ impl ADSR {
     }
 
     fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize,
-        path: &[ModSource]
+        path: &[ModSource], sqrt_attack: bool,
     ) -> Net {
         let scale = settings.dsp_component(vars, ModTarget::EnvScale(index), path)
             >> pow_shape(1.0/MAX_ENV_SCALE);
-        Net::wrap(Box::new(
-            (var(&vars.gate) | scale)
-            >> adsr_scalable(self.attack, self.decay, self.sustain, self.release)))
+        let adsr = adsr_scalable(self.attack, self.decay, self.sustain, self.release,
+            sqrt_attack);
+
+        Net::wrap(Box::new((var(&vars.gate) | scale) >> adsr))
     }
 }
 
@@ -1089,7 +1090,8 @@ impl Modulation {
             ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(SMOOTH_TIME))),
             ModSource::Random => Net::wrap(Box::new(constant(vars.random_values[index]))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
-                Some(env) => Net::wrap(Box::new(env.make_node(settings, vars, i, &path))),
+                Some(env) => Net::wrap(Box::new(env.make_node(
+                    settings, vars, i, &path, self.target.uses_sqrt_attack()))),
                 None => Net::wrap(Box::new(zero())),
             },
             ModSource::LFO(i) => match settings.lfos.get(i) {
@@ -1182,6 +1184,15 @@ impl ModTarget {
             ModTarget::Level(n) | ModTarget::OscPitch(n) |
                 ModTarget::OscFinePitch(n) | ModTarget::Tone(n) => Some(n),
             _ => None,
+        }
+    }
+
+    /// Returns true if the attack level should be sqrt'ed. Since gain values
+    /// are squared, this compensates and gives a linear attack.
+    fn uses_sqrt_attack(&self) -> bool {
+        match *self  {
+            ModTarget::Gain | ModTarget::Level(_) => true,
+            _ => false,
         }
     }
 }
