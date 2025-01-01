@@ -225,6 +225,16 @@ impl Module {
         });
     }
 
+    /// Returns the nearest loop start to the given tick.
+    pub fn nearest_loop(&self, tick: u32) -> Option<u32> {
+        self.tracks[0].channels.iter().flat_map(|c| {
+            c.events.iter().filter_map(|e| match e.data {
+                EventData::Loop => Some(e.tick),
+                _ => None,
+            })
+        }).max_by_key(|t| (*t as isize - tick as isize).abs())
+    }
+
     /// Performs an edit operation and handles undo/redo stacks.
     pub fn push_edit(&mut self, edit: Edit) {
         // TODO: merge consecutive pattern data operations
