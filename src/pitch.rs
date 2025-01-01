@@ -239,6 +239,20 @@ impl Tuning {
         let (_, equave) = self.scale_index(note);
         equave - note.equave
     }
+
+    /// Returns a table of (notation, cents) pairs, starting on `root`.
+    pub fn interval_table(&self, root: &Note) -> Vec<(Vec<Note>, f32)> {
+        let base = self.midi_pitch(root);
+        let mut v = Vec::with_capacity(self.scale.len() + 1);
+
+        for i in 0..=self.scale.len() {
+            let notes = root.step_shift_all(i as isize, self);
+            let cents = (self.midi_pitch(&notes[0]) - base) * 100.0;
+            v.push((notes, cents))
+        }
+
+        v
+    }
 }
 
 /// Parses a Scala file interval into cents.
@@ -298,6 +312,17 @@ impl Note {
     /// Returns the simplest notation for the next/previous note of the tuning.
     /// Prefers notes with the same nominal.
     pub fn step_shift(&self, steps: isize, tuning: &Tuning) -> Note {
+        let notes = self.step_shift_all(steps, tuning);
+
+        if let Some(note) = notes.iter().filter(|n| n.nominal == self.nominal).next() {
+            return *note
+        }
+
+        notes[0]
+    }
+
+    /// Returns all notation for the next/previous note of the tuning.
+    fn step_shift_all(&self, steps: isize, tuning: &Tuning) -> Vec<Note> {
         let mut index = tuning.scale_index(self).0 as isize + steps;
         let mut equave = self.equave;
         let n = tuning.size() as isize;
@@ -311,13 +336,7 @@ impl Note {
             equave -= 1;
         }
 
-        let notes = tuning.notation(index as usize, equave + tuning.octave_offet(self));
-
-        if let Some(note) = notes.iter().filter(|n| n.nominal == self.nominal).next() {
-            return *note
-        }
-
-        notes[0]
+        tuning.notation(index as usize, equave + tuning.octave_offet(self))
     }
 
     /// Returns the next note in the set of simplest equivalent notations.
@@ -497,5 +516,19 @@ mod tests {
         assert_eq!(t.octave_offet(&Note::new(0, Nominal::C, -1, 4)), -1);
         assert_eq!(t.octave_offet(&Note::new(0, Nominal::A, 5, 4)), 1);
         assert_eq!(t.octave_offet(&Note::new(-1, Nominal::B, 0, 4)), 0);
+    }
+
+    #[test]
+    fn test_interval_table() {
+        let t = Tuning::divide(2.0, 5, 1).unwrap();
+        let c4 = Note::new(0, Nominal::C, 0, 4);
+        assert_eq!(t.interval_table(&c4), vec![
+            (vec![], 0.0),
+            (vec![], 240.0),
+            (vec![], 480.0),
+            (vec![], 720.0),
+            (vec![], 960.0),
+            (vec![], 1200.0),
+        ]);
     }
 }

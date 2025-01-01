@@ -6,9 +6,14 @@ use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, modul
 use super::*;
 
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
-    player: &mut Player
+    player: &mut Player, scroll: &mut f32
 ) {
-    ui.layout = Layout::Vertical;
+    ui.layout = Layout::Horizontal;
+    let old_y = ui.cursor_y;
+    ui.cursor_y -= *scroll;
+    ui.cursor_z -= 1;
+    ui.start_group();
+
     ui.header("METADATA");
     if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::None) {
         module.title = s;
@@ -18,6 +23,11 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     }
     fx_controls(ui, &mut module.fx, fx);
     tuning_controls(ui, &mut module.tuning, cfg, player);
+
+    let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
+    ui.cursor_z += 1;
+    ui.cursor_y = old_y;
+    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
@@ -145,7 +155,8 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             Err(e) => ui.report(e),
         }
     }
-    ui.layout = Layout::Horizontal;
+
+    ui.start_group();
     if ui.button("Load scale", true, Info::LoadScale) {
         if let Some(path) = super::new_file_dialog(player)
             .add_filter("Scala scale file", &["scl"])
@@ -160,4 +171,32 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
     }
     ui.note_input("root", &mut tuning.root, Info::TuningRoot);
     ui.offset_label("Scale root", Info::TuningRoot);
+    ui.end_group();
+
+    ui.space(2.0);
+    let rows = tuning.interval_table(&Note::new(0, crate::pitch::Nominal::C, 0, 4));
+    ui.start_group();
+
+    ui.start_group();
+    ui.label("Steps");
+    for i in 0..rows.len() {
+        ui.label(&i.to_string());
+    }
+    ui.end_group();
+
+    ui.start_group();
+    ui.label("Notation");
+    for (notation, _) in &rows {
+        ui.label(&notation.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "));
+    }
+    ui.end_group();
+
+    ui.start_group();
+    ui.label("Cents");
+    for (_, cents) in &rows {
+        ui.label(&format!("{:.1}", cents));
+    }
+    ui.end_group();
+
+    ui.end_group();
 }

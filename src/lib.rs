@@ -105,6 +105,7 @@ struct App {
     patch_index: Option<usize>, // if None, kit is selected
     ui: ui::UI,
     pattern_editor: PatternEditor,
+    general_scroll: f32,
     instruments_scroll: f32,
     settings_scroll: f32,
     save_path: Option<PathBuf>,
@@ -124,6 +125,7 @@ impl App {
             fx: global_fx,
             patch_index: Some(0),
             pattern_editor: PatternEditor::new(),
+            general_scroll: 0.0,
             instruments_scroll: 0.0,
             settings_scroll: 0.0,
             save_path: None,
@@ -466,7 +468,7 @@ impl App {
 
             match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
                 TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut module,
-                    &mut self.fx, &mut self.config, &mut player),
+                    &mut self.fx, &mut self.config, &mut player, &mut self.general_scroll),
                 TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut module,
                     &mut player, &mut self.pattern_editor),
                 TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut module,
