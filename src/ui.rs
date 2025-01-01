@@ -455,7 +455,7 @@ impl UI {
     ) {
         let (_, y_scroll) = mouse_wheel();
         let actual_increment = if is_alt_down() {
-            viewport_h
+            viewport_h / 2.0
         } else {
             self.style.line_height() * 3.0
         };
