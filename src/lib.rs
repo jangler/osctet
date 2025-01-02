@@ -554,7 +554,7 @@ impl App {
 
     fn save_module(&mut self, module: &mut Module, player: &mut Player) {
         if let Some(path) = &self.save_path {
-            if let Err(e) = module.save(path) {
+            if let Err(e) = module.save(self.pattern_editor.beat_division, path) {
                 self.ui.report(e);
             } else {
                 self.ui.notify(String::from("Saved module."));
@@ -572,7 +572,7 @@ impl App {
             .set_file_name(module.title.clone())
             .save_file() {
             self.config.module_folder = config::dir_as_string(&path);
-            if let Err(e) = module.save(&path) {
+            if let Err(e) = module.save(self.pattern_editor.beat_division, &path) {
                 self.ui.report(e);
             } else {
                 self.save_path = Some(path);
@@ -602,6 +602,7 @@ impl App {
         old_module: &mut Module, module: Module, player: &mut Player) {
         *old_module = module;
         self.pattern_editor = PatternEditor::new();
+        self.pattern_editor.beat_division = old_module.division;
         self.patch_index = None;
         player.reinit(old_module.tracks.len());
         self.fx.reinit(&old_module.fx);

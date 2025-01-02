@@ -23,6 +23,9 @@ pub struct Module {
     pub kit: Vec<KitEntry>,
     pub patches: Vec<Patch>,
     pub tracks: Vec<Track>,
+    /// This field is just for save/load. See `PatternEditor` for actual usage.
+    #[serde(default = "default_division")]
+    pub division: u8,
 
     // TODO: cap size of undo stack.
     //       could use https://crates.io/crates/deepsize?
@@ -36,6 +39,8 @@ pub struct Module {
     #[serde(skip)]
     pub has_unsaved_changes: bool,
 }
+
+fn default_division() -> u8 { 4 }
 
 impl Module {
     pub fn new(fx: FXSettings) -> Module {
@@ -55,6 +60,7 @@ impl Module {
             redo_stack: Vec::new(),
             track_history: Vec::new(),
             has_unsaved_changes: false,
+            division: default_division(),
         }
     }
 
@@ -73,7 +79,8 @@ impl Module {
         }
     }
 
-    pub fn save(&mut self, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+    pub fn save(&mut self, division: u8, path: &PathBuf) -> Result<(), Box<dyn Error>> {
+        self.division = division;
         let contents = rmp_serde::to_vec(self)?;
         let file = File::create(path)?;
         GzEncoder::new(file, Default::default()).write_all(&contents)?;
