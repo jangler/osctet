@@ -617,63 +617,74 @@ fn input_names(input: &MidiInput) -> Vec<String> {
 
 /// Application entry point.
 pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
-    let device = cpal::default_host()
-        .default_output_device()
-        .ok_or("could not open audio output device")?;
+    let device = cpal::default_host().default_output_device();
 
-    let config: StreamConfig = device.supported_output_configs()?
-        .next()
-        .ok_or("could not find audio output config")?
-        .with_max_sample_rate()
-        .into();
+    let config: Result<StreamConfig, Box<dyn Error>> = device.as_ref()
+        .ok_or("no audio output device".into())
+        .and_then(|device| {
+            device.supported_output_configs()?
+                .next()
+                .ok_or("could not find audio output config".into())
+                .map(|config| config.with_max_sample_rate().into())
+        });
+    let sample_rate = config.as_ref().map(|config| config.sample_rate.0).unwrap_or(44100); 
 
     let mut seq = Sequencer::new(false, 4);
-    seq.set_sample_rate(config.sample_rate.0 as f64);
+    seq.set_sample_rate(sample_rate as f64);
 
     let fx_settings: FXSettings = Default::default();
     let mut global_fx = GlobalFX::new(seq.backend(), &fx_settings);
-    global_fx.net.set_sample_rate(config.sample_rate.0 as f64);
+    global_fx.net.set_sample_rate(sample_rate as f64);
     let mut backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
 
     let module = Module::new(fx_settings);
-    let player = Player::new(seq, module.tracks.len(), config.sample_rate.0 as f32);
+    let player = Player::new(seq, module.tracks.len(), sample_rate as f32);
     let module = Arc::new(Mutex::new(module));
     let player = Arc::new(Mutex::new(player));
 
     const UPDATE_FRAMES: u32 = 64;
-    let update_interval: f64 = UPDATE_FRAMES as f64 / config.sample_rate.0 as f64;
+    let update_interval: f64 = UPDATE_FRAMES as f64 / sample_rate as f64;
     let mut frames_until_update = UPDATE_FRAMES;
 
     let stream_module = module.clone();
     let stream_player = player.clone();
 
-    let stream = device.build_output_stream(
-        &config,move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
-            // there's probably a better way to do this
-            let mut i = 0;
-            let len = data.len();
-            while i < len {
-                if frames_until_update == 0 {
-                    let module = stream_module.lock().unwrap();
-                    let mut player = stream_player.lock().unwrap();
-                    player.frame(&module, update_interval);
-                    frames_until_update = UPDATE_FRAMES;
+    let stream = config.and_then(|config| {
+        Ok(device.unwrap().build_output_stream(
+            &config, move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
+                // there's probably a better way to do this
+                let mut i = 0;
+                let len = data.len();
+                while i < len {
+                    if frames_until_update == 0 {
+                        let module = stream_module.lock().unwrap();
+                        let mut player = stream_player.lock().unwrap();
+                        player.frame(&module, update_interval);
+                        frames_until_update = UPDATE_FRAMES;
+                    }
+                    let (l, r) = backend.get_stereo();
+                    data[i] = l;
+                    data[i+1] = r;
+                    i += 2;
+                    frames_until_update -= 1;
                 }
-                let (l, r) = backend.get_stereo();
-                data[i] = l;
-                data[i+1] = r;
-                i += 2;
-                frames_until_update -= 1;
-            }
-        },
-        move |err| {
-            eprintln!("stream error: {}", err);
-        },
-        None
-    )?;
-    stream.play()?;
+            },
+            move |err| {
+                eprintln!("stream error: {}", err);
+            },
+            None
+        )?)
+    });
 
     let mut app = App::new(global_fx);
+
+    // ugly duplication, but error typing makes a nice solution difficult
+    match &stream {
+        Ok(stream) => if let Err(e) = stream.play() {
+            app.ui.report(format!("Could not initialize audio: {}", e));
+        }
+        Err(e) => app.ui.report(format!("Could not initialize audio: {}", e))
+    };
 
     if let Some(arg) = arg {
         match Module::load(&arg.into()) {
