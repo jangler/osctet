@@ -5,6 +5,12 @@ use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, modul
 
 use super::*;
 
+/// For checking when the table needs to be regenerated.
+static mut TUNING: Option<Tuning> = None;
+
+/// Table in column-major order.
+static mut TABLE: Option<Vec<Vec<String>>> = None;
+
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
     player: &mut Player, scroll: &mut f32
 ) {
@@ -130,7 +136,10 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
     ) {
         match s.parse() {
             Ok(ratio) => match Tuning::divide(ratio, tuning.size(), tuning.arrow_steps) {
-                Ok(t) => *tuning = t,
+                Ok(t) => {
+                    *tuning = t;
+                    clear_table();
+                }
                 Err(e) => ui.report(e),
             }
             Err(e) => ui.report(e),
@@ -141,7 +150,10 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
     ) {
         match s.parse() {
             Ok(steps) => match Tuning::divide(tuning.equave(), steps, tuning.arrow_steps) {
-                Ok(t) => *tuning = t,
+                Ok(t) => {
+                    *tuning = t;
+                    clear_table();
+                }
                 Err(e) => ui.report(e),
             },
             Err(e) => ui.report(e),
@@ -151,7 +163,10 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
         Info::ArrowSteps
     ) {
         match s.parse() {
-            Ok(steps) => tuning.arrow_steps = steps,
+            Ok(steps) => {
+                tuning.arrow_steps = steps;
+                clear_table();
+            }
             Err(e) => ui.report(e),
         }
     }
@@ -164,39 +179,60 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             .pick_file() {
             cfg.scale_folder = config::dir_as_string(&path);
             match Tuning::load(path, tuning.root) {
-                Ok(t) => *tuning = t,
+                Ok(t) => {
+                    *tuning = t;
+                    clear_table();
+                }
                 Err(e) => ui.report(e),
             }
         }
     }
-    ui.note_input("root", &mut tuning.root, Info::TuningRoot);
+    if ui.note_input("root", &mut tuning.root, Info::TuningRoot).is_some() {
+        clear_table();
+    }
     ui.offset_label("Scale root", Info::TuningRoot);
     ui.end_group();
 
     ui.space(2.0);
-    let rows = tuning.interval_table(&Note::new(0, crate::pitch::Nominal::C, 0, 4));
     ui.start_group();
-
-    ui.start_group();
-    ui.label("Steps");
-    for i in 0..rows.len() {
-        ui.label(&i.to_string());
+    unsafe {
+        if TABLE.is_none() || TUNING.as_ref().is_none_or(|t| *t != *tuning) {
+            TUNING = Some(tuning.clone());
+            TABLE = Some(make_table(&tuning));
+        }
+        draw_table(ui, &["Steps", "Notation", "Cents"], TABLE.as_ref().unwrap())
     }
     ui.end_group();
+}
 
-    ui.start_group();
-    ui.label("Notation");
-    for (notation, _) in &rows {
-        ui.label(&notation.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", "));
+fn clear_table() {
+    unsafe {
+        TABLE = None;
     }
-    ui.end_group();
+}
 
-    ui.start_group();
-    ui.label("Cents");
-    for (_, cents) in &rows {
-        ui.label(&format!("{:.1}", cents));
+fn make_table(t: &Tuning) -> Vec<Vec<String>> {
+    let data = t.interval_table(&Note::new(0, crate::pitch::Nominal::C, 0, 4));
+    let mut columns = Vec::new();
+
+    columns.push((0..data.len()).map(|i| i.to_string()).collect());
+    columns.push(data.iter().map(|(notation, _)| {
+        notation.iter()
+            .filter(|n| n.arrows.abs() <= 2 && n.sharps.abs() <= 2)
+            .map(|n| n.to_string()).collect::<Vec<_>>().join(", ")
+    }).collect());
+    columns.push(data.iter().map(|(_, cents)| format!("{:.1}", cents)).collect());
+
+    columns
+}
+
+fn draw_table(ui: &mut UI, labels: &[&str], table: &Vec<Vec<String>>) {
+    for (label, column) in labels.iter().zip(table) {
+        ui.start_group();
+        ui.label(label);
+        for row in column {
+            ui.label(row);
+        }
+        ui.end_group();
     }
-    ui.end_group();
-
-    ui.end_group();
 }
