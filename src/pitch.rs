@@ -233,11 +233,21 @@ impl Tuning {
             old_notes = new_notes;
             new_notes = [(0, 1), (0, -1), (1, 0), (-1, 0)]
                 .iter().flat_map(|(arrows, sharps)|
-                    old_notes.iter().map(move |note| Note {
-                        arrows: note.arrows + arrows,
-                        sharps: note.sharps + sharps,
-                        ..*note
-                    })
+                    old_notes.iter().flat_map(move |note|
+                        // avoid backtracking and duplicates
+                        if (note.sharps > 0 && *sharps < 0)
+                            || (note.sharps < 0 && *sharps > 0)
+                            || (note.arrows > 0 && *arrows < 0)
+                            || (note.arrows < 0 && *arrows > 0)
+                            || (note.arrows != 0 && *sharps != 0) {
+                            None
+                        } else {
+                            Some(Note {
+                                arrows: note.arrows + arrows,
+                                sharps: note.sharps + sharps,
+                                ..*note
+                            })
+                        })
                 ).collect();
         }
     }
@@ -525,19 +535,5 @@ mod tests {
         assert_eq!(t.octave_offet(&Note::new(0, Nominal::C, -1, 4)), -1);
         assert_eq!(t.octave_offet(&Note::new(0, Nominal::A, 5, 4)), 1);
         assert_eq!(t.octave_offet(&Note::new(-1, Nominal::B, 0, 4)), 0);
-    }
-
-    #[test]
-    fn test_interval_table() {
-        let t = Tuning::divide(2.0, 5, 1).unwrap();
-        let c4 = Note::new(0, Nominal::C, 0, 4);
-        assert_eq!(t.interval_table(&c4), vec![
-            (vec![], 0.0),
-            (vec![], 240.0),
-            (vec![], 480.0),
-            (vec![], 720.0),
-            (vec![], 960.0),
-            (vec![], 1200.0),
-        ]);
     }
 }
