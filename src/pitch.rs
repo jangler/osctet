@@ -93,12 +93,18 @@ pub struct Tuning {
 }
 
 impl Tuning {
+    /// Maximum size of scales. This number is chosen because 1) performance
+    /// starts to really suffer beyond this point and 2) there's a large zeta
+    /// EDO gap after 494.
+    pub const MAX_SIZE: usize = 500;
+
     pub fn divide(ratio: f32, steps: u16, arrow_steps: u8) -> Result<Tuning, &'static str> {
         if ratio <= 1.0 {
             return Err("ratio must be greater than 1");
-        }
-        if steps < 1 {
+        } else if steps < 1 {
             return Err("step count cannot be zero");
+        } else if steps as usize > Self::MAX_SIZE {
+            return Err("scale too large");
         }
         let step = cents(ratio) / steps as f32;
         Ok(Tuning {
@@ -120,6 +126,9 @@ impl Tuning {
         } else {
             return Err("invalid scale file".into())
         };
+        if note_count > Self::MAX_SIZE {
+            return Err("scale too large".into())
+        }
 
         let scale: Result<Vec<_>, _> = lines.take(note_count).map(|s| {
             parse_interval(s).ok_or(format!("invalid interval: {}", s))

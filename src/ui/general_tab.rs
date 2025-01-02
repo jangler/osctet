@@ -136,7 +136,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             Err(e) => ui.report(e),
         }
     }
-    if let Some(s) = ui.edit_box("Steps to octave", 4, tuning.scale.len().to_string(),
+    if let Some(s) = ui.edit_box("Steps to octave", 3, tuning.scale.len().to_string(),
         Info::OctaveSteps
     ) {
         match s.parse() {
@@ -147,7 +147,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             Err(e) => ui.report(e),
         }
     }
-    if let Some(s) = ui.edit_box("Steps to arrow", 4, tuning.arrow_steps.to_string(),
+    if let Some(s) = ui.edit_box("Steps to arrow", 3, tuning.arrow_steps.to_string(),
         Info::ArrowSteps
     ) {
         match s.parse() {
