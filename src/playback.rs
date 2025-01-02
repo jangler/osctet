@@ -243,6 +243,9 @@ impl Player {
 
         for event in events {
             self.handle_event(&event.event, module, event.track, event.channel);
+            if let EventData::End = event.event.data {
+                break
+            }
         }
 
         if self.metronome && (self.tick as f32 / TICKS_PER_BEAT as f32).ceil()
