@@ -350,15 +350,10 @@ in the Instruments tab.".to_string(),
 levels can be set in patch settings.".to_string(),
         Info::KitPatch => text = "The patch that plays this kit mapping.".to_string(),
         Info::Waveform => text =
-"Waveform used by the generator or LFO.
-
-- Sawtooth is bright with all harmonics.
-- Pulse is bright with adjustable harmonics.
-- Triangle is soft with odd harmonics only.
-- Sine is a pure tone.
-- S&H is periodically sampled white noise.
-- Noise is brown noise.
-- PCM allows loading waveforms from audio files.".to_string(),
+"Waveform used by the generator. S&H is periodically
+sampled white noise. For generators, Noise is pink
+to white noise based on the Tone control. For LFOs,
+Noise is brown noise.".to_string(),
         Info::GenOutput => text =
 "The destination for this generator's signal. The
 signal can be mixed with the final outputs of other
@@ -373,17 +368,8 @@ used to modulate the previous generator.
   creates a series of tones for each tone that AM
   would create.".to_string(),
         Info::FilterType => text =
-"Filter type.
-
-- Ladder is a 24 dB/oct lowpass filter that can
-  self-oscillate at high resonance settings.
-- Lowpass attenuates frequencies above the cutoff
-  at 12 dB/oct.
-- Highpass attenuates frequencies below the cutoff
-  at 12 dB/oct.
-- Bandpass attenuates frequencies on either side of
-  the cutoff at 12 dB/oct.
-- Notch is the inverse of a bandpass filter.".to_string(),
+"Filter type. Ladder is 24 dB/oct and can self-
+oscillate; other filters are 12 dB/oct.".to_string(),
         Info::FilterKeytrack => text =
 "How much the filter cutoff follows the fundamental
 of the note. The break-even point for key tracking
