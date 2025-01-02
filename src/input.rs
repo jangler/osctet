@@ -498,7 +498,6 @@ pub enum Action {
     CycleNotation,
     Panic,
     UseLastNote,
-    ToggleTempLoop,
 }
 
 impl Action {
@@ -567,7 +566,6 @@ impl Action {
             Self::CycleNotation => "Cycle notation",
             Self::Panic => "Panic",
             Self::UseLastNote => "Use last note",
-            Self::ToggleTempLoop => "Toggle temp. loop",
         }
     }
 }

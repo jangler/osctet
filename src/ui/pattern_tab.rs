@@ -275,18 +275,7 @@ impl PatternEditor {
             Action::UnmuteAllTracks => player.unmute_all(module),
             Action::CycleNotation => self.cycle_notation(module),
             Action::UseLastNote => self.use_last_note(module),
-            Action::ToggleTempLoop => self.toggle_temp_loop(module),
             _ => (),
-        }
-    }
-
-    fn toggle_temp_loop(&self, module: &mut Module) {
-        let (start, end) = self.selection_corners();
-
-        if start.tick == end.tick {
-            clear_temp_loop(module);
-        } else {
-            set_temp_loop(module, start.tick, end.tick + self.ticks_per_row());
         }
     }
 
@@ -1353,79 +1342,4 @@ fn with_alpha(a: f32, color: Color) -> Color {
 
 fn line_height(atlas: &GlyphAtlas) -> f32 {
     atlas.cap_height() + PATTERN_MARGIN * 2.0
-}
-
-/// Clears the shortest loop in the module.
-fn clear_temp_loop(module: &mut Module) {
-    let start = Position::new(0, 0, 0, GLOBAL_COLUMN);
-
-    if let Some(end_tick) = module.last_event_tick() {
-        let end = Position {
-            tick: end_tick,
-            track: 0,
-            channel: module.tracks[0].channels.len() - 1,
-            column: GLOBAL_COLUMN,
-        };
-
-        let ctrl_events = module.scan_events(start, end);
-        let smallest_loop = ctrl_events.iter().filter_map(|a| match a.event.data {
-            EventData::Loop => ctrl_events.iter()
-                .find(|b| match b.event.data {
-                    EventData::End => b.event.tick > a.event.tick,
-                    _ => false,
-                }).map(|b| (a, b)),
-            _ => None,
-        }).min_by_key(|(a, b)| b.event.tick - a.event.tick);
-
-        if let Some((a, b)) = smallest_loop {
-            module.push_edit(Edit::PatternData {
-                remove: vec![a.position(), b.position()],
-                add: Vec::new(),
-            });
-        }
-    }
-}
-
-/// Sets a loop at the current selection.
-fn set_temp_loop(module: &mut Module, start: u32, end: u32) {
-    // find open channels
-    let start_channel = module.tracks[0].channels.iter().enumerate()
-        .find(|(_, c)| c.events.iter().find(|e| e.tick == start).is_none())
-        .map(|(i, _)| i);
-    let end_channel = module.tracks[0].channels.iter().enumerate()
-        .find(|(_, c)| c.events.iter().find(|e| e.tick == end).is_none())
-        .map(|(i, _)| i);
-
-    // might need to create a new channel to put the events in
-    let (start_i, end_i) = if let (Some(a), Some(b)) = (start_channel, end_channel) {
-        (a, b)
-    } else {
-        let i = module.tracks[0].channels.len();
-        module.push_edit(Edit::AddChannel(0, Channel::new()));
-        (i, i)
-    };
-
-    let add = vec![
-        LocatedEvent {
-            track: 0,
-            channel: start_i,
-            event: Event {
-                tick: start,
-                data: EventData::Loop,
-            }
-        },
-        LocatedEvent {
-            track: 0,
-            channel: end_i,
-            event: Event {
-                tick: end,
-                data: EventData::End,
-            }
-        },
-    ];
-
-    module.push_edit(Edit::PatternData {
-        remove: add.iter().map(|e| e.position()).collect(),
-        add,
-    });
 }

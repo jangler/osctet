@@ -306,9 +306,6 @@ track.".to_string(),
 clipboard.".to_string(),
             Action::UseLastNote =>
                 text = "Insert a copy of the last note in the channel.".to_string(),
-            Action::ToggleTempLoop => text =
-"Set playback to loop over the selected timespan,
-or clear temporary loop points.".to_string(),
             Action::IncrementDivision => text = "Increase beat division by 1.".to_string(),
             Action::DecrementDivision => text = "Decrease beat division by 1.".to_string(),
             Action::DoubleDivision => text = "Double the beat division.".to_string(),

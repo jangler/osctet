@@ -188,7 +188,6 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::F10), Action::SoloTrack),
         (Hotkey::new(Modifiers::None, KeyCode::F11), Action::UnmuteAllTracks),
         (Hotkey::new(Modifiers::None, KeyCode::F12), Action::Panic),
-        (Hotkey::new(Modifiers::Ctrl, KeyCode::L), Action::ToggleTempLoop),
         // (Hotkey::new(Modifiers::Ctrl, KeyCode::R), Action::ToggleRecord),
     ]
 }
