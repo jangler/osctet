@@ -126,6 +126,17 @@ impl Graphic {
         }
     }
 
+    fn overlaps(&self, style: &Style, rect: &Rect) -> bool {
+        let this_rect = match self {
+            Self::Rect(rect, _, _) => rect,
+            Self::Line(x1, y1, x2, y2, _) =>
+                &Rect::new(*x1, *y1, x2 - x1, y2 - y1),
+            Self::Text(x, y, text, _) =>
+                &Rect::new(*x, *y, style.atlas.text_width(text), style.line_height()),
+        };
+        this_rect.overlaps(rect)
+    }
+
     fn align_right(&mut self, right_edge: f32, char_width: f32) {
         match self {
             Self::Rect(rect, _, _) => {
@@ -334,8 +345,11 @@ impl UI {
 
     pub fn end_frame(&mut self) {
         self.draw_queue.sort_by_key(|x| x.z);
+        let screen_rect = Rect::new(0.0, 0.0, screen_width(), screen_height());
         for op in &self.draw_queue {
-            op.graphic.draw(&self.style);
+            if op.graphic.overlaps(&self.style, &screen_rect) {
+                op.graphic.draw(&self.style);
+            }
         }
         self.draw_queue.clear();
 
