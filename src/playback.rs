@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::mpsc::{self, Receiver}, thread};
 
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, NOTE_COLUMN, TICKS_PER_BEAT}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, MOD_COLUMN, NOTE_COLUMN, TICKS_PER_BEAT, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f64 = 10.0;
@@ -313,6 +313,38 @@ impl Player {
         }
     }
 
+    fn reinit_memory(&mut self, tick: u32, module: &Module) {
+        for track in 0..module.tracks.len() {
+            self.reinit_track_memory(tick, module, track);
+        }
+    }
+
+    fn reinit_track_memory(&mut self, tick: u32, module: &Module, track_i: usize) {
+        self.synths[track_i].reset_memory();
+
+        for (channel_i, channel) in module.tracks[track_i].channels.iter().enumerate() {
+            let mut events: Vec<_> = channel.events.iter()
+                .filter(|e| e.tick < tick
+                    && (VEL_COLUMN..=MOD_COLUMN).contains(&e.data.logical_column()))
+                .collect();
+            events.sort_by_key(|e| e.tick);
+
+            for evt in events {
+                match evt.data {
+                    EventData::Pressure(v) => {
+                        self.synths[track_i].set_vel_memory(
+                            channel_i as u8, v as f32 / EventData::DIGIT_MAX as f32);
+                    }
+                    EventData::Modulation(v) => {
+                        self.synths[track_i].set_mod_memory(
+                            channel_i as u8, v as f32 / EventData::DIGIT_MAX as f32);
+                    }
+                    _ => ()
+                }
+            }
+        }
+    }
+
     pub fn toggle_mute(&mut self, module: &Module, track_i: usize) {
         if track_i == 0 {
             return // never mute keyjazz track
@@ -393,7 +425,8 @@ impl Player {
             EventData::Tempo(t) => self.tempo = t,
             EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
             EventData::End => if let Some(tick) = module.find_loop_start(self.tick) {
-                self.go_to(tick);
+                self.tick = tick;
+                self.reinit_memory(tick, module);
                 self.looped = true;
             } else {
                 self.stop();
@@ -406,10 +439,6 @@ impl Player {
             EventData::InterpolatedModulation(v) =>
                 self.modulate(track, channel as u8, v),
         }
-    }
-
-    fn go_to(&mut self, tick: u32) {
-        self.tick = tick;
     }
 }
 
