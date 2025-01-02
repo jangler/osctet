@@ -3,7 +3,7 @@
 use std::{collections::HashMap, error::Error, fs::File, io::BufReader, path::Path};
 
 use bdf_reader::{Bitmap, Font};
-use macroquad::{color::Color, math::Rect, texture::{draw_texture, Texture2D}};
+use macroquad::{color::Color, math::Rect, texture::{build_textures_atlas, draw_texture, Texture2D}};
 
 pub const SHARP: u32 = 0x81;
 pub const DOUBLE_SHARP: u32 = 0x82;
@@ -88,6 +88,7 @@ impl GlyphAtlas {
                 None => eprintln!("invalid char encoding: {}", glyph.encoding())
             }
         }
+        build_textures_atlas();
 
         let (cap_height, offset_y) = if let Some(glyph) = font.glyph('X') {
             (count_bitmap_rows(glyph.bitmap()) as f32,
