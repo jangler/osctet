@@ -175,7 +175,8 @@ pub struct UI {
     pub note_queue: Vec<(Key, EventData)>,
     instrument_edit_index: Option<usize>,
     mouse_consumed: Option<String>,
-    scrollbar_grabbed: bool,
+    v_scrollbar_grabbed: bool,
+    h_scrollbar_grabbed: bool,
     notification: Option<Notification>,
     text_clipboard: Option<String>,
     group_ignores_geometry: bool,
@@ -214,7 +215,8 @@ impl UI {
             note_queue: Vec::new(),
             instrument_edit_index: None,
             mouse_consumed: None,
-            scrollbar_grabbed: false,
+            v_scrollbar_grabbed: false,
+            h_scrollbar_grabbed: false,
             notification: None,
             text_clipboard: None,
             group_ignores_geometry: false,
@@ -238,7 +240,7 @@ impl UI {
     }
 
     pub fn grabbed(&self) -> bool {
-        self.scrollbar_grabbed || self.focused_slider.is_some()
+        self.v_scrollbar_grabbed || self.focused_slider.is_some()
     }
 
     pub fn get_tab(&self, key: &str) -> Option<usize> {
@@ -467,14 +469,16 @@ impl UI {
     pub fn vertical_scrollbar(&mut self,
         current_y: &mut f32, max_y: f32, viewport_h: f32, keys: bool
     ) {
-        let (_, y_scroll) = mouse_wheel();
-        let actual_increment = if is_alt_down() {
-            viewport_h / 2.0
-        } else {
-            self.style.line_height() * 3.0
-        };
-        let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
-        *current_y += dy;
+        if !is_shift_down() {
+            let (_, y_scroll) = mouse_wheel();
+            let actual_increment = if is_alt_down() {
+                viewport_h / 2.0
+            } else {
+                self.style.line_height() * 3.0
+            };
+            let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
+            *current_y += dy;
+        }
 
         if keys && !self.accepting_keyboard_input() {
             if is_key_pressed(KeyCode::Home) {
@@ -513,19 +517,69 @@ impl UI {
         self.push_rect(handle, self.style.theme.control_bg_click(), None);
 
         if is_mouse_button_pressed(MouseButton::Left) && hit {
-            self.scrollbar_grabbed = true;
+            self.v_scrollbar_grabbed = true;
         }
 
-        if is_mouse_button_down(MouseButton::Left) && (self.scrollbar_grabbed || hit) {
+        if is_mouse_button_down(MouseButton::Left) && (self.v_scrollbar_grabbed || hit) {
             let (_, y) = mouse_position();
             let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
                 .min(1.0).max(0.0);
             *current_y = ((max_y - viewport_h) * offset).round();
         } else {
-            self.scrollbar_grabbed = false;
+            self.v_scrollbar_grabbed = false;
         }
 
         self.bounds.w -= w;
+    }
+
+    pub fn horizontal_scroll(&mut self,
+         current_x: &mut f32, max_x: f32, viewport_w: f32
+    ) {
+        if is_shift_down() {
+            let (_, y_scroll) = mouse_wheel();
+            let actual_increment = self.style.line_height() * 3.0;
+            let dx = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
+            *current_x += dx;
+        }
+
+        *current_x = (*current_x).min(max_x - viewport_w).max(0.0);
+
+        if viewport_w >= max_x {
+            return // no need to draw scrollbar
+        }
+
+        let h = self.style.margin * 2.0;
+        let trough = Rect {
+            x: self.bounds.x,
+            y: self.bounds.y + self.bounds.h - h,
+            w: viewport_w,
+            h,
+        };
+        self.push_rect(trough, self.style.theme.control_bg(), None);
+
+        let w = clamp(viewport_w / max_x, 0.0, 1.0) * trough.w;
+        let handle = Rect {
+            x: trough.x + (trough.w - w) * *current_x / (max_x - viewport_w),
+            w,
+            ..trough
+        };
+        let hit = self.mouse_hits(trough, "horizontal_scrollbar");
+        self.push_rect(handle, self.style.theme.control_bg_click(), None);
+
+        if is_mouse_button_pressed(MouseButton::Left) && hit {
+            self.h_scrollbar_grabbed = true;
+        }
+
+        if is_mouse_button_down(MouseButton::Left) && (self.h_scrollbar_grabbed || hit) {
+            let (x, _) = mouse_position();
+            let offset = ((x - trough.x - handle.w / 2.0) / (trough.w - handle.w))
+                .min(1.0).max(0.0);
+            *current_x = ((max_x - viewport_w) * offset).round();
+        } else {
+            self.h_scrollbar_grabbed = false;
+        }
+
+        self.bounds.h -= h;
     }
 
     /// Check whether the mouse is within the rect and unoccluded.
@@ -1468,6 +1522,10 @@ fn display_unit(unit: Option<&'static str>) -> Box<dyn Fn(f32) -> String> {
     } else {
         Box::new(|x| format!("{:.3}", x))
     }
+}
+
+fn is_shift_down() -> bool {
+    is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
 
 fn is_alt_down() -> bool {

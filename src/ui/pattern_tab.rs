@@ -8,10 +8,6 @@ use super::*;
 
 const PATTERN_MARGIN: f32 = 2.0;
 
-fn is_shift_down() -> bool {
-    is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
-}
-
 fn is_ctrl_down() -> bool {
     is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
 }
@@ -22,6 +18,7 @@ pub struct PatternEditor {
     edit_end: Position,
     pub beat_division: u8,
     beat_scroll: f32, // measured in beats
+    h_scroll: f32,
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
     clipboard: Option<PatternClip>,
@@ -56,6 +53,7 @@ impl PatternEditor {
             edit_end: edit_cursor,
             beat_division: 4,
             beat_scroll: 0.0,
+            h_scroll: 0.0,
             tap_tempo_intervals: Vec::new(),
             pending_interval: None,
             clipboard: None,
@@ -942,22 +940,21 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     }
 
     ui.start_group();
+    ui.cursor_x -= pe.h_scroll;
     let left_x = ui.cursor_x;
     let track_xs = draw_track_headers(ui, module, player, pe);
     let rect = Rect {
-        w: ui.bounds.w,
+        w: ui.bounds.w - left_x.min(0.0),
         ..ui.end_group().unwrap()
     };
     ui.cursor_z -= 1;
     ui.push_rect(rect, ui.style.theme.panel_bg(), None);
-    ui.cursor_x = track_xs[0];
 
     let beat_height = pe.beat_height(ui);
     let end_y = ui.bounds.h - ui.cursor_y
         + (module.last_event_tick().unwrap_or(0)
             .max(pe.edit_start.tick).max(pe.edit_end.tick) as f32)
         * beat_height / TICKS_PER_BEAT as f32;
-    let viewport_h = ui.bounds.h + ui.bounds.y - ui.cursor_y;
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.style.theme.border_unfocused());
@@ -973,14 +970,20 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     }
     let mut scroll = pe.scroll(ui);
     if !(pe.follow || pe.record) || !player.is_playing() {
+        let viewport_h = ui.bounds.h + ui.bounds.y - ui.cursor_y;
         ui.vertical_scrollbar(&mut scroll, end_y, viewport_h, false);
         pe.set_scroll(scroll, ui);
     }
+    ui.horizontal_scroll(&mut pe.h_scroll,
+        track_xs.last().unwrap() - left_x
+            + ui.style.margin * 4.0 + ui.style.atlas.char_width(),
+        ui.bounds.w);
+    ui.cursor_x = track_xs[0];
     let viewport = Rect {
         x: ui.bounds.x,
         y: ui.cursor_y,
         w: ui.bounds.w,
-        h: viewport_h,
+        h: ui.bounds.h + ui.bounds.y - ui.cursor_y,
     };
     ui.cursor_z -= 1;
     ui.cursor_y -= scroll;
