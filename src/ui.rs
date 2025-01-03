@@ -26,7 +26,6 @@ pub mod info;
 
 const LINE_THICKNESS: f32 = 1.0;
 const SLIDER_WIDTH: f32 = 100.0;
-const MOUSE_WHEEL_INCREMENT: f32 = 120.0;
 
 const PANEL_Z_OFFSET: i8 = 10;
 const COMBO_Z_OFFSET: i8 = 20;
@@ -478,13 +477,14 @@ impl UI {
     ) {
         if !is_shift_down() {
             let (_, y_scroll) = mouse_wheel();
-            let actual_increment = if is_alt_down() {
-                viewport_h / 2.0
-            } else {
-                self.style.line_height() * 3.0
-            };
-            let dy = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
-            *current_y += dy;
+            if y_scroll != 0.0 {
+                let increment = if is_alt_down() {
+                    viewport_h / 2.0
+                } else {
+                    self.style.line_height() * 3.0
+                };
+                *current_y += -y_scroll.signum() * increment;
+            }
         }
 
         if keys && !self.accepting_keyboard_input() {
@@ -544,9 +544,11 @@ impl UI {
     ) {
         if is_shift_down() {
             let (_, y_scroll) = mouse_wheel();
-            let actual_increment = self.style.line_height() * 3.0;
-            let dx = -y_scroll / MOUSE_WHEEL_INCREMENT * actual_increment;
-            *current_x += dx;
+            if y_scroll != 0.0 {
+                let increment = self.style.line_height() * 3.0;
+                let dx = -y_scroll.signum() * increment;
+                *current_x += dx;
+            }
         }
 
         *current_x = (*current_x).min(max_x - viewport_w).max(0.0);
