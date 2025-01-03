@@ -160,7 +160,7 @@ impl PatternEditor {
         (self.screen_tick as f32 / TICKS_PER_BEAT as f32).ceil() as u32 * TICKS_PER_BEAT
     }
 
-    fn set_screen_ticks(&mut self, viewport: Rect, ui: &UI) {
+    fn set_metrics(&mut self, viewport: Rect, ui: &UI) {
         self.screen_tick = self.y_tick(viewport.y, ui);
         self.screen_tick_max = self.y_tick(viewport.y + viewport.h, ui);
     }
@@ -643,7 +643,6 @@ impl PatternEditor {
                 });
             }
         }
-        // TODO: report error?
     }
 
     fn draw_channel(&self, ui: &mut UI, channel: &Channel, muted: bool) {
@@ -747,8 +746,7 @@ impl PatternEditor {
 
     /// Scroll to a position that centers the given tick.
     fn scroll_to(&mut self, tick: u32) {
-        // TODO: this should also be offset by half of the line height, or something
-        let offset = (self.screen_tick_max - self.screen_tick) / 2;
+        let offset = (self.screen_tick_max - self.screen_tick - self.ticks_per_row()) / 2;
         self.beat_scroll = tick.saturating_sub(offset) as f32 / TICKS_PER_BEAT as f32;
     }
 
@@ -987,7 +985,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.cursor_z -= 1;
     ui.cursor_y -= scroll;
 
-    pe.set_screen_ticks(viewport, ui);
+    pe.set_metrics(viewport, ui);
 
     if viewport.contains(mouse_position_vec2()) {
         if is_mouse_button_pressed(MouseButton::Left) {
