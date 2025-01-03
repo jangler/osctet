@@ -632,7 +632,7 @@ impl UI {
         self.end_widget("label", info, ControlInfo::None);
     }
 
-    pub fn header(&mut self, label: &str) {
+    pub fn header(&mut self, label: &str, info: Info) {
         let rect = Rect {
             x: self.cursor_x,
             y: self.cursor_y,
@@ -643,7 +643,7 @@ impl UI {
         self.push_rect(rect, self.style.theme.accent1_bg(), None);
         self.push_text(self.cursor_x, self.cursor_y,
             label.to_owned(), self.style.theme.fg());
-        self.end_widget("header", Info::None, ControlInfo::None);
+        self.end_widget("header", info, ControlInfo::None);
     }
 
     fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,

@@ -68,6 +68,14 @@ pub enum Info {
     NoteColumn,
     PressureColumn,
     ModulationColumn,
+    NoteLayout,
+    Compression,
+    Tuning,
+    Generators,
+    Filters,
+    Envelopes,
+    Lfos,
+    ModMatrix,
 }
 
 impl Default for Info {
@@ -98,6 +106,34 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::Generators => text =
+"Generators create the initial signal that other
+patch parameters shape.".to_string(),
+        Info::Filters => text =
+"Filters attenuate certain parts of the frequency
+spectrum to change the timbre of a sound.".to_string(),
+        Info::Envelopes => text =
+"Envelopes modulate parameters between different
+levels over time. They have no effect unless
+assigned in the mod matrix.".to_string(),
+        Info::Lfos => text =
+"Low-frequency oscillators modulate parameters in
+a repeating pattern. They have no effect unless
+assigned in the mod matrix.".to_string(),
+        Info::ModMatrix => text =
+"Assign modulation inputs and outputs. Modulation
+must not contain loops.".to_string(),
+        Info::Compression => text =
+"Dynamic range compression. Reduces the output level
+based on the input level. Can be used to clip peaks,
+shape transients, regulate overall volume, etc.".to_string(),
+        Info::Tuning => text =
+"Song tuning. Notation is always diatonic, based
+on the tuning's octave and best fifth.".to_string(),
+        Info::NoteLayout => text =
+"Keys used for note input. The octaves of these
+notes represent an offset from the base octave
+setting.".to_string(),
         Info::OctaveRatio => text =
 "Size of the octave, as a frequency multiplier.
 Can be used to slightly stretch the octave, or to

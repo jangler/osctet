@@ -209,7 +209,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
 }
 
 fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
-    ui.header("GENERAL");
+    ui.header("GENERAL", Info::None);
     ui.shared_slider("gain", "Gain", &patch.gain.0, 0.0..=1.0, None, 2, true, Info::None);
     ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1, true, Info::None);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time,
@@ -244,7 +244,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut
 fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
     player: &mut Player
 ) {
-    ui.header("GENERATORS");
+    ui.header("GENERATORS", Info::Generators);
 
     ui.start_group();
     let mut removed_osc = None;
@@ -442,7 +442,7 @@ fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) {
 }
 
 fn filter_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.header("FILTERS");
+    ui.header("FILTERS", Info::Filters);
 
     if !patch.filters.is_empty() {
         ui.start_group();
@@ -506,7 +506,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.header("ENVELOPES");
+    ui.header("ENVELOPES", Info::Envelopes);
 
     if !patch.envs.is_empty() {
         ui.start_group();
@@ -562,7 +562,7 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.header("LFOS");
+    ui.header("LFOS", Info::Lfos);
 
     if !patch.lfos.is_empty() {
         let mut removed_lfo = None;
@@ -615,7 +615,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
 }
 
 fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
-    ui.header("MOD MATRIX");
+    ui.header("MOD MATRIX", Info::ModMatrix);
 
     if !patch.mod_matrix.is_empty() {
         let mut removed_mod = None;

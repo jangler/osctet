@@ -11,7 +11,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.cursor_z -= 1;
     ui.start_group();
 
-    ui.header("GENERAL");
+    ui.header("GENERAL", Info::None);
 
     if ui.button("Reset to defaults", true, Info::ResetSettings) {
         cfg.reset();
@@ -20,7 +20,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
 
     ui.space(2.0);
-    ui.header("APPEARANCE");
+    ui.header("APPEARANCE", Info::None);
 
     // TODO: currently accent 2 isn't used on this page, so there's no way to
     //       see the effects of adjusting it
@@ -101,7 +101,7 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
 }
 
 fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
-    ui.header("KEY COMMANDS");
+    ui.header("KEY COMMANDS", Info::None);
     ui.start_group();
 
     let mut id = 0;
@@ -140,7 +140,7 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
 }
 
 fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
-    ui.header("NOTE LAYOUT");
+    ui.header("NOTE LAYOUT", Info::NoteLayout);
     ui.start_group();
 
     let mut hotkey_input_id = hotkey_input_id;

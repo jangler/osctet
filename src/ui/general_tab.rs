@@ -20,7 +20,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.cursor_z -= 1;
     ui.start_group();
 
-    ui.header("METADATA");
+    ui.header("METADATA", Info::None);
     if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::None) {
         module.title = s;
     }
@@ -38,7 +38,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
 
 fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.space(2.0);
-    ui.header("SPATIAL FX");
+    ui.header("SPATIAL FX", Info::None);
     let mut commit = false;
 
     if let Some(i) = ui.combo_box("spatial_type", "Type", settings.spatial.variant_name(),
@@ -85,7 +85,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     }
 
     ui.space(2.0);
-    ui.header("COMPRESSION");
+    ui.header("COMPRESSION", Info::Compression);
 
     let comp = &mut settings.comp;
     let mut commit = false;
@@ -130,7 +130,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
     player: &mut Player
 ) {
     ui.space(2.0);
-    ui.header("TUNING");
+    ui.header("TUNING", Info::Tuning);
     if let Some(s) = ui.edit_box("Octave ratio", 8, tuning.equave().to_string(),
         Info::OctaveRatio
     ) {
