@@ -855,7 +855,8 @@ impl Patch {
         net
     }
 
-    /// Returns true unless gain is modulated by an envelope with zero sustain.
+    /// Returns true unless gain is modulated by an envelope with zero sustain,
+    /// or all generators are one-shot PCM.
     pub fn sustains(&self) -> bool {
         for m in &self.mod_matrix {
             if m.target == ModTarget::Gain {
@@ -869,7 +870,11 @@ impl Patch {
             }
         }
 
-        true
+        !self.oscs.iter().all(|g| match &g.waveform {
+            Waveform::Pcm(data) => data.as_ref()
+                .is_none_or(|data| data.loop_point.is_none()),
+            _ => false,
+        })
     }
 
     /// Returns the maximum amount of time that it could take for this patch
