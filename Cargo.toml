@@ -5,7 +5,7 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [dependencies]
-cpal = "0.15.3"
+cpal = { version = "0.15.3", features = ["jack"] }
 fundsp = { git = "https://github.com/SamiPerttu/fundsp.git" }
 midir = "0.10.0"
 serde = { version = "1.0.214", features = ["derive"] }

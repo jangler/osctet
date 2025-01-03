@@ -37,6 +37,7 @@ pub struct Config {
     pub font_size: usize,
     pub smooth_playhead: bool,
     pub display_info: bool,
+    pub desired_sample_rate: u32,
 }
 
 impl Config {
@@ -120,6 +121,7 @@ impl Default for Config {
             font_size: default_font_size(),
             smooth_playhead: false,
             display_info: true,
+            desired_sample_rate: 48000,
         }
     }
 }

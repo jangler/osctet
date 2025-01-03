@@ -6,6 +6,7 @@ use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::{Arc, Mutex};
 
 use config::Config;
+use cpal::SampleRate;
 use fx::{FXSettings, GlobalFX};
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
@@ -110,11 +111,11 @@ struct App {
     settings_scroll: f32,
     save_path: Option<PathBuf>,
     render_channel: Option<Receiver<RenderUpdate>>,
+    sample_rate: u32,
 }
 
 impl App {
-    fn new(global_fx: GlobalFX) -> Self {
-        let config = Config::load().unwrap_or_default();
+    fn new(global_fx: GlobalFX, config: Config, sample_rate: u32) -> Self {
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
         App {
@@ -130,6 +131,7 @@ impl App {
             settings_scroll: 0.0,
             save_path: None,
             render_channel: None,
+            sample_rate,
         }
     }
 
@@ -475,7 +477,7 @@ impl App {
                     &mut self.patch_index, &mut self.instruments_scroll, &mut self.config,
                     &mut player), // so, basically everything
                 TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config,
-                    &mut self.settings_scroll),
+                    &mut self.settings_scroll, self.sample_rate),
                 _ => panic!("bad tab value"),
             }
         }
@@ -615,19 +617,39 @@ fn input_names(input: &MidiInput) -> Vec<String> {
         .collect()
 }
 
+/// Return the preferred audio device for the platform.
+fn get_audio_device() -> Option<cpal::Device> {
+    if cfg!(target_os = "linux") {
+        cpal::host_from_id(cpal::HostId::Jack).ok()
+            .and_then(|host| host.default_output_device())
+            .or_else(|| cpal::default_host().default_output_device())
+    } else {
+        cpal::default_host().default_output_device()
+    }
+}
+
+fn preferred_config(device: &cpal::Device, desired_sr: SampleRate) -> Result<StreamConfig, Box<dyn Error>> {
+    device.supported_output_configs()?
+        .filter(|conf| conf.channels() == 2)
+        .max_by_key(|conf| (
+            conf.sample_format().sample_size() > 1,
+            conf.max_sample_rate() >= desired_sr
+        )).map(|conf| {
+            let sr = desired_sr
+                .clamp(conf.min_sample_rate(), conf.max_sample_rate());
+            conf.with_sample_rate(sr).into()
+        }).ok_or("no supported audio config".into())
+}
+
 /// Application entry point.
 pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
-    let device = cpal::default_host().default_output_device();
+    let conf = Config::load().unwrap_or_default();
+    let device = get_audio_device();
 
-    let config: Result<StreamConfig, Box<dyn Error>> = device.as_ref()
+    let audio_conf: Result<StreamConfig, Box<dyn Error>> = device.as_ref()
         .ok_or("no audio output device".into())
-        .and_then(|device| {
-            device.supported_output_configs()?
-                .next()
-                .ok_or("could not find audio output config".into())
-                .map(|config| config.with_max_sample_rate().into())
-        });
-    let sample_rate = config.as_ref().map(|config| config.sample_rate.0).unwrap_or(44100); 
+        .and_then(|device| preferred_config(device, SampleRate(conf.desired_sample_rate)));
+    let sample_rate = audio_conf.as_ref().map(|config| config.sample_rate.0).unwrap_or(44100); 
 
     let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(sample_rate as f64);
@@ -649,7 +671,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let stream_module = module.clone();
     let stream_player = player.clone();
 
-    let stream = config.and_then(|config| {
+    let stream = audio_conf.and_then(|config| {
         Ok(device.unwrap().build_output_stream(
             &config, move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
                 // there's probably a better way to do this
@@ -676,7 +698,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
         )?)
     });
 
-    let mut app = App::new(global_fx);
+    let mut app = App::new(global_fx, conf, sample_rate);
 
     // ugly duplication, but error typing makes a nice solution difficult
     match &stream {

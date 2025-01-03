@@ -4,7 +4,7 @@ use crate::config::Config;
 
 use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
 
-pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
+pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
     ui.cursor_y -= *scroll;
@@ -19,6 +19,15 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     }
     ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
     ui.checkbox("Display info text", &mut cfg.display_info, true, Info::DisplayInfo);
+    if let Some(s) = ui.edit_box("Desired sample rate", 6, cfg.desired_sample_rate.to_string(), Info::DesiredSampleRate) {
+        match s.parse::<u32>() {
+            Ok(n) => cfg.desired_sample_rate = n,
+            Err(e) => ui.report(e),
+        }
+    }
+    if sample_rate != cfg.desired_sample_rate {
+        ui.offset_label(&format!("Actual sample rate: {} Hz", sample_rate), Info::None);
+    }
 
     ui.space(2.0);
     ui.header("APPEARANCE", Info::None);

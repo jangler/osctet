@@ -77,6 +77,7 @@ pub enum Info {
     Lfos,
     ModMatrix,
     DisplayInfo,
+    DesiredSampleRate,
 }
 
 impl Default for Info {
@@ -107,6 +108,9 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::DesiredSampleRate => text =
+"Audio output sample rate to request, in Hz. Requires
+program restart to take effect.".to_string(),
         Info::DisplayInfo =>
             text = "Display mouseover help text for UI elements.".to_string(),
         Info::Generators => text =
