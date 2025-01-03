@@ -1010,7 +1010,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
             fix_cursors(pe, &module.tracks);
         }
 
-        if mouse_position().0 >= track_xs[0] {
+        if (track_xs[0]..*track_xs.last().unwrap()).contains(&mouse_position().0) {
             ui.info = match (pos.track, pos.column) {
                 (0, GLOBAL_COLUMN) => Info::ControlColumn,
                 (_, NOTE_COLUMN) => Info::NoteColumn,

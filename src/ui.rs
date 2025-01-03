@@ -3,7 +3,7 @@
 //! Not polished for general reuse. Macroquad also has its own built-in UI
 //! library, but the demos don't give me much faith in it.
 
-use std::{collections::HashMap, fmt::Display, ops::RangeInclusive};
+use std::{collections::HashMap, fmt::Display, mem, ops::RangeInclusive};
 
 use fundsp::shared::Shared;
 use info::{ControlInfo, Info};
@@ -31,6 +31,9 @@ const MOUSE_WHEEL_INCREMENT: f32 = 120.0;
 const PANEL_Z_OFFSET: i8 = 10;
 const COMBO_Z_OFFSET: i8 = 20;
 const TOOLTIP_Z_OFFSET: i8 = 30;
+
+/// Seconds before info popup.
+const INFO_DELAY: f32 = 0.1;
 
 /// Return a new file dialog. Use this instead of using `rfd` directly.
 pub fn new_file_dialog(player: &mut Player) -> FileDialog {
@@ -183,6 +186,8 @@ pub struct UI {
     widget_on_stack: bool,
     info: Info,
     ctrl_info: ControlInfo,
+    saved_info: (Info, ControlInfo),
+    info_delay: f32,
     bottom_right_corner: Vec2,
 }
 
@@ -223,6 +228,8 @@ impl UI {
             widget_on_stack: false,
             info: Info::None,
             ctrl_info: ControlInfo::None,
+            saved_info: (Info::None, ControlInfo::None),
+            info_delay: INFO_DELAY,
             bottom_right_corner: Vec2::ZERO,
         }
     }
@@ -1384,13 +1391,22 @@ impl UI {
             note.time_remaining -= get_frame_time().min(0.1);
             note_expired = note.time_remaining <= 0.0;
             Some(note.message.clone())
-        } else {
-            let s = info::text(&self.info, &self.ctrl_info, conf);
-            if s.is_empty() {
-                None
+        } else if self.info == self.saved_info.0 && self.ctrl_info == self.saved_info.1 {
+            self.info_delay = (self.info_delay - get_frame_time()).max(0.0);
+            if self.info_delay == 0.0 {
+                let s = info::text(&self.info, &self.ctrl_info, conf);
+                if s.is_empty() {
+                    None
+                } else {
+                    Some(s)
+                }
             } else {
-                Some(s)
+                None
             }
+        } else {
+            self.saved_info = (mem::take(&mut self.info), mem::take(&mut self.ctrl_info));
+            self.info_delay = INFO_DELAY;
+            None
         };
         if note_expired {
             self.notification = None;

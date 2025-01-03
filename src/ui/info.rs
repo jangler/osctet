@@ -1,6 +1,7 @@
 use crate::{config::Config, input::Action};
 
 /// Info text types for specific controls.
+#[derive(PartialEq)]
 pub enum Info {
     None,
     OctaveRatio,
@@ -69,12 +70,25 @@ pub enum Info {
     ModulationColumn,
 }
 
+impl Default for Info {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 /// Info text types for widget categories.
+#[derive(PartialEq)]
 pub enum ControlInfo {
     None,
     Slider,
     Note,
     Hotkey,
+}
+
+impl Default for ControlInfo {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
