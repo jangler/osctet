@@ -359,6 +359,34 @@ enum KeyCodeDef {
     Unknown = 0x01ff,
 }
 
+fn key_to_string(key: KeyCode) -> String {
+    let s = match key {
+        KeyCode::Apostrophe => "'",
+        KeyCode::Comma => ",",
+        KeyCode::Minus => "-",
+        KeyCode::Period => ".",
+        KeyCode::Slash => "/",
+        KeyCode::Key0 => "0",
+        KeyCode::Key1 => "1",
+        KeyCode::Key2 => "2",
+        KeyCode::Key3 => "3",
+        KeyCode::Key4 => "4",
+        KeyCode::Key5 => "5",
+        KeyCode::Key6 => "6",
+        KeyCode::Key7 => "7",
+        KeyCode::Key8 => "8",
+        KeyCode::Key9 => "9",
+        KeyCode::Semicolon => ";",
+        KeyCode::Equal => "=",
+        KeyCode::LeftBracket => "[",
+        KeyCode::Backslash => "\\",
+        KeyCode::RightBracket => "]",
+        KeyCode::GraveAccent => "`",
+        _ => &format!("{:?}", key),
+    };
+    s.to_owned()
+}
+
 /// Combination of modifier keys. This is kind of a silly way to store this
 /// information, but it serializes to TOML a lot nicer than a struct of three
 /// booleans.
@@ -402,6 +430,21 @@ impl Modifiers {
     }
 }
 
+impl fmt::Display for Modifiers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            Self::None => "(none)",
+            Self::Ctrl => "Ctrl",
+            Self::Alt => "Alt",
+            Self::Shift => "Shift",
+            Self::CtrlAlt => "Ctrl+Alt",
+            Self::CtrlShift => "Ctrl+Shift",
+            Self::AltShift => "Alt+Shift",
+            Self::CtrlAltShift => "Ctrl+Alt+Shift",
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct Hotkey {
     pub mods: Modifiers,
@@ -426,9 +469,9 @@ impl Hotkey {
 impl fmt::Display for Hotkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.mods == Modifiers::None {
-            write!(f, "{:?}", self.key)
+            write!(f, "{}", key_to_string(self.key))
         } else {
-            write!(f, "{:?}+{:?}", self.mods, self.key)
+            write!(f, "{}+{}", self.mods, key_to_string(self.key))
         }
     }
 }

@@ -145,7 +145,7 @@ fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
 
     let mut hotkey_input_id = hotkey_input_id;
     let max_chars = cfg.note_keys.iter().map(|(k, _)| k.to_string().len()).max().unwrap();
-    let entries_per_col = entries_per_col(ui, max_chars * 2, cfg.note_keys.len());
+    let entries_per_col = entries_per_col(ui, (max_chars * 2).max(6), cfg.note_keys.len());
 
     for chunk in cfg.note_keys.chunks_mut(entries_per_col) {
         // TODO: duplication with hotkey_controls
