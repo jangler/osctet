@@ -35,6 +35,7 @@ pub struct Config {
     pub note_keys: Vec<(Hotkey, Note)>,
     #[serde(default = "default_font_size")]
     pub font_size: usize,
+    pub smooth_playhead: bool,
 }
 
 impl Config {
@@ -116,6 +117,7 @@ impl Default for Config {
             keys,
             note_keys: input::default_note_keys(),
             font_size: default_font_size(),
+            smooth_playhead: false,
         }
     }
 }

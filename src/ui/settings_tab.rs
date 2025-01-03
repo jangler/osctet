@@ -11,10 +11,13 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
     ui.cursor_z -= 1;
     ui.start_group();
 
+    ui.header("GENERAL");
+
     if ui.button("Reset to defaults", true, Info::ResetSettings) {
         cfg.reset();
         ui.style.theme = Default::default();
     }
+    ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
 
     ui.space(2.0);
     ui.header("APPEARANCE");

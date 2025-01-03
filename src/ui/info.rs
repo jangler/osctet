@@ -62,6 +62,7 @@ pub enum Info {
     ModSource,
     ModDest,
     TrackPatch,
+    SmoothPlayhead,
 }
 
 /// Info text types for widget categories.
@@ -377,6 +378,9 @@ operate in the range 0..1, but LFOs oscillate in
 the range -1..1.".to_string(),
         Info::ModDest => text = "The modulated parameter.".to_string(),
         Info::TrackPatch => text = "The patch controlled by this track.".to_string(),
+        Info::SmoothPlayhead => text =
+"If disabled, playhead visual and pattern follow
+will be quantized to the nearest row.".to_string(),
     };
 
     if !actions.is_empty() {

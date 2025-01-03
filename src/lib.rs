@@ -470,7 +470,7 @@ impl App {
                 TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut module,
                     &mut self.fx, &mut self.config, &mut player, &mut self.general_scroll),
                 TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut module,
-                    &mut player, &mut self.pattern_editor),
+                    &mut player, &mut self.pattern_editor, &self.config),
                 TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut module,
                     &mut self.patch_index, &mut self.instruments_scroll, &mut self.config,
                     &mut player), // so, basically everything

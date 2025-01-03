@@ -471,6 +471,7 @@ impl PatternEditor {
         self.edit_end.tick = self.round_tick(self.edit_end.tick);
     }
 
+    /// Round a tick to the nearest on-division value.
     pub fn round_tick(&self, tick: u32) -> u32 {
         let tpr = TICKS_PER_BEAT as f32 / self.beat_division as f32;
         let div = ((tick % TICKS_PER_BEAT) as f32 / tpr).round();
@@ -909,7 +910,9 @@ impl PatternEditor {
     }
 }
 
-pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut PatternEditor) {
+pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut PatternEditor,
+    conf: &Config
+) {
     if let Some(interval) = pe.pending_interval.as_mut() {
         *interval += get_frame_time();
     }
@@ -958,8 +961,13 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.style.theme.border_unfocused());
+    let playhead_tick = if conf.smooth_playhead {
+        player.get_tick()
+    } else {
+        pe.round_tick(player.get_tick())
+    };
     if (pe.follow || pe.record) && player.is_playing() {
-        pe.scroll_to(player.get_tick());
+        pe.scroll_to(playhead_tick);
     }
     if pe.record {
         let ticks_per_row = pe.ticks_per_row();
@@ -1007,7 +1015,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     draw_beats(ui, left_x, beat_height);
     ui.cursor_z += 1;
     if player.is_playing() {
-        draw_playhead(ui, player.get_tick(), left_x, beat_height);
+        draw_playhead(ui, playhead_tick, left_x, beat_height);
     }
     pe.draw_cursor(ui, &track_xs);
 
