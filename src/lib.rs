@@ -538,12 +538,13 @@ impl App {
 
     fn render_and_save(&mut self, module: &Module, player: &mut Player) {
         if module.ends() {
-            if let Some(path) = ui::new_file_dialog(player)
+            if let Some(mut path) = ui::new_file_dialog(player)
                 .add_filter("WAV file", &["wav"])
                 .set_directory(self.config.render_folder.clone()
                     .unwrap_or(String::from(".")))
                 .set_file_name(module.title.clone())
                 .save_file() {
+                path.set_extension("wav");
                 self.config.render_folder = config::dir_as_string(&path);
                 self.render_channel = Some(playback::render(module.clone(), path));
             }
@@ -571,12 +572,13 @@ impl App {
     }
 
     fn save_module_as(&mut self, module: &mut Module, player: &mut Player) {
-        if let Some(path) = ui::new_file_dialog(player)
+        if let Some(mut path) = ui::new_file_dialog(player)
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .set_directory(self.config.module_folder.clone()
                 .unwrap_or(String::from(".")))
             .set_file_name(module.title.clone())
             .save_file() {
+            path.set_extension(MODULE_EXT);
             self.config.module_folder = config::dir_as_string(&path);
             if let Err(e) = module.save(self.pattern_editor.beat_division, &path) {
                 self.ui.report(e);

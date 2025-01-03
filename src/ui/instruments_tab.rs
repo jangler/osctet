@@ -90,11 +90,12 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     let patches = &mut module.patches;
     if ui.button("Save", patch_index.is_some(), Info::SavePatch) {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
-            if let Some(path) = super::new_file_dialog(player)
+            if let Some(mut path) = super::new_file_dialog(player)
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
                 .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
                 .set_file_name(patch.name.clone())
                 .save_file() {
+                path.set_extension(PATCH_FILTER_EXT);
                 cfg.patch_folder = config::dir_as_string(&path);
                 if let Err(e) = patch.save(&path) {
                     ui.report(e);
