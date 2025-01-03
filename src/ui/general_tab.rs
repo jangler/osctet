@@ -5,14 +5,14 @@ use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, modul
 
 use super::*;
 
-/// For checking when the table needs to be regenerated.
-static mut TUNING: Option<Tuning> = None;
-
-/// Table in column-major order.
-static mut TABLE: Option<Vec<Vec<String>>> = None;
+/// Interval table cache.
+pub struct TableCache {
+    tuning: Tuning,
+    table: Vec<Vec<String>>,
+}
 
 pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
-    player: &mut Player, scroll: &mut f32
+    player: &mut Player, scroll: &mut f32, table_cache: &mut Option<TableCache>,
 ) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
@@ -28,7 +28,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
         module.author = s;
     }
     fx_controls(ui, &mut module.fx, fx);
-    tuning_controls(ui, &mut module.tuning, cfg, player);
+    tuning_controls(ui, &mut module.tuning, cfg, player, table_cache);
 
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_z += 1;
@@ -127,7 +127,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
 }
 
 fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
-    player: &mut Player
+    player: &mut Player, table_cache: &mut Option<TableCache>
 ) {
     ui.space(2.0);
     ui.header("TUNING", Info::Tuning);
@@ -138,7 +138,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             Ok(ratio) => match Tuning::divide(ratio, tuning.size(), tuning.arrow_steps) {
                 Ok(t) => {
                     *tuning = t;
-                    clear_table();
+                    *table_cache = None;
                 }
                 Err(e) => ui.report(e),
             }
@@ -152,7 +152,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             Ok(steps) => match Tuning::divide(tuning.equave(), steps, tuning.arrow_steps) {
                 Ok(t) => {
                     *tuning = t;
-                    clear_table();
+                    *table_cache = None;
                 }
                 Err(e) => ui.report(e),
             },
@@ -165,7 +165,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
         match s.parse() {
             Ok(steps) => {
                 tuning.arrow_steps = steps;
-                clear_table();
+                *table_cache = None;
             }
             Err(e) => ui.report(e),
         }
@@ -181,34 +181,30 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
             match Tuning::load(path, tuning.root) {
                 Ok(t) => {
                     *tuning = t;
-                    clear_table();
+                    *table_cache = None;
                 }
                 Err(e) => ui.report(e),
             }
         }
     }
     if ui.note_input("root", &mut tuning.root, Info::TuningRoot).is_some() {
-        clear_table();
+        *table_cache = None;
     }
     ui.offset_label("Scale root", Info::TuningRoot);
     ui.end_group();
 
     ui.space(2.0);
     ui.start_group();
-    unsafe {
-        if TABLE.is_none() || TUNING.as_ref().is_none_or(|t| *t != *tuning) {
-            TUNING = Some(tuning.clone());
-            TABLE = Some(make_table(&tuning));
-        }
-        draw_table(ui, &["Steps", "Notation", "Cents"], TABLE.as_ref().unwrap())
+    if table_cache.as_ref().is_none_or(|tc| tc.tuning != *tuning) {
+        *table_cache = Some(TableCache {
+            tuning: tuning.clone(),
+            table: make_table(tuning),
+        });
+    }
+    if let Some(tc) = table_cache {
+        draw_table(ui, &["Steps", "Notation", "Cents"], &tc.table);
     }
     ui.end_group();
-}
-
-fn clear_table() {
-    unsafe {
-        TABLE = None;
-    }
 }
 
 fn make_table(t: &Tuning) -> Vec<Vec<String>> {

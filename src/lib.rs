@@ -27,6 +27,7 @@ pub mod playback;
 mod dsp;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
+use ui::general_tab::TableCache;
 use ui::info::Info;
 use ui::instruments_tab::fix_patch_index;
 use ui::pattern_tab::PatternEditor;
@@ -112,6 +113,7 @@ struct App {
     save_path: Option<PathBuf>,
     render_channel: Option<Receiver<RenderUpdate>>,
     sample_rate: u32,
+    table_cache: Option<TableCache>,
 }
 
 impl App {
@@ -132,6 +134,7 @@ impl App {
             save_path: None,
             render_channel: None,
             sample_rate,
+            table_cache: None,
         }
     }
 
@@ -470,7 +473,8 @@ impl App {
 
             match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
                 TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut module,
-                    &mut self.fx, &mut self.config, &mut player, &mut self.general_scroll),
+                    &mut self.fx, &mut self.config, &mut player, &mut self.general_scroll,
+                    &mut self.table_cache),
                 TAB_PATTERN => ui::pattern_tab::draw(&mut self.ui, &mut module,
                     &mut player, &mut self.pattern_editor, &self.config),
                 TAB_INSTRUMENTS => ui::instruments_tab::draw(&mut self.ui, &mut module,
