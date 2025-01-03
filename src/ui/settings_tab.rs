@@ -18,6 +18,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32) {
         ui.style.theme = Default::default();
     }
     ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
+    ui.checkbox("Display info text", &mut cfg.display_info, true, Info::DisplayInfo);
 
     ui.space(2.0);
     ui.header("APPEARANCE", Info::None);

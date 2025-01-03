@@ -1393,7 +1393,7 @@ impl UI {
             Some(note.message.clone())
         } else if self.info == self.saved_info.0 && self.ctrl_info == self.saved_info.1 {
             self.info_delay = (self.info_delay - get_frame_time()).max(0.0);
-            if self.info_delay == 0.0 {
+            if conf.display_info && self.info_delay == 0.0 {
                 let s = info::text(&self.info, &self.ctrl_info, conf);
                 if s.is_empty() {
                     None

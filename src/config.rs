@@ -36,6 +36,7 @@ pub struct Config {
     #[serde(default = "default_font_size")]
     pub font_size: usize,
     pub smooth_playhead: bool,
+    pub display_info: bool,
 }
 
 impl Config {
@@ -118,6 +119,7 @@ impl Default for Config {
             note_keys: input::default_note_keys(),
             font_size: default_font_size(),
             smooth_playhead: false,
+            display_info: true,
         }
     }
 }

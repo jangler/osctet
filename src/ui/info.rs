@@ -76,6 +76,7 @@ pub enum Info {
     Envelopes,
     Lfos,
     ModMatrix,
+    DisplayInfo,
 }
 
 impl Default for Info {
@@ -106,6 +107,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::DisplayInfo =>
+            text = "Display mouseover help text for UI elements.".to_string(),
         Info::Generators => text =
 "Generators create the initial signal that other
 patch parameters shape.".to_string(),
