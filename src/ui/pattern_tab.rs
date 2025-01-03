@@ -999,14 +999,25 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
     pe.set_metrics(viewport, ui);
 
     if viewport.contains(mouse_position_vec2()) {
+        let pos = pe.position_from_mouse(ui, &track_xs, &module.tracks);
         if is_mouse_button_pressed(MouseButton::Left) {
-            pe.edit_end = pe.position_from_mouse(ui, &track_xs, &module.tracks);
+            pe.edit_end = pos;
             if !is_shift_down() {
                 pe.edit_start = pe.edit_end;
             }
         } else if is_mouse_button_down(MouseButton::Left) && !ui.grabbed() {
-            pe.edit_end = pe.position_from_mouse(ui, &track_xs, &module.tracks);
+            pe.edit_end = pos;
             fix_cursors(pe, &module.tracks);
+        }
+
+        if mouse_position().0 >= track_xs[0] {
+            ui.info = match (pos.track, pos.column) {
+                (0, GLOBAL_COLUMN) => Info::ControlColumn,
+                (_, NOTE_COLUMN) => Info::NoteColumn,
+                (_, VEL_COLUMN) => Info::PressureColumn,
+                (_, MOD_COLUMN) => Info::ModulationColumn,
+                _ => panic!("invalid column"),
+            };
         }
     }
 

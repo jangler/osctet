@@ -63,6 +63,10 @@ pub enum Info {
     ModDest,
     TrackPatch,
     SmoothPlayhead,
+    ControlColumn,
+    NoteColumn,
+    PressureColumn,
+    ModulationColumn,
 }
 
 /// Info text types for widget categories.
@@ -381,6 +385,23 @@ the range -1..1.".to_string(),
         Info::SmoothPlayhead => text =
 "If disabled, playhead visual and pattern follow
 will be quantized to the nearest row.".to_string(),
+        Info::PressureColumn => text =
+"Pressure column.
+
+0-9 - Enter digit".to_string(),
+        Info::ModulationColumn => text =
+"Modulation column.
+
+0-9 - Enter digit".to_string(),
+        Info::ControlColumn => {
+            text = "Control column.".to_string();
+            actions =
+                vec![Action::TapTempo, Action::RationalTempo, Action::Loop, Action::End];
+        },
+        Info::NoteColumn => {
+            text = "Note column.".to_string();
+            actions = vec![Action::NoteOff, Action::CycleNotation, Action::UseLastNote];
+        },
     };
 
     if !actions.is_empty() {
