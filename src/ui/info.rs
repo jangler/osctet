@@ -110,7 +110,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
         Info::None => (),
         Info::DesiredSampleRate => text =
 "Audio output sample rate to request, in Hz. Requires
-program restart to take effect.".to_string(),
+program restart to take effect. Does not affect
+sample rate of WAV export.".to_string(),
         Info::DisplayInfo =>
             text = "Display mouseover help text for UI elements.".to_string(),
         Info::Generators => text =
