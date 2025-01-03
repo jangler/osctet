@@ -770,7 +770,7 @@ impl UI {
         }
 
         let mut selected_index = self.tabs.get(id).cloned().unwrap_or_default();
-        let mut x = self.cursor_x;
+        let mut x = self.cursor_x + 1.0;
         let h = self.style.line_height();
         let mut gfx = vec![
             Graphic::Rect(Rect {
@@ -805,6 +805,11 @@ impl UI {
             gfx.push(Graphic::Rect(Rect {w: r.w, ..r }, color, None));
             gfx.push(Graphic::Text(x, self.cursor_y,
                 label.to_string(), self.style.theme.fg()));
+            if i == 0 {
+                gfx.push(Graphic::Line(x - LINE_THICKNESS * 0.5, self.cursor_y,
+                    x - LINE_THICKNESS *0.5, self.cursor_y + r.h,
+                    self.style.theme.border_unfocused()));
+            }
             x += r.w;
             gfx.push(Graphic::Line(x - LINE_THICKNESS * 0.5, self.cursor_y,
                 x - LINE_THICKNESS *0.5, self.cursor_y + r.h,
