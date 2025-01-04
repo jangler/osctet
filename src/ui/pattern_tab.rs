@@ -489,8 +489,10 @@ impl PatternEditor {
     fn select_all_channels(&mut self, module: &Module) {
         self.edit_start.track = 0;
         self.edit_start.channel = 0;
+        self.edit_start.column = GLOBAL_COLUMN;
         self.edit_end.track = module.tracks.len() - 1;
         self.edit_end.channel = module.tracks[self.edit_end.track].channels.len() - 1;
+        self.edit_end.column = MOD_COLUMN;
     }
 
     fn place_events_evenly(&self, module: &mut Module) {
