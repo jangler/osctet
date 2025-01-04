@@ -1,13 +1,13 @@
-use std::{hint::black_box, path::PathBuf};
+use std::{hint::black_box, path::PathBuf, sync::Arc};
 use criterion::{criterion_group, criterion_main, Criterion};
 use osctet::{module::Module, playback::render};
 
 fn render_module(c: &mut Criterion, filename: &str) {
     let path: PathBuf = ["./testdata", filename].iter().collect();
-    let module = Module::load(&path).unwrap();
+    let module = Arc::new(Module::load(&path).unwrap());
     c.bench_function(&format!("render {}", filename),
         |b| b.iter(|| black_box({
-            let rx = render(module.clone(), path.clone());
+            let rx = render(module.clone(), path.clone(), None);
             while let Ok(_) = rx.recv() {}
         })));
 }
