@@ -286,6 +286,7 @@ impl UI {
 
         clear_background(self.style.theme.panel_bg());
 
+        self.handle_dialog();
         self.info_box(conf);
         self.info = Info::None;
         self.ctrl_info = ControlInfo::None;
@@ -370,23 +371,6 @@ impl UI {
             }
         }
         self.draw_queue.clear();
-
-        // dialog
-        const ID: &str = "dialog";
-        let close = if let Some(dialog) = &self.dialog {
-            match dialog {
-                Dialog::Alert(s) => alert_dialog(&self.style, s),
-            };
-            is_key_pressed(KeyCode::Escape)
-                || (self.mouse_consumed.is_none()
-                    && is_mouse_button_pressed(MouseButton::Left))
-        } else {
-            false
-        };
-        if close {
-            self.dialog = None;
-            self.mouse_consumed = Some(ID.to_string());
-        }
 
         // drain input queues
         while let Some(_) = get_char_pressed() {}
@@ -1324,10 +1308,6 @@ impl UI {
         }
 
         let mouse_off = !hit && is_mouse_button_pressed(MouseButton::Left);
-        if mouse_off {
-            self.mouse_consumed = Some(ID.to_string());
-        }
-
         is_key_pressed(KeyCode::Enter) || mouse_off
     }
 
@@ -1566,6 +1546,38 @@ impl UI {
 
         self.push_text(x, y, base, color);
     }
+
+    // TODO: characters with descenders give this too large a bottom margin. make
+    //       the rect size independent of the particular characters
+    fn handle_dialog(&mut self) {
+        const ID: &str = "dialog";
+        self.cursor_z += TOOLTIP_Z_OFFSET;
+
+        let close = if let Some(dialog) = &self.dialog {
+            match dialog {
+                Dialog::Alert(s) => {
+                    let s = s.clone();
+                    let mut r = center(fit_strings(&self.style, &[s.clone()]));
+                    r.h += self.style.margin;
+                    self.push_rect(r, self.style.theme.panel_bg(),
+                        Some(self.style.theme.border_unfocused()));
+                    self.push_text(r.x, r.y, s, self.style.theme.fg());
+                }
+            };
+            is_key_pressed(KeyCode::Escape)
+                || (self.mouse_consumed.is_none()
+                    && is_mouse_button_pressed(MouseButton::Left))
+        } else {
+            false
+        };
+
+        if close {
+            self.dialog = None;
+            self.mouse_consumed = Some(ID.to_string());
+        }
+
+        self.cursor_z -= TOOLTIP_Z_OFFSET;
+    }
 }
 
 fn interpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
@@ -1574,15 +1586,6 @@ fn interpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
 
 fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
     (x - range.start()) / (range.end() - range.start())
-}
-
-// TODO: characters with descenders give this too large a bottom margin. make
-//       the rect size independent of the particular characters
-fn alert_dialog(style: &Style, message: &str) {
-    let mut r = center(fit_strings(style, &[message.to_owned()]));
-    r.h += style.margin;
-    draw_filled_rect(r, style.theme.panel_bg(), style.theme.border_unfocused());
-    draw_text_topleft(style, style.theme.fg(), message, r.x, r.y);
 }
 
 fn fit_strings(style: &Style, v: &[String]) -> Rect {
