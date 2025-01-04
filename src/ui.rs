@@ -523,8 +523,11 @@ impl UI {
         let hit = self.mouse_hits(trough, "vertical_scrollbar");
         self.push_rect(handle, self.style.theme.control_bg_click(), None);
 
-        if is_mouse_button_pressed(MouseButton::Left) && hit {
-            self.v_scrollbar_grabbed = true;
+        if hit {
+            self.info = Info::VerticalScrollbar;
+            if is_mouse_button_pressed(MouseButton::Left) {
+                self.v_scrollbar_grabbed = true;
+            }
         }
 
         if is_mouse_button_down(MouseButton::Left) && (self.v_scrollbar_grabbed || hit) {
@@ -575,8 +578,11 @@ impl UI {
         let hit = self.mouse_hits(trough, "horizontal_scrollbar");
         self.push_rect(handle, self.style.theme.control_bg_click(), None);
 
-        if is_mouse_button_pressed(MouseButton::Left) && hit {
-            self.h_scrollbar_grabbed = true;
+        if hit {
+            self.info = Info::HorizontalScrollbar;
+            if is_mouse_button_pressed(MouseButton::Left) {
+                self.h_scrollbar_grabbed = true;
+            }
         }
 
         if is_mouse_button_down(MouseButton::Left) && (self.h_scrollbar_grabbed || hit) {

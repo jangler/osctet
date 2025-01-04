@@ -78,6 +78,8 @@ pub enum Info {
     ModMatrix,
     DisplayInfo,
     DesiredSampleRate,
+    VerticalScrollbar,
+    HorizontalScrollbar,
 }
 
 impl Default for Info {
@@ -108,6 +110,15 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::VerticalScrollbar => text =
+"Vertical scrollbar.
+
+Wheel - Scroll
+Alt+Wheel - Scroll faster".to_string(),
+        Info::HorizontalScrollbar => text =
+"Horizontal scrollbar.
+
+Shift+Wheel - Scroll".to_string(),
         Info::DesiredSampleRate => text =
 "Audio output sample rate to request, in Hz. Requires
 program restart to take effect. Does not affect
