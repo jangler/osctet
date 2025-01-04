@@ -194,6 +194,8 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
     ui.end_group();
 
     ui.space(2.0);
+    ui.header("INVERVAL TABLE", Info::None);
+
     ui.start_group();
     if table_cache.as_ref().is_none_or(|tc| tc.tuning != *tuning) {
         *table_cache = Some(TableCache {
