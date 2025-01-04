@@ -304,6 +304,12 @@ impl Player {
                 }
             }
 
+            if channel.events.iter()
+                .find(|e| e.tick == tick && e.data == EventData::NoteOff)
+                .is_some() {
+                active_note = None;
+            }
+
             if let Some((patch, note)) = active_note {
                 let key = Key {
                     origin: KeyOrigin::Pattern,
