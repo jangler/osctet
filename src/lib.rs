@@ -673,7 +673,9 @@ fn preferred_config(device: &cpal::Device, desired_sr: SampleRate
         .filter(|conf| conf.channels() == 2)
         .max_by_key(|conf| (
             conf.sample_format().sample_size() > 1,
-            conf.max_sample_rate() >= desired_sr
+            conf.max_sample_rate() >= desired_sr,
+            conf.min_sample_rate() <= desired_sr,
+            conf.sample_format() == cpal::SampleFormat::F32
         )).map(|conf| {
             let sr = desired_sr
                 .clamp(conf.min_sample_rate(), conf.max_sample_rate());

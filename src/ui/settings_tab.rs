@@ -30,7 +30,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
         }
     }
     if sample_rate != cfg.desired_sample_rate {
-        ui.offset_label(&format!("Actual sample rate: {} Hz", sample_rate), Info::None);
+        ui.label(&format!("Actual sample rate: {} Hz", sample_rate));
     }
 
     ui.space(2.0);
