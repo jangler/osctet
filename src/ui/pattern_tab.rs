@@ -770,7 +770,7 @@ impl PatternEditor {
     fn input_note_off(&self, module: &mut Module, all_channels: bool) {
         let (start, end) = self.selection_corners();
 
-        if start == end {
+        if start == end && start.column == NOTE_COLUMN {
             insert_event_at_cursor(module, &start, EventData::NoteOff, all_channels);
         } else {
             let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
