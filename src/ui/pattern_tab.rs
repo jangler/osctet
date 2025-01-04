@@ -747,7 +747,8 @@ impl PatternEditor {
 
     /// Scroll to a position that centers the given tick.
     fn scroll_to(&mut self, tick: u32) {
-        let offset = (self.screen_tick_max - self.screen_tick - self.ticks_per_row()) / 2;
+        let offset = (self.screen_tick_max - self.screen_tick)
+            .saturating_sub(self.ticks_per_row()) / 2;
         self.beat_scroll = tick.saturating_sub(offset) as f32 / TICKS_PER_BEAT as f32;
     }
 

@@ -409,7 +409,7 @@ impl App {
                 },
                 Err(e) => {
                     self.midi.port_selection = None;
-                    self.ui.report(e);
+                    self.ui.report(format!("MIDI connection failed: {e}"));
                 },
             }
         }
@@ -455,7 +455,7 @@ impl App {
                         self.ui.notify(format!("Rendering: {}%", (f * 100.0).round())),
                     RenderUpdate::Done(wav, path) => match wav.save_wav16(path) {
                         Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
-                        Err(e) => self.ui.report(e),
+                        Err(e) => self.ui.report(format!("Writing WAV failed: {e}")),
                     }
                 }
             }
