@@ -414,6 +414,7 @@ impl App {
                 },
                 Err(e) => {
                     self.midi.port_selection = None;
+                    self.config.default_midi_input = None;
                     self.ui.report(format!("MIDI connection failed: {e}"));
                 },
             }
@@ -422,6 +423,7 @@ impl App {
                 c.close();
             }
             self.midi.port_name = None;
+            self.config.default_midi_input = None;
         }
     }
 
