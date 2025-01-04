@@ -300,7 +300,8 @@ applied on a per-track basis.".to_string(),
 "Paste pattern data. Blank space in paste data
 will not overwrite events.".to_string(),
             Action::NoteOff => text =
-"Insert a note off event to trigger envelope release.".to_string(),
+"Insert a note off event to trigger envelope release.
+With Shift, insert into all track channels.".to_string(),
             Action::End => text =
 "Mark the end point of the song. Can only be placed
 in a Ctrl channel.".to_string(),
@@ -408,7 +409,9 @@ saved to or loaded from.".to_string(),
                 text = "Move pattern cursor right 1 channel.".to_string(),
             Action::PrevChannel =>
                 text = "Move pattern cursor left 1 channel.".to_string(),
-            Action::Delete => text = "Delete selected data.".to_string(),
+            Action::Delete => text =
+"Delete selected data. With Shift, delete from all
+track channels.".to_string(),
             Action::NextTab => text = "View the next UI tab.".to_string(),
             Action::PrevTab => text = "View the previous UI tab.".to_string(),
             Action::UnmuteAllTracks => text = "Unmute all muted tracks.".to_string(),
@@ -460,11 +463,13 @@ will be quantized to the nearest row.".to_string(),
         Info::PressureColumn => text =
 "Pressure column.
 
-0-9 - Enter digit".to_string(),
+0-9 - Enter digit
+Shift+0-9 - Track enter digit".to_string(),
         Info::ModulationColumn => text =
 "Modulation column.
 
-0-9 - Enter digit".to_string(),
+0-9 - Enter digit
+Shift+0-9 - Track enter digit".to_string(),
         Info::ControlColumn => {
             text = "Control column.".to_string();
             actions =

@@ -245,7 +245,8 @@ impl App {
                         | Action::NextColumn | Action::PrevColumn
                         | Action::NextBeat | Action::PrevBeat
                         | Action::NextEvent | Action::PrevEvent
-                        | Action::PatternStart | Action::PatternEnd | Action::Delete =>
+                        | Action::PatternStart | Action::PatternEnd
+                        | Action::Delete | Action::NoteOff =>
                             self.pattern_editor
                                 .action(*action, module, &self.config, player),
                     _ => (),

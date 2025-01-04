@@ -232,11 +232,11 @@ impl PatternEditor {
                     module.delete_events(start, end);
                 }
             },
-            Action::NoteOff => self.input_note_off(module),
+            Action::NoteOff => self.input_note_off(module, is_shift_down()),
             Action::End =>
-                insert_event_at_cursor(module, &self.edit_start, EventData::End),
+                insert_event_at_cursor(module, &self.edit_start, EventData::End, false),
             Action::Loop =>
-                insert_event_at_cursor(module, &self.edit_start, EventData::Loop),
+                insert_event_at_cursor(module, &self.edit_start, EventData::Loop, false),
             Action::RationalTempo => self.rational_tempo(module),
             Action::TapTempo => self.tap_tempo(module),
             Action::InsertRows => self.push_rows(module),
@@ -556,7 +556,7 @@ impl PatternEditor {
             let n = self.tap_tempo_intervals.len();
             let mean = self.tap_tempo_intervals.iter().sum::<f32>() / n as f32;
             let t = 60.0 / mean;
-            insert_event_at_cursor(module, &self.edit_start, EventData::Tempo(t));
+            insert_event_at_cursor(module, &self.edit_start, EventData::Tempo(t), false);
         }
         self.pending_interval = Some(0.0);
     }
@@ -568,7 +568,7 @@ impl PatternEditor {
         if n > 0 && n != d {
             let lcm = n.gcd(d);
             insert_event_at_cursor(module, &self.edit_start,
-                EventData::RationalTempo(n / lcm, d / lcm));
+                EventData::RationalTempo(n / lcm, d / lcm), false);
         }
     }
 
@@ -767,31 +767,36 @@ impl PatternEditor {
         module.shift_channel_events(start, end, ticks);
     }
 
-    fn input_note_off(&self, module: &mut Module) {
+    fn input_note_off(&self, module: &mut Module, all_channels: bool) {
         let (start, end) = self.selection_corners();
-        let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
-        let mut add = Vec::new();
 
-        for (track_i, track) in module.tracks.iter().enumerate() {
-            for channel_i in 0..track.channels.len() {
-                let tuple = (track_i, channel_i, NOTE_COLUMN);
-                if track_i > 0 && tuple >= start_tuple && tuple <= end_tuple {
-                    add.push(LocatedEvent {
-                        track: track_i,
-                        channel: channel_i,
-                        event: Event {
-                            tick: self.edit_start.tick,
-                            data: EventData::NoteOff
-                        }
-                    });
+        if start == end {
+            insert_event_at_cursor(module, &start, EventData::NoteOff, all_channels);
+        } else {
+            let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
+            let mut add = Vec::new();
+    
+            for (track_i, track) in module.tracks.iter().enumerate() {
+                for channel_i in 0..track.channels.len() {
+                    let tuple = (track_i, channel_i, NOTE_COLUMN);
+                    if track_i > 0 && tuple >= start_tuple && tuple <= end_tuple {
+                        add.push(LocatedEvent {
+                            track: track_i,
+                            channel: channel_i,
+                            event: Event {
+                                tick: self.edit_start.tick,
+                                data: EventData::NoteOff
+                            }
+                        });
+                    }
                 }
             }
+    
+            module.push_edit(Edit::PatternData {
+                remove: add.iter().map(|e| e.position()).collect(),
+                add,
+            });
         }
-
-        module.push_edit(Edit::PatternData {
-            remove: add.iter().map(|e| e.position()).collect(),
-            add,
-        });
     }
 
     fn record_event(&mut self, _key: Key, data: EventData, module: &mut Module) {
@@ -939,7 +944,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
             while let Some((_, data)) = ui.note_queue.pop() {
                 match data {
                     EventData::NoteOff => (),
-                    _ => insert_event_at_cursor(module, &cursor, data),
+                    _ => insert_event_at_cursor(module, &cursor, data, false),
                 }
             }
         }
@@ -1147,8 +1152,10 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player,
 
 fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
     match cursor.column {
-        VEL_COLUMN => insert_event_at_cursor(module, cursor, EventData::Pressure(value)),
-        MOD_COLUMN => insert_event_at_cursor(module, cursor, EventData::Modulation(value)),
+        VEL_COLUMN => insert_event_at_cursor(
+            module, cursor, EventData::Pressure(value), is_shift_down()),
+        MOD_COLUMN => insert_event_at_cursor(
+            module, cursor, EventData::Modulation(value), is_shift_down()),
         _ => (),
     }
 }
@@ -1170,15 +1177,16 @@ fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Co
     module.push_edit(Edit::ReplaceEvents(replacements));
 }
 
-fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData) {
+fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData,
+    all_channels: bool
+) {
     // TODO: insert events at all valid selected positions
     if data.is_ctrl() != (cursor.track == 0) {
         return
     }
 
     let n = module.tracks[cursor.track].channels.len();
-    if is_shift_down() && n > 1 {
-        // hold shift to insert events into all track channels
+    if all_channels && n > 1 {
         let add: Vec<_> = (0..n).map(|i| LocatedEvent {
             track: cursor.track,
             channel: i,
