@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "panic at unknown location"
             };
             let _ = fs::write(PANIC_FILE, message);
-            eprint!("{}", message);
+            eprintln!("{}", message);
         }));
     }
 
