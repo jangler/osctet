@@ -1258,7 +1258,7 @@ impl UI {
             hit_rect.y += hit_rect.h;
         }
 
-        self.end_widget("instrument_list", Info::None, ControlInfo::None);
+        self.end_widget("instrument_list", Info::InstrumentList, ControlInfo::None);
         return_val
     }
 
