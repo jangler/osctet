@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::mpsc::{self, Receiver}, thread};
+use std::{path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, Mutex}, thread};
 
 use fundsp::hacker32::*;
 
@@ -459,10 +459,13 @@ pub enum RenderUpdate {
 }
 
 /// Renders module to PCM. Loops forever if module is missing END!
-pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
+/// If `track` is some, solo that track for rendering.
+pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
+) -> Receiver<RenderUpdate> {
     let (tx, rx) = mpsc::channel();
 
-    thread::spawn(move || {let sample_rate = 44100;
+    thread::spawn(move || {
+        let sample_rate = 44100;
         let mut wave = Wave::new(2, sample_rate as f64);
         let mut seq = Sequencer::new(false, 4);
         seq.set_sample_rate(sample_rate as f64);
@@ -471,6 +474,9 @@ pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
         fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
         fx.net.set_sample_rate(sample_rate as f64);
         let mut player = Player::new(seq, module.tracks.len(), sample_rate as f32);
+        if let Some(track) = track {
+            player.toggle_solo(&module, track);
+        }
         let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
         let block_size = 64;
         let dt = block_size as f64 / sample_rate as f64;
@@ -496,14 +502,53 @@ pub fn render(module: Module, path: PathBuf) -> Receiver<RenderUpdate> {
                 time_since_loop += dt;
             }
             if let Err(e) = tx.send(RenderUpdate::Progress(playtime / render_time)) {
-                eprintln!("{}", e);
+                eprintln!("{e}");
             }
         }
 
         if let Err(e) = tx.send(RenderUpdate::Done(wave, path)) {
-            eprintln!("{}", e);
+            eprintln!("{e}");
         }
     });
+
+    rx
+}
+
+/// Renders each track to its own WAV file.
+pub fn render_tracks(module: Arc<Module>, path: PathBuf) -> Receiver<RenderUpdate> {
+    let (tx, rx) = mpsc::channel();
+    let track_range = 1..module.tracks.len();
+    let progress = Arc::new(Mutex::new(
+        track_range.clone().map(|_| 0.0).collect::<Vec<_>>()));
+
+    for i in track_range {
+        let path = path
+            .with_file_name(format!("{}_{}",
+                path.file_stem().and_then(|s| s.to_str()).unwrap_or_default(), i))
+            .with_extension("wav");
+        let track_rx = render(module.clone(), path, Some(i));
+        let tx = tx.clone();
+        let progress = progress.clone();
+
+        thread::spawn(move || {
+            for msg in track_rx {
+                match msg {
+                    RenderUpdate::Progress(f) => {
+                        let mut progress = progress.lock().unwrap();
+                        progress[i - 1] = f;
+                        let total_progress = progress.iter().sum::<f64>()
+                            / progress.len() as f64;
+                        if let Err(e) = tx.send(RenderUpdate::Progress(total_progress)) {
+                            eprintln!("{e}")
+                        }
+                    }
+                    RenderUpdate::Done(..) => if let Err(e) = tx.send(msg) {
+                        eprintln!("{e}")
+                    }
+                }
+            }
+        });
+    }
 
     rx
 }

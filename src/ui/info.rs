@@ -278,6 +278,9 @@ no effect.".to_string(),
         Info::KitNoteOut =>
             text = "The pitch that this kit mapping plays at.".to_string(),
         Info::Action(action) => match action {
+            Action::RenderTracks => text =
+"Render each track to WAV. Compression will be
+applied on a per-track basis.".to_string(),
             Action::CycleNotation =>
                 text = "Cycle selected notes through alternative notations.".to_string(),
             Action::IncrementOctave =>

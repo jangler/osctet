@@ -213,7 +213,8 @@ impl App {
                     Action::OpenSong=> self.open_module(module, player),
                     Action::SaveSong => self.save_module(module, player),
                     Action::SaveSongAs => self.save_module_as(module, player),
-                    Action::RenderSong => self.render_and_save(&module, player),
+                    Action::RenderSong => self.render_and_save(&module, player, false),
+                    Action::RenderTracks => self.render_and_save(&module, player, true),
                     // TODO: undo/redo are silent right now, which could be confusing when
                     //       things are being undone/redone offscreen. could either provide
                     //       messages describing what's being done, or move view to location
@@ -539,7 +540,7 @@ impl App {
         self.ui.end_bottom_panel();
     }
 
-    fn render_and_save(&mut self, module: &Module, player: &mut Player) {
+    fn render_and_save(&mut self, module: &Module, player: &mut Player, tracks: bool) {
         if module.ends() {
             if let Some(mut path) = ui::new_file_dialog(player)
                 .add_filter("WAV file", &["wav"])
@@ -549,9 +550,13 @@ impl App {
                 .save_file() {
                 path.set_extension("wav");
                 self.config.render_folder = config::dir_as_string(&path);
-                self.render_channel = Some(playback::render(module.clone(), path));
+                let module = Arc::new(module.clone());
+                self.render_channel = Some(if tracks {
+                    playback::render_tracks(module, path)
+                } else {
+                    playback::render(module, path, None)
+                });
             }
-
         } else {
             self.ui.report("Module must have END event to export")
         }

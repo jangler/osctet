@@ -138,6 +138,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Ctrl, KeyCode::S), Action::SaveSong),
         (Hotkey::new(Modifiers::CtrlShift, KeyCode::S), Action::SaveSongAs),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::E), Action::RenderSong),
+        (Hotkey::new(Modifiers::CtrlShift, KeyCode::E), Action::RenderTracks),
         (Hotkey::new(Modifiers::CtrlShift, KeyCode::Tab), Action::PrevTab),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::Tab), Action::NextTab),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::Z), Action::Undo),
