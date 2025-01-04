@@ -417,6 +417,11 @@ impl App {
                     self.ui.report(format!("MIDI connection failed: {e}"));
                 },
             }
+        } else if self.midi.port_selection.is_none() && self.midi.port_name.is_some() {
+            if let Some(c) = self.midi.conn.take() {
+                c.close();
+            }
+            self.midi.port_name = None;
         }
     }
 
@@ -505,7 +510,11 @@ impl App {
             };
             if let Some(i) = self.ui.combo_box("midi_input", "MIDI input", s,
                 Info::MidiInput, || input_names(self.midi.input.as_ref().unwrap())) {
-                self.midi.port_selection = input_names(self.midi.input.as_ref().unwrap()).get(i).cloned();
+                self.midi.port_selection = if i == 0 {
+                    None
+                } else {
+                    input_names(self.midi.input.as_ref().unwrap()).get(i).cloned()
+                };
             }
 
             let mut v = self.config.midi_send_pressure.unwrap_or(true);
@@ -627,9 +636,10 @@ impl App {
 }
 
 fn input_names(input: &MidiInput) -> Vec<String> {
-    input.ports().into_iter()
-        .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)")))
-        .collect()
+    let mut v = vec![String::from("(none)")];
+    v.extend(input.ports().into_iter()
+        .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)"))));
+    v
 }
 
 /// Returns JACK if available, otherwise ALSA.
