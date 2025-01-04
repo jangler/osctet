@@ -37,6 +37,7 @@ use ui::pattern_tab::PatternEditor;
 pub const APP_NAME: &str = "Osctet";
 const MODULE_FILETYPE_NAME: &str = "Osctet module";
 const MODULE_EXT: &str = "osctet";
+const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
 
@@ -137,7 +138,7 @@ impl App {
             render_channel: None,
             sample_rate,
             table_cache: None,
-            version: format!("v{}-pre1", env::var("CARGO_PKG_VERSION").unwrap()),
+            version: format!("v{PKG_VERSION}-pre1"),
         }
     }
 
