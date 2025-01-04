@@ -1,5 +1,7 @@
 //! Color themes.
 
+use std::{error::Error, path::Path};
+
 use macroquad::color::Color;
 use palette::{FromColor, Lchuv, Srgb};
 use serde::{Deserialize, Serialize};
@@ -50,6 +52,18 @@ impl Theme {
             accent2: Lchuv::new(50.0, DEFAULT_ACCENT_CHROMA, DEFAULT_ACCENT2_HUE),
             gamma,
         }
+    }
+
+    /// Load theme from a file.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+        let s = std::fs::read_to_string(path)?;
+        Ok(toml::from_str(&s)?)
+    }
+
+    /// Save theme to a file.
+    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
+        let s = toml::to_string_pretty(self)?;
+        Ok(std::fs::write(path, s)?)
     }
 
     fn is_light(&self) -> bool {

@@ -1,10 +1,12 @@
 use palette::Lchuv;
 
-use crate::config::Config;
+use crate::{config::{self, Config}, playback::Player};
 
 use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
 
-pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32) {
+pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
+    player: &mut Player
+) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
     ui.cursor_y -= *scroll;
@@ -19,7 +21,9 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32) {
     }
     ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
     ui.checkbox("Display info text", &mut cfg.display_info, true, Info::DisplayInfo);
-    if let Some(s) = ui.edit_box("Desired sample rate", 6, cfg.desired_sample_rate.to_string(), Info::DesiredSampleRate) {
+    if let Some(s) = ui.edit_box("Desired sample rate", 6,
+        cfg.desired_sample_rate.to_string(), Info::DesiredSampleRate
+    ) {
         match s.parse::<u32>() {
             Ok(n) => cfg.desired_sample_rate = n,
             Err(e) => ui.report(e),
@@ -56,6 +60,12 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32) {
     }
     if ui.button("Reset (dark)", true, Info::ResetTheme("dark")) {
         ui.style.theme = Theme::dark(ui.style.theme.gamma);
+    }
+    if ui.button("Save", true, Info::SaveTheme) {
+        save_theme(ui, cfg, player);
+    }
+    if ui.button("Load", true, Info::LoadTheme) {
+        load_theme(ui, cfg, player);
     }
     ui.end_group();
 
@@ -189,5 +199,34 @@ fn set_font(cfg: &mut Config, ui: &mut UI, size: usize) {
         ui.style.margin = atlas.max_height() - atlas.cap_height();
         ui.style.atlas = atlas;
         cfg.font_size = size;
+    }
+}
+
+const THEME_FILTER_NAME: &str = "Osctet theme";
+const THEME_FILTER_EXT: &str = "oscthm";
+
+fn save_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
+    if let Some(mut path) = super::new_file_dialog(player)
+        .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
+        .set_directory(cfg.theme_folder.clone().unwrap_or(String::from(".")))
+        .save_file() {
+        path.set_extension(THEME_FILTER_EXT);
+        cfg.theme_folder = config::dir_as_string(&path);
+        if let Err(e) = ui.style.theme.save(path) {
+            ui.report(format!("Error loading theme: {e}"));
+        }
+    }
+}
+
+fn load_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
+    if let Some(path) = super::new_file_dialog(player)
+        .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
+        .set_directory(cfg.theme_folder.clone().unwrap_or(String::from(".")))
+        .pick_file() {
+        cfg.theme_folder = config::dir_as_string(&path);
+        match Theme::load(path) {
+            Ok(t) => ui.style.theme = t,
+            Err(e) => ui.report(format!("Error loading theme: {e}")),
+        }
     }
 }

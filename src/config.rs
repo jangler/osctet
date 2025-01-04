@@ -27,6 +27,7 @@ pub struct Config {
     pub render_folder: Option<String>,
     pub scale_folder: Option<String>,
     pub sample_folder: Option<String>,
+    pub theme_folder: Option<String>,
     #[serde(default = "default_keys")]
     keys: Vec<(Hotkey, Action)>, // for serialization
     #[serde(skip)]
@@ -57,11 +58,12 @@ impl Config {
     /// Reset all settings except paths to defaults.
     pub fn reset(&mut self) {
         *self = Self {
-            module_folder: self.module_folder.clone(),
-            patch_folder: self.patch_folder.clone(),
-            render_folder: self.render_folder.clone(),
-            scale_folder: self.scale_folder.clone(),
-            sample_folder: self.sample_folder.clone(),
+            module_folder: self.module_folder.take(),
+            patch_folder: self.patch_folder.take(),
+            render_folder: self.render_folder.take(),
+            scale_folder: self.scale_folder.take(),
+            sample_folder: self.sample_folder.take(),
+            theme_folder: self.theme_folder.take(),
             ..Default::default()
         };
     }
@@ -115,6 +117,7 @@ impl Default for Config {
             render_folder: None,
             scale_folder: None,
             sample_folder: None,
+            theme_folder: None,
             key_map: keys.iter().cloned().collect(),
             keys,
             note_keys: input::default_note_keys(),

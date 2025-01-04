@@ -501,7 +501,7 @@ impl App {
                     &mut self.patch_index, &mut self.instruments_scroll, &mut self.config,
                     &mut player), // so, basically everything
                 TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config,
-                    &mut self.settings_scroll, self.sample_rate),
+                    &mut self.settings_scroll, self.sample_rate, &mut player),
                 _ => panic!("bad tab value"),
             }
         }

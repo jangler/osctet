@@ -80,6 +80,8 @@ pub enum Info {
     DesiredSampleRate,
     VerticalScrollbar,
     HorizontalScrollbar,
+    SaveTheme,
+    LoadTheme,
 }
 
 impl Default for Info {
@@ -110,6 +112,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::LoadTheme => text = "Load color theme from disk.".to_string(),
+        Info::SaveTheme => text = "Save color theme to disk.".to_string(),
         Info::VerticalScrollbar => text =
 "Vertical scrollbar.
 
