@@ -1079,7 +1079,7 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player,
     ui.layout = Layout::Horizontal;
 
     // offset for beat width
-    ui.cursor_x += ui.style.atlas.char_width() * 3.0 + ui.style.margin * 2.0;
+    ui.cursor_x += ui.style.atlas.char_width() * 4.0 + ui.style.margin * 2.0;
 
     let mut xs = vec![ui.cursor_x];
     xs.extend(module.tracks.iter_mut().enumerate().map(|(i, track)| {
