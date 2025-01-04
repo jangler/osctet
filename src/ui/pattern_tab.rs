@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, u8};
 
 use gcd::Gcd;
 
@@ -65,23 +65,23 @@ impl PatternEditor {
     }
 
     pub fn inc_division(&mut self) {
-        self.set_division((self.beat_division + 1).min(TICKS_PER_BEAT as u8));
+        self.set_division(self.beat_division + 1);
     }
 
     pub fn dec_division(&mut self) {
-        self.set_division((self.beat_division - 1).max(1));
+        self.set_division(self.beat_division - 1);
     }
 
     pub fn double_division(&mut self) {
-        self.set_division((self.beat_division * 2).min(TICKS_PER_BEAT as u8));
+        self.set_division(self.beat_division * 2);
     }
 
     pub fn halve_division(&mut self) {
-        self.set_division((self.beat_division / 2).max(1));
+        self.set_division(self.beat_division / 2);
     }
 
     pub fn set_division(&mut self, division: u8) {
-        let division = division.max(1).min(TICKS_PER_BEAT as u8);
+        let division = division.max(1).min(u8::MAX/2);
         self.screen_tick_max = self.screen_tick
             + (self.screen_tick_max - self.screen_tick)
             * self.beat_division as u32 / division as u32;
