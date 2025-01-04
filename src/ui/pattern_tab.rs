@@ -1006,7 +1006,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     pe.set_metrics(viewport, ui);
 
-    if viewport.contains(mouse_position_vec2()) {
+    if ui.mouse_hits(viewport, "pattern") {
         let pos = pe.position_from_mouse(ui, &track_xs, &module.tracks);
         if is_mouse_button_pressed(MouseButton::Left) {
             pe.edit_end = pos;

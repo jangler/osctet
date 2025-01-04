@@ -168,6 +168,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Ctrl, KeyCode::Down), Action::NextEvent),
         (Hotkey::new(Modifiers::None, KeyCode::Home), Action::PatternStart),
         (Hotkey::new(Modifiers::None, KeyCode::End), Action::PatternEnd),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::A), Action::SelectAllChannels),
 
         // events
         (Hotkey::new(Modifiers::None, KeyCode::Space), Action::UseLastNote),
@@ -211,7 +212,6 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::Delete), Action::Delete),
         (Hotkey::new(Modifiers::None, KeyCode::Insert), Action::InsertRows),
         (Hotkey::new(Modifiers::None, KeyCode::Backspace), Action::DeleteRows),
-        (Hotkey::new(Modifiers::Ctrl, KeyCode::A), Action::SelectAllChannels),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::P), Action::PlaceEvenly),
     ]
 }
