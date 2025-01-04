@@ -1,5 +1,6 @@
 //! Microtonal tracker with built-in subtractive/FM synth.
 
+use std::env;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -114,6 +115,7 @@ struct App {
     render_channel: Option<Receiver<RenderUpdate>>,
     sample_rate: u32,
     table_cache: Option<TableCache>,
+    version: String,
 }
 
 impl App {
@@ -135,6 +137,7 @@ impl App {
             render_channel: None,
             sample_rate,
             table_cache: None,
+            version: format!("v{}-pre1", env::var("CARGO_PKG_VERSION").unwrap()),
         }
     }
 
@@ -471,7 +474,7 @@ impl App {
 
             self.bottom_panel(&mut player);
 
-            match self.ui.tab_menu(MAIN_TAB_ID, &TABS) {
+            match self.ui.tab_menu(MAIN_TAB_ID, &TABS, &self.version) {
                 TAB_GENERAL => ui::general_tab::draw(&mut self.ui, &mut module,
                     &mut self.fx, &mut self.config, &mut player, &mut self.general_scroll,
                     &mut self.table_cache),

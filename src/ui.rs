@@ -827,7 +827,7 @@ impl UI {
     }
 
     /// Draws a tab menu. Returns the index of the selected tab.
-    pub fn tab_menu(&mut self, id: &str, labels: &[&str]) -> usize {
+    pub fn tab_menu(&mut self, id: &str, labels: &[&str], version: &str) -> usize {
         if !self.tabs.contains_key(id) {
             self.tabs.insert(id.to_owned(), 0);
         }
@@ -887,11 +887,17 @@ impl UI {
                     self.style.theme.panel_bg()));
             }
         }
+        self.push_graphics(gfx);
+        {
+            let w = self.style.atlas.text_width(version) + self.style.margin * 2.0;
+            let x = self.bounds.x + self.bounds.w - w;
+            self.push_text(x, self.cursor_y, version.to_owned(),
+                self.style.theme.border_unfocused());
+        }
         let h = self.style.line_height() + LINE_THICKNESS;
         self.cursor_y += h;
         self.bounds.y += h;
         self.bounds.h -= h;
-        self.push_graphics(gfx);
         selected_index
     }
 
