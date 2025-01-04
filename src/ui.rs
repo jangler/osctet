@@ -362,16 +362,20 @@ impl UI {
         self.draw_queue.clear();
 
         // dialog
+        const ID: &str = "dialog";
         let close = if let Some(dialog) = &self.dialog {
             match dialog {
                 Dialog::Alert(s) => alert_dialog(&self.style, s),
             };
-            is_key_pressed(KeyCode::Escape) || is_mouse_button_pressed(MouseButton::Left)
+            is_key_pressed(KeyCode::Escape)
+                || (self.mouse_consumed.is_none()
+                    && is_mouse_button_pressed(MouseButton::Left))
         } else {
             false
         };
         if close {
             self.dialog = None;
+            self.mouse_consumed = Some(ID.to_string());
         }
 
         // drain input queues
@@ -1217,7 +1221,9 @@ impl UI {
 
     /// Primitive that draws the currently focused text and handles edit input.
     fn editable_text(&mut self, rect: Rect, max_width: usize) -> bool {
-        let hit = self.mouse_hits(rect, "editable_text");
+        const ID: &str = "editable_text";
+
+        let hit = self.mouse_hits(rect, ID);
         let margin = self.style.margin;
 
         if let Some(state) = self.focused_text.as_mut() {
@@ -1258,8 +1264,12 @@ impl UI {
             self.push_text(rect.x, rect.y, text, self.style.theme.fg());
         }
 
-        is_key_pressed(KeyCode::Enter) ||
-            (!hit && is_mouse_button_pressed(MouseButton::Left))
+        let mouse_off = !hit && is_mouse_button_pressed(MouseButton::Left);
+        if mouse_off {
+            self.mouse_consumed = Some(ID.to_string());
+        }
+
+        is_key_pressed(KeyCode::Enter) || mouse_off
     }
 
     pub fn shared_slider(&mut self, id: &str, label: &str, param: &Shared,
