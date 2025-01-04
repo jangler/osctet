@@ -12,7 +12,7 @@ use fx::{FXSettings, GlobalFX};
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
-use module::{EventData, Module, TrackTarget};
+use module::{EventData, Module, TrackTarget, TICKS_PER_BEAT};
 use playback::{Player, RenderUpdate};
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
@@ -445,9 +445,17 @@ impl App {
             }
             if self.ui.accepting_note_input() {
                 player.clear_notes_with_origin(KeyOrigin::Midi);
-           }
+            }
 
-           self.handle_midi(&module, &mut player);
+            if player.is_playing() {
+                let end_tick = module.last_event_tick().unwrap_or_default()
+                    + TICKS_PER_BEAT;
+                if player.get_tick() > end_tick {
+                    player.stop()
+                }
+            }
+
+            self.handle_midi(&module, &mut player);
         }
 
         self.handle_render_updates();
@@ -680,7 +688,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
         .and_then(|device| preferred_config(device, SampleRate(conf.desired_sample_rate)));
     let sample_rate = audio_conf.as_ref()
         .map(|config| config.sample_rate.0)
-        .unwrap_or(44100); 
+        .unwrap_or(44100);
 
     let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(sample_rate as f64);
