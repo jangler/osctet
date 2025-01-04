@@ -1440,12 +1440,17 @@ impl UI {
                 .max()
                 .unwrap_or_default() as f32 + self.style.margin * 2.0;
             let h = self.style.line_height() * lines.len() as f32;
-            let rect = Rect {
+            let mut rect = Rect {
                 x: self.bottom_right_corner.x - w - self.style.margin,
                 y: self.bottom_right_corner.y - h - self.style.margin,
                 w,
                 h,
             };
+
+            // draw in left corner if mouse is over right corner
+            if self.mouse_hits(rect, "info_box") {
+                rect.x = self.bounds.x + self.style.margin;
+            }
 
             self.cursor_z += TOOLTIP_Z_OFFSET;
             self.push_rect(rect, self.style.theme.panel_bg(),
