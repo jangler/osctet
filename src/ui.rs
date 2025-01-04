@@ -1103,6 +1103,7 @@ impl UI {
         // focus/unfocus
         if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
             self.focused_text = Some(TextEditState::new(id.to_owned(), text.to_owned()));
+            self.mouse_consumed = Some(id.to_string());
         } else if is_key_pressed(KeyCode::Escape) {
             self.focused_text = None;
         }
