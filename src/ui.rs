@@ -1128,6 +1128,8 @@ impl UI {
     pub fn instrument_list(&mut self, options: &[String], index: &mut usize,
         min_chars: usize,
     ) -> Option<String> {
+        const TEXT_ID: &str = "instrument_list";
+
         let margin = self.style.margin;
         let atlas = &self.style.atlas;
         let line_height = self.style.line_height();
@@ -1136,6 +1138,11 @@ impl UI {
             y: self.cursor_y + margin,
             w: options.iter().fold(0.0_f32, |w, s| w.max(atlas.text_width(s)))
                 .max(atlas.char_width() * min_chars as f32)
+                .max(self.focused_text.as_ref().map_or(0.0, |x| if x.id == TEXT_ID {
+                    atlas.text_width(&x.text)
+                } else {
+                    0.0
+                }))
                 + margin * 2.0,
             h: line_height * options.len() as f32 + 2.0,
         };
@@ -1153,7 +1160,6 @@ impl UI {
         };
         let lmb = is_mouse_button_released(MouseButton::Left);
         let mut return_val = None;
-        let id = "patch name";
         for (i, option) in options.iter().enumerate() {
             if i == *index {
                 self.push_rect(hit_rect, self.style.theme.content_bg_click(), None);
@@ -1181,7 +1187,8 @@ impl UI {
                 if self.mouse_hits(hit_rect, "instrument_list")
                     && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
                     let text = option.clone();
-                    self.focused_text = Some(TextEditState::new(id.to_string(), text));
+                    self.focused_text =
+                        Some(TextEditState::new(TEXT_ID.to_string(), text));
                     self.instrument_edit_index = Some(i);
                     *index = i;
                 }
