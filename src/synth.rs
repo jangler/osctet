@@ -254,6 +254,8 @@ impl PcmData {
         })
     }
 
+    /// Loads the audio file with position offset by `offset` in the file's
+    /// directory.
     pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
         Self::load(Self::next_file(path, offset))
     }

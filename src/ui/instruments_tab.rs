@@ -98,7 +98,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
                 path.set_extension(PATCH_FILTER_EXT);
                 cfg.patch_folder = config::dir_as_string(&path);
                 if let Err(e) = patch.save(&path) {
-                    ui.report(e);
+                    ui.report(format!("Error saving patch: {e}"));
                 }
             }
         }
@@ -120,7 +120,7 @@ fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
                         edits.push(Edit::InsertPatch(patches.len() + i, p));
                         *patch_index = Some(patches.len() + i);
                     },
-                    Err(e) => ui.report(e),
+                    Err(e) => ui.report(format!("Error loading patch: {e}")),
                 }
             }
         }
@@ -422,7 +422,7 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config,
         cfg.sample_folder = config::dir_as_string(&path);
         match PcmData::load(path) {
             Ok(result) => *data = Some(result),
-            Err(e) => ui.report(e),
+            Err(e) => ui.report(format!("Error loading audio: {e}")),
         }
     }
 }
@@ -437,7 +437,7 @@ fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) {
                     .map(|s| s.to_str()).flatten()
                     .map(|s| ui.notify(format!("Loaded {}", s)));
             }
-            Err(e) => ui.report(e),
+            Err(e) => ui.report(format!("Error loading audio: {e}")),
         }
     }
 }

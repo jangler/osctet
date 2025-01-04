@@ -562,7 +562,7 @@ impl App {
     fn save_module(&mut self, module: &mut Module, player: &mut Player) {
         if let Some(path) = &self.save_path {
             if let Err(e) = module.save(self.pattern_editor.beat_division, path) {
-                self.ui.report(e);
+                self.ui.report(format!("Error saving module: {e}"));
             } else {
                 self.ui.notify(String::from("Saved module."));
             }
@@ -581,7 +581,7 @@ impl App {
             path.set_extension(MODULE_EXT);
             self.config.module_folder = config::dir_as_string(&path);
             if let Err(e) = module.save(self.pattern_editor.beat_division, &path) {
-                self.ui.report(e);
+                self.ui.report(format!("Error saving module: {e}"));
             } else {
                 self.save_path = Some(path);
                 self.ui.notify(String::from("Saved module."));
@@ -601,7 +601,7 @@ impl App {
                     self.load_module(module, new_module, player);
                     self.save_path = Some(path);
                 },
-                Err(e) => self.ui.report(e),
+                Err(e) => self.ui.report(format!("Error loading module: {e}")),
             }
         }
     }
@@ -724,7 +724,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
         match Module::load(&arg.into()) {
             Ok(m) => app.load_module(
                 &mut module.lock().unwrap(), m, &mut player.lock().unwrap()),
-            Err(e) => app.ui.report(e),
+            Err(e) => app.ui.report(format!("Error loading module: {e}")),
         }
     }
 

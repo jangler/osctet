@@ -183,7 +183,7 @@ fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
                     *tuning = t;
                     *table_cache = None;
                 }
-                Err(e) => ui.report(e),
+                Err(e) => ui.report(format!("Error loading scale: {e}")),
             }
         }
     }
