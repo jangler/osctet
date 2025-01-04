@@ -623,18 +623,22 @@ fn input_names(input: &MidiInput) -> Vec<String> {
         .collect()
 }
 
-/// Return the preferred audio device for the platform.
+/// Returns JACK if available, otherwise ALSA.
+#[cfg(target_os = "linux")]
 fn get_audio_device() -> Option<cpal::Device> {
-    if cfg!(target_os = "linux") {
-        cpal::host_from_id(cpal::HostId::Jack).ok()
-            .and_then(|host| host.default_output_device())
-            .or_else(|| cpal::default_host().default_output_device())
-    } else {
-        cpal::default_host().default_output_device()
-    }
+    cpal::host_from_id(cpal::HostId::Jack).ok()
+        .and_then(|host| host.default_output_device())
+        .or_else(|| cpal::default_host().default_output_device())
 }
 
-fn preferred_config(device: &cpal::Device, desired_sr: SampleRate) -> Result<StreamConfig, Box<dyn Error>> {
+/// Returns the default device.
+#[cfg(not(target_os = "linux"))]
+fn get_audio_device() -> Option<cpal::Device> {
+    cpal::default_host().default_output_device()
+}
+
+fn preferred_config(device: &cpal::Device, desired_sr: SampleRate
+) -> Result<StreamConfig, Box<dyn Error>> {
     device.supported_output_configs()?
         .filter(|conf| conf.channels() == 2)
         .max_by_key(|conf| (
@@ -655,7 +659,9 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let audio_conf: Result<StreamConfig, Box<dyn Error>> = device.as_ref()
         .ok_or("no audio output device".into())
         .and_then(|device| preferred_config(device, SampleRate(conf.desired_sample_rate)));
-    let sample_rate = audio_conf.as_ref().map(|config| config.sample_rate.0).unwrap_or(44100); 
+    let sample_rate = audio_conf.as_ref()
+        .map(|config| config.sample_rate.0)
+        .unwrap_or(44100); 
 
     let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(sample_rate as f64);
