@@ -869,6 +869,7 @@ impl UI {
             } else if self.mouse_hits(r, "tab_menu") {
                 if is_mouse_button_pressed(MouseButton::Left) {
                     self.tabs.insert(id.to_owned(), i);
+                    self.unfocus();
                     selected_index = i;
                 }
                 self.style.theme.panel_bg_click()
@@ -909,6 +910,16 @@ impl UI {
         self.bounds.y += h;
         self.bounds.h -= h;
         selected_index
+    }
+
+    /// Unfocus all controls.
+    fn unfocus(&mut self) {
+        self.focused_hotkey = None;
+        self.focused_note = None;
+        self.focused_slider = None;
+        self.focused_text = None;
+        self.instrument_edit_index = None;
+        self.open_combo_box = None;
     }
 
     pub fn set_tab(&mut self, id: &str, index: usize) {
