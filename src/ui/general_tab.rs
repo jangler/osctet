@@ -74,7 +74,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
                 commit = true;
             }
             if ui.slider("feedback", "Feedback", feedback,
-                0.0..=1.0, None, 1, true, Info::DelayFeedback) {
+                0.0..=1.0, None, 2, true, Info::DelayFeedback) {
                 commit = true;
             }
         }
