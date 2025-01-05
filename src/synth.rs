@@ -308,10 +308,10 @@ impl PcmData {
                 return
             }
 
-            // don't move the point by more than 1 ms
-            let max_distance = (self.wave.sample_rate() as f32 * 0.001) as usize;
+            // don't move the point by more than 2 ms
+            let max_distance = (self.wave.sample_rate() as f32 * 0.002) as usize;
             let window_start = pt.saturating_sub(max_distance);
-            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 2);
+            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 3);
 
             let last_sample = self.wave.at(0, self.wave.len() - 1);
             let second_last_sample = self.wave.at(0, self.wave.len() - 2);
@@ -325,7 +325,7 @@ impl PcmData {
                 let test_delta = s2 - s1;
 
                 if test_delta.signum() == delta.signum() {
-                    matches.push((i + 1, s2));
+                    matches.push((i + 2, s2));
                 }
             }
 
