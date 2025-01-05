@@ -278,12 +278,13 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
                 ui.group_ignores_geometry = true;
 
                 if let Some(data) = data {
-                    // these are two separate if-lets for ownership reasons
-                    if data.path.is_some() && ui.button("Prev", true, Info::PrevSample) {
-                        loaded_sample |= load_pcm_offset(data, -1, ui);
-                    }
-                    if data.path.is_some() && ui.button("Next", true, Info::NextSample) {
-                        loaded_sample |= load_pcm_offset(data, 1, ui);
+                    if data.path.is_some() {
+                        if ui.button("Prev", true, Info::PrevSample) {
+                            loaded_sample |= load_pcm_offset(data, -1, ui);
+                        }
+                        if ui.button("Next", true, Info::NextSample) {
+                            loaded_sample |= load_pcm_offset(data, 1, ui);
+                        }
                     }
 
                     if ui.button("Detect pitch", true, Info::DetectPitch) {

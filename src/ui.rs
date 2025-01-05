@@ -655,13 +655,15 @@ impl UI {
     fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,
         bg: &Color, bg_hover: &Color, bg_click: &Color,
     ) -> (Rect, MouseEvent) {
+        let id = "text_rect_".to_string() + label;
+
         let rect = Rect {
             x,
             y,
             w: self.style.atlas.text_width(label) + self.style.margin * 2.0,
             h: self.style.line_height(),
         };
-        let mouse_hit = self.mouse_hits(rect, "text_rect") && enabled;
+        let mouse_hit = self.mouse_hits(rect, &id) && enabled;
 
         // draw fill based on mouse state
         let (fill, stroke) = if mouse_hit {
@@ -684,8 +686,10 @@ impl UI {
         });
 
         (rect, if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
+            self.mouse_consumed = Some(id);
             MouseEvent::Pressed
         } else if mouse_hit && is_mouse_button_released(MouseButton::Left) {
+            self.mouse_consumed = Some(id);
             MouseEvent::Released
         } else {
             MouseEvent::None
