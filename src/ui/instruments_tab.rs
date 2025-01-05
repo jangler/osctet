@@ -1,4 +1,3 @@
-use fundsp::math::midi_hz;
 use macroquad::input::{KeyCode, is_key_pressed};
 
 use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
@@ -270,9 +269,10 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
 
             if let Waveform::Pcm(data) = &mut osc.waveform {
                 ui.start_group();
+                let mut loaded_sample = false;
 
                 if ui.button("Load sample", true, Info::LoadSample) {
-                    load_pcm(data, ui, cfg, player);
+                    loaded_sample |= load_pcm(data, ui, cfg, player);
                 }
 
                 ui.group_ignores_geometry = true;
@@ -280,16 +280,16 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
                 if let Some(data) = data {
                     // these are two separate if-lets for ownership reasons
                     if data.path.is_some() && ui.button("Prev", true, Info::PrevSample) {
-                        load_pcm_offset(data, -1, ui);
+                        loaded_sample |= load_pcm_offset(data, -1, ui);
                     }
                     if data.path.is_some() && ui.button("Next", true, Info::NextSample) {
-                        load_pcm_offset(data, 1, ui);
+                        loaded_sample |= load_pcm_offset(data, 1, ui);
                     }
 
                     if ui.button("Detect pitch", true, Info::DetectPitch) {
                         match data.detect_pitch() {
                             Some(freq) => {
-                                osc.freq_ratio.0.set(midi_hz(60.0) / freq as f32);
+                                osc.freq_ratio.0.set(REF_FREQ / freq as f32);
                                 osc.fine_pitch.0.set(0.0);
                             },
                             None => ui.report("Could not detect pitch"),
@@ -314,6 +314,14 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
                             *pt = (pt2 * sr).round() as usize;
                             data.fix_loop_point();
                         }
+                    }
+                }
+
+                if loaded_sample {
+                    if let Some(pitch) = data.as_ref().and_then(|d| d.midi_pitch) {
+                        osc.freq_ratio.0.set(
+                            2.0_f32.powf((REF_PITCH as f32 - pitch) / 12.0));
+                        osc.fine_pitch.0.set(0.0);
                     }
                 }
 
@@ -413,7 +421,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
 
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config,
     player: &mut Player
-) {
+) -> bool {
     if let Some(path) = super::new_file_dialog(player)
         .add_filter("Audio file", &PcmData::FILE_EXTENSIONS)
         .set_directory(cfg.sample_folder.clone()
@@ -421,13 +429,18 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config,
         .pick_file() {
         cfg.sample_folder = config::dir_as_string(&path);
         match PcmData::load(path) {
-            Ok(result) => *data = Some(result),
+            Ok(result) => {
+                *data = Some(result);
+                return true
+            }
             Err(e) => ui.report(format!("Error loading audio: {e}")),
         }
     }
+
+    false
 }
 
-fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) {
+fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) -> bool {
     if let Some(path) = &data.path {
         match PcmData::load_offset(path, offset) {
             Ok(result) => {
@@ -436,10 +449,13 @@ fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) {
                     .map(|p| p.file_name()).flatten()
                     .map(|s| s.to_str()).flatten()
                     .map(|s| ui.notify(format!("Loaded {}", s)));
+                return true
             }
             Err(e) => ui.report(format!("Error loading audio: {e}")),
         }
     }
+
+    false
 }
 
 fn filter_controls(ui: &mut UI, patch: &mut Patch) {

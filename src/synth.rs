@@ -9,9 +9,11 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::dsp::{adsr_scalable, pow_shape};
+use crate::{dsp::{adsr_scalable, pow_shape}, smpl::SmplData};
 
-const KEY_TRACKING_REF_FREQ: f32 = 261.6; // C4
+pub const REF_PITCH: f64 = 60.0; // C4
+pub const REF_FREQ: f32 = 261.6; // C4
+
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICES_PER_CHANNEL: usize = 3;
 
@@ -178,7 +180,7 @@ impl Waveform {
             Self::Noise => Box::new((noise().seed(random()) | tone)
                 >> (pinkpass() * (1.0 - pass()) & pass() * pass())),
             Self::Pcm(data) => if let Some(data) = data {
-                let f = data.wave.sample_rate() as f32 / vars.rate / midi_hz::<f32>(60.0);
+                let f = data.wave.sample_rate() as f32 / vars.rate / REF_FREQ;
                 Box::new(base * f >>
                     resample(wavech(&data.wave, 0, data.loop_point)))
             } else {
@@ -230,6 +232,8 @@ pub struct PcmData {
     pub loop_point: Option<usize>,
     #[serde(skip)]
     pub path: Option<PathBuf>,
+    #[serde(skip)]
+    pub midi_pitch: Option<f32>,
 }
 
 fn empty_wave() -> Arc<Wave> {
@@ -246,11 +250,17 @@ impl PcmData {
         let mut wave = Wave::load_slice(data.clone())?;
         wave.normalize();
 
+        let smpl = SmplData::from_wave(&data);
+        let loop_point = smpl.as_ref().and_then(|smpl|
+            smpl.sample_loops.get(0).map(|lp| *lp.start()));
+        let midi_pitch = smpl.as_ref().map(|smpl| smpl.midi_pitch);
+
         Ok(Self {
             wave: Arc::new(wave),
             data,
-            loop_point: None,
+            loop_point,
             path: Some(path.as_ref().to_path_buf()),
+            midi_pitch,
         })
     }
 
@@ -329,7 +339,7 @@ impl PcmData {
     /// Attempts to detect the fundamental frequency of the sample.
     pub fn detect_pitch(&self) -> Option<f64> {
         // limit search to what can be set in the UI
-        let ref_pitch = midi_hz(60.0);
+        let ref_pitch = midi_hz(REF_PITCH);
         let range = (ref_pitch / MAX_FREQ_RATIO as f64).max(20.0)
             ..(ref_pitch / MIN_FREQ_RATIO as f64);
 
@@ -997,9 +1007,9 @@ impl Filter {
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
             KeyTracking::Partial => Net::wrap(Box::new(
-                var_fn(&vars.freq, |x| pow(x * 1.0/KEY_TRACKING_REF_FREQ, 0.5)))),
+                var_fn(&vars.freq, |x| pow(x * 1.0/REF_FREQ, 0.5)))),
             KeyTracking::Full => Net::wrap(Box::new(
-                var(&vars.freq) * (1.0/KEY_TRACKING_REF_FREQ))),
+                var(&vars.freq) * (1.0/REF_FREQ))),
         };
         let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index), &[])
             >> pow_shape(FILTER_CUTOFF_MOD_BASE);

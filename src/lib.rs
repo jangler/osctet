@@ -26,6 +26,7 @@ pub mod ui;
 pub mod module;
 pub mod playback;
 mod dsp;
+mod smpl;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
 use ui::general_tab::TableCache;
