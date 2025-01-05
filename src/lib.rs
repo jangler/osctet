@@ -41,7 +41,7 @@ const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
 
-struct Midi {
+pub struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll
     // create a new input just for that (see Boddlnagg/midir#90).
     input: Option<MidiInput>,
@@ -502,7 +502,8 @@ impl App {
                     &mut self.patch_index, &mut self.instruments_scroll, &mut self.config,
                     &mut player), // so, basically everything
                 TAB_SETTINGS => ui::settings_tab::draw(&mut self.ui, &mut self.config,
-                    &mut self.settings_scroll, self.sample_rate, &mut player),
+                    &mut self.settings_scroll, self.sample_rate, &mut player,
+                    &mut self.midi),
                 _ => panic!("bad tab value"),
             }
         }
@@ -512,30 +513,6 @@ impl App {
 
     fn bottom_panel(&mut self, player: &mut Player) {
         self.ui.start_bottom_panel();
-
-        if self.midi.input.is_some() {
-            let s = if let Some(name) = &self.midi.port_name {
-                &name
-            } else {
-                "(none)"
-            };
-            if let Some(i) = self.ui.combo_box("midi_input", "MIDI input", s,
-                Info::MidiInput, || input_names(self.midi.input.as_ref().unwrap())) {
-                self.midi.port_selection = if i == 0 {
-                    None
-                } else {
-                    input_names(self.midi.input.as_ref().unwrap()).get(i).cloned()
-                };
-            }
-
-            let mut v = self.config.midi_send_pressure.unwrap_or(true);
-            if self.ui.checkbox("Use aftertouch", &mut v, self.midi.port_name.is_some(),
-                Info::Aftertouch) {
-                self.config.midi_send_pressure = Some(v);
-            }
-        } else {
-            self.ui.label("No MIDI device");
-        }
 
         if let Some(n) = self.ui.edit_box("Division", 3,
             self.pattern_editor.beat_division.to_string(), Info::Division
@@ -644,13 +621,6 @@ impl App {
         player.reinit(old_module.tracks.len());
         self.fx.reinit(&old_module.fx);
     }
-}
-
-fn input_names(input: &MidiInput) -> Vec<String> {
-    let mut v = vec![String::from("(none)")];
-    v.extend(input.ports().into_iter()
-        .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)"))));
-    v
 }
 
 /// Returns JACK if available, otherwise ALSA.

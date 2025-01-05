@@ -1,11 +1,11 @@
 use palette::Lchuv;
 
-use crate::{config::{self, Config}, playback::Player};
+use crate::{config::{self, Config}, playback::Player, Midi};
 
 use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
 
 pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
-    player: &mut Player
+    player: &mut Player, midi: &mut Midi
 ) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
@@ -21,6 +21,10 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     }
     ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
     ui.checkbox("Display info text", &mut cfg.display_info, true, Info::DisplayInfo);
+
+    ui.space(2.0);
+    ui.header("I/O", Info::None);
+
     if let Some(s) = ui.edit_box("Desired sample rate", 6,
         cfg.desired_sample_rate.to_string(), Info::DesiredSampleRate
     ) {
@@ -31,6 +35,34 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     }
     if sample_rate != cfg.desired_sample_rate {
         ui.label(&format!("Actual sample rate: {} Hz", sample_rate));
+    }
+
+    if midi.input.is_some() {
+        ui.start_group();
+
+        let s = if let Some(name) = &midi.port_name {
+            &name
+        } else {
+            "(none)"
+        };
+        if let Some(i) = ui.combo_box("midi_input", "MIDI input", s,
+            Info::MidiInput, || input_names(midi.input.as_ref().unwrap())) {
+            midi.port_selection = if i == 0 {
+                None
+            } else {
+                input_names(midi.input.as_ref().unwrap()).get(i).cloned()
+            };
+        }
+
+        let mut v = cfg.midi_send_pressure.unwrap_or(true);
+        if ui.checkbox("Use aftertouch", &mut v, midi.port_name.is_some(),
+            Info::Aftertouch) {
+            cfg.midi_send_pressure = Some(v);
+        }
+
+        ui.end_group();
+    } else {
+        ui.label("No MIDI device");
     }
 
     ui.space(2.0);
@@ -229,4 +261,11 @@ fn load_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
             Err(e) => ui.report(format!("Error loading theme: {e}")),
         }
     }
+}
+
+fn input_names(input: &midir::MidiInput) -> Vec<String> {
+    let mut v = vec![String::from("(none)")];
+    v.extend(input.ports().into_iter()
+        .map(|p| input.port_name(&p).unwrap_or(String::from("(unknown)"))));
+    v
 }
