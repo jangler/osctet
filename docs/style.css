@@ -1,0 +1,21 @@
+html {
+    background-color: #c7e3df;
+}
+body {
+    background-color: #fcfcfc;
+    color: #414141;
+    margin: auto;
+    padding: 1em;
+    width: 100%;
+    max-width: 40em;
+    font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+}
+#header {
+    display: table;
+
+    h1 {
+        padding-left: 0.2em;
+        display: table-cell;
+        vertical-align: middle;
+    }
+}
