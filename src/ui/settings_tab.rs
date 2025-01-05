@@ -70,7 +70,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     ui.end_group();
 
     ui.start_group();
-    ui.offset_label("Font size", Info::None);
+    ui.offset_label("Font size", Info::Font);
     if ui.button("-", cfg.font_size > 0, Info::FontSize("Increase")) {
         set_font(cfg, ui, cfg.font_size - 1);
     }

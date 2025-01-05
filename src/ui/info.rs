@@ -83,6 +83,7 @@ pub enum Info {
     SaveTheme,
     LoadTheme,
     InstrumentList,
+    Font,
 }
 
 impl Default for Info {
@@ -113,6 +114,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::Font =>
+            text = "Font is a modified version of Dina by Joergen Ibsen.".to_string(),
         Info::InstrumentList => text =
 "Patch list. Right-click to edit names.
 
