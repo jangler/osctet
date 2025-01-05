@@ -193,30 +193,19 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
 
 fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
     ui.header("NOTE LAYOUT", Info::NoteLayout);
-    ui.start_group();
 
     let mut hotkey_input_id = hotkey_input_id;
-    let max_chars = cfg.note_keys.iter().map(|(k, _)| k.to_string().len()).max().unwrap();
-    let entries_per_col = entries_per_col(ui, (max_chars * 2).max(6), cfg.note_keys.len());
 
-    for chunk in cfg.note_keys.chunks_mut(entries_per_col) {
-        // TODO: duplication with hotkey_controls
+    for range in [17..cfg.note_keys.len(), 0..17] {
         ui.start_group();
-        for (_, note) in chunk.iter() {
+        for (hotkey, note) in &mut cfg.note_keys[range] {
             ui.offset_label(&note.to_string(), Info::None);
-        }
-        ui.align_right(chunk.len());
-        ui.end_group();
-
-        ui.start_group();
-        for (hotkey, _) in chunk.iter_mut() {
             ui.hotkey_input(hotkey_input_id, hotkey, Info::None);
             hotkey_input_id += 1;
         }
         ui.end_group();
-    }
 
-    ui.end_group();
+    }
 }
 
 fn entries_per_col(ui: &UI, max_chars: usize, len: usize) -> usize {
