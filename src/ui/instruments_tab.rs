@@ -290,7 +290,8 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
                     if ui.button("Detect pitch", true, Info::DetectPitch) {
                         match data.detect_pitch() {
                             Some(freq) => {
-                                osc.freq_ratio.0.set(REF_FREQ / freq as f32);
+                                osc.freq_ratio.0
+                                    .set(clamp_freq_ratio(REF_FREQ / freq as f32));
                                 osc.fine_pitch.0.set(0.0);
                             },
                             None => ui.report("Could not detect pitch"),
@@ -320,8 +321,8 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
 
                 if loaded_sample {
                     if let Some(pitch) = data.as_ref().and_then(|d| d.midi_pitch) {
-                        osc.freq_ratio.0.set(
-                            2.0_f32.powf((REF_PITCH as f32 - pitch) / 12.0));
+                        osc.freq_ratio.0.set(clamp_freq_ratio(
+                            2.0_f32.powf((REF_PITCH as f32 - pitch) / 12.0)));
                         osc.fine_pitch.0.set(0.0);
                     }
                 }

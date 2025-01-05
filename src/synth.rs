@@ -338,18 +338,25 @@ impl PcmData {
 
     /// Attempts to detect the fundamental frequency of the sample.
     pub fn detect_pitch(&self) -> Option<f64> {
-        // limit search to what can be set in the UI
-        let ref_pitch = midi_hz(REF_PITCH);
-        let range = (ref_pitch / MAX_FREQ_RATIO as f64).max(20.0)
-            ..(ref_pitch / MIN_FREQ_RATIO as f64);
-
         let signal: Vec<_> = (0..self.wave.len())
             .map(|i| self.wave.at(0, i) as f64)
             .collect();
         let rate = self.wave.sample_rate();
 
-        HannedFftDetector::default().detect_pitch_in_range(&signal, rate, range)
+        HannedFftDetector::default().detect_pitch(&signal, rate)
     }
+}
+
+/// Clamps `r` to the freq. ratio range that can be set in the UI,
+/// by adding or removing octaves.
+pub fn clamp_freq_ratio(mut r: f32) -> f32 {
+    while r > MAX_FREQ_RATIO {
+        r *= 0.5;
+    }
+    while r < MIN_FREQ_RATIO {
+        r *= 2.0;
+    }
+    r
 }
 
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -1310,4 +1317,16 @@ struct VoiceVars {
     lfo_phases: Vec<f32>,
     prev_freq: Option<f32>,
     rate: f32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clamp_freq_ratio;
+
+    #[test]
+    fn test_clamp_freq_ratio() {
+        assert_eq!(clamp_freq_ratio(20.0), 10.0);
+        assert_eq!(clamp_freq_ratio(40.0), 10.0);
+        assert_eq!(clamp_freq_ratio(0.1), 0.4);
+    }
 }
