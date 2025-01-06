@@ -164,19 +164,14 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
 
     for chunk in keymap.chunks_mut(entries_per_col) {
         ui.start_group();
-        for (_, action) in chunk.iter() {
-            // TODO: this should use Info::Action, but mouseover is broken for align_right
-            ui.offset_label(action.name(), Info::None);
-        }
-        ui.align_right(chunk.len());
-        ui.end_group();
-
-        ui.start_group();
         for (hotkey, action) in chunk.iter_mut() {
+            ui.start_group();
             if ui.hotkey_input(id, hotkey, Info::Action(*action)) {
                 changed = true;
             }
             id += 1;
+            ui.offset_label(action.name(), Info::Action(*action));
+            ui.end_group();
         }
         ui.end_group();
     }
