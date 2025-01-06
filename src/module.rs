@@ -633,6 +633,8 @@ pub enum EventData {
     TickGlide(u8),
     /// MIDI-style pitch bend. Data is cent offset from starting note.
     Bend(i16),
+    /// Section marker. No effect on playback.
+    Section,
 }
 
 impl EventData {
@@ -657,7 +659,7 @@ impl EventData {
     pub fn is_ctrl(&self) -> bool {
         match *self {
             Self::Tempo(_) | Self::RationalTempo(_, _)
-                | Self::End | Self::Loop => true,
+                | Self::End | Self::Loop | Self::Section => true,
             _ => false,
         }
     }

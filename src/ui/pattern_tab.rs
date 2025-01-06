@@ -886,6 +886,7 @@ impl PatternEditor {
             EventData::Modulation(v) => format!("{:X}", v),
             EventData::End => String::from("End"),
             EventData::Loop => String::from("Loop"),
+            EventData::Section => String::from("Sect"),
             EventData::Tempo(t) => t.round().to_string(),
             EventData::RationalTempo(n, d) => format!("{}:{}", n, d),
             EventData::InterpolatedPitch(_)

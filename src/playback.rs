@@ -298,7 +298,8 @@ impl Player {
                     EventData::Tempo(t) => self.tempo = t,
                     EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
                     EventData::End | EventData::Loop | EventData::StartGlide(_)
-                        | EventData::EndGlide(_) | EventData::TickGlide(_) => (),
+                        | EventData::EndGlide(_) | EventData::TickGlide(_)
+                        | EventData::Section => (),
                     EventData::InterpolatedPitch(_)
                         | EventData::InterpolatedPressure(_)
                         | EventData::InterpolatedModulation(_)
@@ -445,7 +446,7 @@ impl Player {
                 self.stop();
             },
             EventData::Loop | EventData::StartGlide(_) | EventData::EndGlide(_)
-                | EventData::TickGlide(_) => (),
+                | EventData::TickGlide(_) | EventData::Section => (),
             EventData::InterpolatedPitch(pitch) => self.bend_to(track, key, pitch),
             EventData::InterpolatedPressure(v) =>
                 self.channel_pressure(track, channel as u8, v),
