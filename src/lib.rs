@@ -196,11 +196,10 @@ impl App {
                     } else {
                         player.play_from(0, &module)
                     }
-                    Action::PlayFromLoop => if player.is_playing() {
+                    Action::PlayFromScreen => if player.is_playing() {
                         player.stop()
                     } else {
-                        let tick = module.nearest_loop(self.pattern_editor.cursor_tick())
-                            .unwrap_or_default();
+                        let tick = self.pattern_editor.screen_beat_tick();
                         player.play_from(tick, &module)
                     }
                     Action::PlayFromCursor => if player.is_playing() {

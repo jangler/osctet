@@ -302,8 +302,8 @@ applied on a per-track basis.".to_string(),
                 text = "Decrement the octave used for note input.".to_string(),
             Action::PlayFromStart =>
                 text = "Play/stop from the beginning of the song.".to_string(),
-            Action::PlayFromLoop =>
-                text = "Play/stop from the nearest loop point.".to_string(),
+            Action::PlayFromScreen =>
+                text = "Play/stop from the first beat on-screen.".to_string(),
             Action::PlayFromCursor =>
                 text = "Play/stop from the pattern cursor.".to_string(),
             Action::RenderSong => text = "Render song to WAV.".to_string(),
