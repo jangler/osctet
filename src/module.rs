@@ -631,6 +631,8 @@ pub enum EventData {
     StartGlide(u8),
     EndGlide(u8),
     TickGlide(u8),
+    /// MIDI-style pitch bend. Data is cent offset from starting note.
+    Bend(i16),
 }
 
 impl EventData {

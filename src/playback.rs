@@ -274,6 +274,7 @@ impl Player {
             events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
 
             let mut active_note = None;
+            let mut bend_offset = 0;
 
             for evt in events {
                 match evt.data {
@@ -281,6 +282,7 @@ impl Player {
                         if let Some((patch, note)) = module.map_note(note, track_i) {
                             if patch.sustains() {
                                 active_note = Some((patch, note));
+                                bend_offset = 0;
                             }
                         }
                     }
@@ -301,6 +303,7 @@ impl Player {
                         | EventData::InterpolatedPressure(_)
                         | EventData::InterpolatedModulation(_)
                         => panic!("interpolated event in pattern"),
+                    EventData::Bend(c) => bend_offset = c,
                 }
             }
 
@@ -318,6 +321,7 @@ impl Player {
                 };
                 let pitch = module.tuning.midi_pitch(&note);
                 self.note_on(track_i, key, pitch, None, patch);
+                self.pitch_bend(track_i, channel_i as u8, bend_offset as f32 / 100.0);
             }
         }
     }
@@ -447,6 +451,7 @@ impl Player {
                 self.channel_pressure(track, channel as u8, v),
             EventData::InterpolatedModulation(v) =>
                 self.modulate(track, channel as u8, v),
+            EventData::Bend(c) => self.pitch_bend(track, channel as u8, c as f32 / 100.0),
         }
     }
 }

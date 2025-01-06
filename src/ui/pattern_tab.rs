@@ -895,6 +895,7 @@ impl PatternEditor {
             EventData::StartGlide(_)
                 | EventData::EndGlide(_)
                 | EventData::TickGlide(_) => return,
+            EventData::Bend(c) => format!("{:+}", c),
         };
         ui.push_text(x, y, text, color);
     }
