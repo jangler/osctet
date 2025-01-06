@@ -393,10 +393,10 @@ impl UI {
         let (x, y) = match &graphic {
             Graphic::Line(x1, y1, x2, y2, _) => (x1.max(*x2), y1.max(*y2)),
             Graphic::Rect(rect, _, _) => (rect.x + rect.w, rect.y + rect.h),
-            Graphic::Text(x, y, text, _) => {
-                (x + self.style.atlas.text_width(text) + self.style.margin * 2.0,
-                    y + self.style.line_height())
-            }
+            Graphic::Text(x, y, text, _) => (
+                x + self.style.atlas.text_width(text) + self.style.margin * 2.0,
+                y + self.style.line_height()
+            ),
         };
         self.expand_groups(x, y);
         self.draw_queue.push(DrawOp {

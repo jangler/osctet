@@ -192,9 +192,9 @@ fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
     for range in [17..cfg.note_keys.len(), 0..17] {
         ui.start_group();
         for (hotkey, note) in &mut cfg.note_keys[range] {
-            ui.offset_label(&note.to_string(), Info::None);
             ui.hotkey_input(hotkey_input_id, hotkey, Info::None);
             hotkey_input_id += 1;
+            ui.offset_label(&note.to_string(), Info::None);
         }
         ui.end_group();
 
