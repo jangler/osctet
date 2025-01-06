@@ -217,10 +217,6 @@ impl App {
                     Action::SaveSongAs => self.save_module_as(module, player),
                     Action::RenderSong => self.render_and_save(&module, player, false),
                     Action::RenderTracks => self.render_and_save(&module, player, true),
-                    // TODO: undo/redo are silent right now, which could be confusing when
-                    //       things are being undone/redone offscreen. could either provide
-                    //       messages describing what's being done, or move view to location
-                    //       of changes
                     Action::Undo => if module.undo() {
                         player.update_synths(module.drain_track_history());
                         fix_patch_index(&mut self.patch_index, module.patches.len());

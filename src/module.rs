@@ -510,8 +510,6 @@ pub struct KitEntry {
 pub struct Track {
     pub target: TrackTarget,
     pub channels: Vec<Channel>,
-    pub share_pressure: bool, // TODO
-    pub share_modulation: bool, // TODO
 }
 
 impl Track {
@@ -519,8 +517,6 @@ impl Track {
         Self {
             target,
             channels: vec![Channel::new()],
-            share_pressure: false,
-            share_modulation: false,
         }
     }
 }
