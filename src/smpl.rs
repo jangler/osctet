@@ -34,7 +34,7 @@ impl SmplData {
         }).collect();
 
         Some(Self {
-            midi_pitch: unity_note as f32 + pitch_fraction as f32 / 127.0,
+            midi_pitch: unity_note as f32 + pitch_fraction as f32 / 256.0,
             sample_loops,
         })
     }
