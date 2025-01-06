@@ -252,7 +252,8 @@ impl PcmData {
 
         let smpl = SmplData::from_wave(&data);
         let loop_point = smpl.as_ref().and_then(|smpl|
-            smpl.sample_loops.get(0).map(|lp| *lp.start()));
+            smpl.sample_loops.get(0).map(|lp|
+                min(*lp.start(), wave.len().saturating_sub(1))));
         let midi_pitch = smpl.as_ref().map(|smpl| smpl.midi_pitch);
 
         Ok(Self {
@@ -304,7 +305,7 @@ impl PcmData {
         if let Some(pt) = &mut self.loop_point {
             // don't mess with the loop point if it's zero -- it might be a
             // single-cycle wave
-            if *pt == 0 {
+            if *pt == 0 || self.wave.len() < 3 {
                 return
             }
 
