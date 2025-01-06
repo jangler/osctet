@@ -275,6 +275,15 @@ impl PatternEditor {
             Action::UseLastNote => self.use_last_note(module),
             _ => (),
         }
+
+        if action != Action::TapTempo {
+            self.clear_tap_tempo_state();
+        }
+    }
+
+    fn clear_tap_tempo_state(&mut self) {
+        self.tap_tempo_intervals.clear();
+        self.pending_interval = None;
     }
 
     /// Expands the selection to the bounds of what would be pasted.
@@ -543,11 +552,6 @@ impl PatternEditor {
                 _ => (),
             }
         }
-
-        if key != KeyCode::T {
-            self.tap_tempo_intervals.clear();
-            self.pending_interval = None;
-        }
     }
 
     fn tap_tempo(&mut self, module: &mut Module) {
@@ -775,7 +779,7 @@ impl PatternEditor {
         } else {
             let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
             let mut add = Vec::new();
-    
+
             for (track_i, track) in module.tracks.iter().enumerate() {
                 for channel_i in 0..track.channels.len() {
                     let tuple = (track_i, channel_i, NOTE_COLUMN);
@@ -791,7 +795,7 @@ impl PatternEditor {
                     }
                 }
             }
-    
+
             module.push_edit(Edit::PatternData {
                 remove: add.iter().map(|e| e.position()).collect(),
                 add,
@@ -1015,6 +1019,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
             if !is_shift_down() {
                 pe.edit_start = pe.edit_end;
             }
+            pe.clear_tap_tempo_state();
         } else if is_mouse_button_down(MouseButton::Left) && !ui.grabbed() {
             pe.edit_end = pos;
             fix_cursors(pe, &module.tracks);
