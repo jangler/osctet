@@ -68,8 +68,6 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     ui.space(2.0);
     ui.header("APPEARANCE", Info::None);
 
-    // TODO: currently accent 2 isn't used on this page, so there's no way to
-    //       see the effects of adjusting it
     ui.start_group();
     color_controls(ui, "Foreground", false, |t| &mut t.fg);
     color_controls(ui, "Background", false, |t| &mut t.bg);

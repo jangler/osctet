@@ -494,8 +494,6 @@ pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
             module.playtime()
         };
 
-        // TODO: render would probably be faster if we called player.frame() only
-        //       when there's a new event. benchmark this
         player.play();
         while player.playing && time_since_loop < LOOP_FADEOUT_TIME {
             player.frame(&module, dt);

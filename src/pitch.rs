@@ -144,7 +144,6 @@ impl Tuning {
         octaves * self.scale.len() as i32 + fifths * self.generator_steps()
     }
 
-    // TODO: this and root_pitch might have off-by-one errors?
     pub fn midi_pitch(&self, note: &Note) -> f32 {
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let root_steps = self.nominal_steps(self.root.nominal)

@@ -244,7 +244,6 @@ impl Module {
 
     /// Performs an edit operation and handles undo/redo stacks.
     pub fn push_edit(&mut self, edit: Edit) {
-        // TODO: merge consecutive pattern data operations
         let edit = self.flip_edit(edit);
         self.undo_stack.push(edit);
         self.redo_stack.clear();
@@ -654,7 +653,6 @@ impl EventData {
 
     /// Returns true if the data goes in the control/global track.
     pub fn is_ctrl(&self) -> bool {
-        // TODO: how to handle tempo interpolation?
         match *self {
             Self::Tempo(_) | Self::RationalTempo(_, _)
                 | Self::End | Self::Loop => true,

@@ -277,7 +277,7 @@ impl PcmData {
                 // TODO: files ending in ex. .WAV instead of .wav won't match
                 let entries: Vec<_> = entries.flatten()
                     .filter(|e| Self::FILE_EXTENSIONS.contains(
-                        &&e.path().extension().unwrap_or_default()
+                        && e.path().extension().unwrap_or_default()
                             .to_str().unwrap_or_default()))
                     .collect();
                 entries.iter().position(|e| e.path() == *path).map(|i| {
@@ -904,8 +904,9 @@ impl Patch {
             .fold(0.0, f32::max)
     }
 
-    // TODO: this doesn't account for depth modulation
+    /// Returns a longest-case estimate of envelope scale factor.
     fn env_scale_factor(&self, i: usize) -> f32 {
+        // TODO: this doesn't account for depth modulation
         pow(MAX_ENV_SCALE, self.mod_matrix.iter()
             .filter(|m| m.target == ModTarget::EnvScale(i))
             .map(|m| m.depth.0.value().max(0.0))
@@ -1270,8 +1271,8 @@ impl Voice {
         let filter_net = settings.make_filter_net(&vars);
 
         // use dry signal if clip gain is set to 1.0
-        // TODO: doubling this could be costly. once we have live net updates,
-        //       make this node a conditional.
+        // TODO: doubling this could be costly. it would be better to code the
+        //       behavior into a custom audionode
         let clip = pass()
             * (var(&settings.distortion.0)
                 + settings.dsp_component(&vars, ModTarget::ClipGain, &[])

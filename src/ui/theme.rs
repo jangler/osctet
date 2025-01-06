@@ -18,10 +18,9 @@ const ACCENT_L_OFFSET: f32 = 15.0;
 
 const ACCENT_BG_CHROMA_MULTIPLIER: f32 = 1.0/3.0;
 
-// TODO: cache generated colors and only regenerate when needed
-
 /// Color theme using four seed colors. Seed colors use the CIE L*C*uv h°uv
-/// color space, which is cylindrical and perceptually uniform.
+/// color space, which is cylindrical and perceptually uniform. (Although in
+/// practice, we gamma correct.)
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Theme {
     pub fg: Lchuv,
