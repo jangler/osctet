@@ -476,13 +476,13 @@ will be quantized to the nearest row.".to_string(),
         Info::PressureColumn => text =
 "Pressure column.
 
-0-9 - Enter digit
-Shift+0-9 - Track enter digit".to_string(),
+0..F - Enter digit
+Shift+0..F - Track enter digit".to_string(),
         Info::ModulationColumn => text =
 "Modulation column.
 
 0-9 - Enter digit
-Shift+0-9 - Track enter digit".to_string(),
+Shift+0..F - Track enter digit".to_string(),
         Info::ControlColumn => {
             text = "Control column.".to_string();
             actions =
