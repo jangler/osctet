@@ -200,14 +200,16 @@ impl Tuning {
         )
     }
 
-    /// Returns the shortest notation for a given scale index.
+    /// Returns the shortest notation for a given scale index. May return
+    /// an empty vector.
     pub fn notation(&self, index: usize, equave: i8) -> Vec<Note> {
         let mut old_notes;
         let mut new_notes = Nominal::VARIANTS
             .map(|nominal| Note::new(0, nominal, 0, equave))
             .to_vec();
 
-        loop {
+        // notation with more than 9 accidentals isn't exactly useful
+        for _ in 0..9 {
             let matches: Vec<_> = new_notes.iter()
                 .filter(|note| self.scale_index(note).0 == index)
                 .collect();
@@ -239,6 +241,8 @@ impl Tuning {
                         })
                 ).collect();
         }
+
+        Vec::new()
     }
 
     /// Returns 1 if the note crosses the octave line B->C, -1 if it crosses
@@ -255,7 +259,12 @@ impl Tuning {
 
         for i in 0..=self.scale.len() {
             let notes = root.step_shift_all(i as isize, self);
-            let cents = (self.midi_pitch(&notes[0]) - base) * 100.0;
+            let cents = if let Some(note) = notes.get(0) {
+                (self.midi_pitch(note) - base) * 100.0
+            } else {
+                // TODO: not necessarily true for unequal scales
+                self.scale[(i as i32 - 1).rem_euclid(self.scale.len() as i32) as usize]
+            };
             v.push((notes, cents))
         }
 
@@ -326,10 +335,11 @@ impl Note {
             return *note
         }
 
-        notes[0]
+        *notes.get(0).unwrap_or(self)
     }
 
     /// Returns all notation for the next/previous note of the tuning.
+    /// May return an empty vector.
     fn step_shift_all(&self, steps: isize, tuning: &Tuning) -> Vec<Note> {
         let mut index = tuning.scale_index(self).0 as isize + steps;
         let mut equave = self.equave;
@@ -482,12 +492,16 @@ mod tests {
             Note::new(1, Nominal::C, 0, 3),
             Note::new(-1, Nominal::D, 0, 3),
         ]);
+
         let t = Tuning::divide(2.0, 17, 1).unwrap();
         assert_eq!(t.notation(15, 4), vec![
             Note::new(0, Nominal::A, 1, 4),
             Note::new(0, Nominal::C, -1, 5),
             Note::new(-1, Nominal::B, 0, 4),
         ]);
+        
+        let t = Tuning::divide(2.0, 15, 0).unwrap();
+        assert_eq!(t.notation(1, 4), Vec::new()); // no notation for desired note
     }
 
     #[test]
@@ -514,6 +528,9 @@ mod tests {
             arrows: -1,
             ..A4
         });
+
+        let t = Tuning::divide(2.0, 15, 0).unwrap();
+        assert_eq!(A4.step_shift(1, &t), A4); // no notation for desired note
     }
 
     #[test]

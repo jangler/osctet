@@ -1170,9 +1170,11 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
 fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Config) {
     let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
         if let EventData::Pitch(note) = evt.event.data {
+            let pitch =
+                input::adjust_note_for_modifier_keys(note, cfg, &module.tuning);
             Some(LocatedEvent {
                 event: Event {
-                    data: EventData::Pitch(input::adjust_note_for_modifier_keys(note, cfg)),
+                    data: EventData::Pitch(pitch),
                     ..evt.event
                 },
                 ..evt.clone()

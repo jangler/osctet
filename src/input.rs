@@ -38,7 +38,7 @@ pub fn note_from_key(key: Hotkey, t: &Tuning, equave: i8, cfg: &Config) -> Optio
                     ..*n
                 }
             };
-            let n = adjust_note_for_modifier_keys(n, cfg);
+            let n = adjust_note_for_modifier_keys(n, cfg, t);
             Note {
                 equave: n.equave + equave,
                 ..n
@@ -102,7 +102,7 @@ pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
             nominal,
             sharps: if use_sharps(t) { accidentals } else { 0 },
             equave: (n as i8) / 12 - 1,
-        }, cfg)
+        }, cfg, t)
     };
     match n % 12 {
         0 => f(Nominal::C, 0),
@@ -121,7 +121,7 @@ pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
     }
 }
 
-pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config) -> Note {
+pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config, tuning: &Tuning) -> Note {
     let mut note = Note {
         arrows: note.arrows,
         sharps: note.sharps,
@@ -149,28 +149,37 @@ pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config) -> Note {
     }
 
     if cfg.action_is_down(Action::NudgeEnharmonic) {
-        enharmonic_alternative(note)
+        enharmonic_alternative(note, tuning)
     } else {
         note
     }
 }
 
-fn enharmonic_alternative(note: Note) -> Note {
+fn enharmonic_alternative(note: Note, tuning: &Tuning) -> Note {
     let bias = match note.nominal {
         Nominal::E | Nominal::B => 1,
         Nominal::C | Nominal::F => -1,
         _ => 0,
     };
-    let ((nominal, equave_offset), sharp_offset) = if note.sharps * 2 + bias >= 0 {
+    let use_sharps = use_sharps(tuning);
+
+    let count = if use_sharps {
+        note.sharps
+    } else {
+        note.arrows
+    };
+
+    let ((nominal, equave_offset), count_offset) = if count * 2 + bias >= 0 {
         (note.nominal.next(), if bias > 0 { -1 } else { -2 })
     } else {
         (note.nominal.prev(), if bias < 0 { 1 } else { 2 })
     };
+
     Note {
+        arrows: if use_sharps { note.arrows } else { note.arrows + count_offset },
         nominal,
-        sharps: note.sharps + sharp_offset,
+        sharps: if use_sharps { note.sharps + count_offset } else { note.sharps },
         equave: note.equave + equave_offset,
-        ..note
     }
 }
 
