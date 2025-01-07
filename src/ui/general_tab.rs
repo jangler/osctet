@@ -227,9 +227,9 @@ fn make_table(t: &Tuning) -> Vec<Vec<String>> {
 fn draw_table(ui: &mut UI, labels: &[&str], table: &Vec<Vec<String>>) {
     for (label, column) in labels.iter().zip(table) {
         ui.start_group();
-        ui.label(label);
+        ui.label(label, Info::None);
         for row in column {
-            ui.label(row);
+            ui.label(row, Info::None);
         }
         ui.end_group();
     }

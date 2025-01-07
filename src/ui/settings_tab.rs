@@ -34,7 +34,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
         }
     }
     if sample_rate != cfg.desired_sample_rate {
-        ui.label(&format!("Actual sample rate: {} Hz", sample_rate));
+        ui.label(&format!("Actual sample rate: {} Hz", sample_rate), Info::None);
     }
 
     if midi.input.is_some() {
@@ -62,7 +62,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
 
         ui.end_group();
     } else {
-        ui.label("No MIDI device");
+        ui.label("No MIDI device", Info::None);
     }
 
     ui.space(2.0);
@@ -126,7 +126,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
 fn color_controls(ui: &mut UI, label: &str, accent: bool,
     f: impl Fn(&mut Theme) -> &mut Lchuv) {
     ui.start_group();
-    ui.label(label);
+    ui.label(label, Info::None);
 
     let lchuv = f(&mut ui.style.theme);
     let (mut l, mut chroma, _) = lchuv.into_components();

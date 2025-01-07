@@ -1134,13 +1134,13 @@ fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player,
         for _ in 0..track.channels.len() {
             let color = ui.style.theme.border_unfocused();
             if i == 0 {
-                ui.colored_label("Ctrl", color)
+                ui.colored_label("Ctrl", Info::ControlColumn, color)
             } else {
-                ui.colored_label("Note", color);
+                ui.colored_label("Note", Info::NoteColumn, color);
                 ui.cursor_x -= ui.style.margin;
-                ui.colored_label("P", color);
+                ui.colored_label("P", Info::PressureColumn, color);
                 ui.cursor_x -= ui.style.margin;
-                ui.colored_label("M", color);
+                ui.colored_label("M", Info::ModulationColumn, color);
             }
         }
         ui.end_group();

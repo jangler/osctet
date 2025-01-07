@@ -619,14 +619,14 @@ impl UI {
     }
 
     /// A label is non-interactive text.
-    pub fn label(&mut self, label: &str) {
-        self.colored_label(label, self.style.theme.fg());
+    pub fn label(&mut self, label: &str, info: Info) {
+        self.colored_label(label, info, self.style.theme.fg());
     }
 
-    pub fn colored_label(&mut self, label: &str, color: Color) {
+    pub fn colored_label(&mut self, label: &str, info: Info, color: Color) {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y, label.to_owned(), color);
-        self.end_widget("label", Info::None, ControlInfo::None);
+        self.end_widget("label", info, ControlInfo::None);
     }
 
     /// An offset label is a label offset in the y direction to align with

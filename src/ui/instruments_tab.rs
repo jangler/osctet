@@ -156,14 +156,14 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
         ui.start_group();
         let mut removed_index = None;
 
-        labeled_group(ui, "Note in", |ui| {
+        labeled_group(ui, "Note in", Info::KitNoteIn, |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let label = format!("kit_{}_input", i);
                 ui.note_input(&label, &mut entry.input_note, Info::KitNoteIn);
             }
         });
 
-        labeled_group(ui, "Patch", |ui| {
+        labeled_group(ui, "Patch", Info::KitPatch, |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let name = module.patches.get(entry.patch_index)
                     .map(|x| x.name.as_ref())
@@ -176,7 +176,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
             }
         });
 
-        labeled_group(ui, "Note out", |ui| {
+        labeled_group(ui, "Note out", Info::KitNoteOut, |ui| {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let label = format!("kit_{}_output", i);
                 let key = ui.note_input(&label, &mut entry.patch_note, Info::KitNoteOut);
@@ -189,7 +189,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
             }
         });
 
-        labeled_group(ui, "", |ui| {
+        labeled_group(ui, "", Info::None, |ui| {
             for i in 0..module.kit.len() {
                 if ui.button("X", true, Info::Remove("this mapping")) {
                     removed_index = Some(i);
@@ -252,7 +252,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
     // the code for these controls is a little hairier because the PCM
     // controls use an extra line.
 
-    labeled_group(ui, "#", |ui| {
+    labeled_group(ui, "#", Info::None, |ui| {
         for (i, osc) in patch.oscs.iter().enumerate() {
             ui.offset_label(&(i + 1).to_string(), Info::None);
 
@@ -262,7 +262,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "Level", |ui| {
+    labeled_group(ui, "Level", Info::None, |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_level", i),
                 "", &osc.level.0, 0.0..=1.0, None, 2, true, Info::None);
@@ -333,7 +333,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "Tone", |ui| {
+    labeled_group(ui, "Tone", Info::Tone, |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_tone", i), "", &osc.tone.0,
                 0.0..=1.0, None, 1, osc.waveform.uses_tone(), Info::Tone);
@@ -344,7 +344,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "Freq. ratio", |ui| {
+    labeled_group(ui, "Freq. ratio", Info::FreqRatio, |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.shared_slider(&format!("osc_{}_ratio", i),
                 "", &osc.freq_ratio.0, MIN_FREQ_RATIO..=MAX_FREQ_RATIO, None, 2,
@@ -356,7 +356,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "Finetune", |ui| {
+    labeled_group(ui, "Finetune", Info::None, |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             ui.formatted_shared_slider(&format!("osc_{}_tune", i),
                 "", &osc.fine_pitch.0, -0.5..=0.5, 1, osc.waveform.uses_freq(), Info::None,
@@ -368,7 +368,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "Waveform", |ui| {
+    labeled_group(ui, "Waveform", Info::Waveform, |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             if let Some(i) = ui.combo_box(&format!("osc_{}_wave", i),
                 "", osc.waveform.name(), Info::Waveform,
@@ -382,7 +382,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "Output", |ui| {
+    labeled_group(ui, "Output", Info::GenOutput, |ui| {
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
             let outputs = OscOutput::choices(i);
             if let Some(i) = ui.combo_box(&format!("osc_{}_output", i),
@@ -397,7 +397,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
-    labeled_group(ui, "", |ui| {
+    labeled_group(ui, "", Info::None, |ui| {
         for (i, osc) in patch.oscs.iter().enumerate() {
             if patch.oscs.len() < 2 {
                 ui.offset_label("", Info::None); // can't delete the only osc
@@ -469,7 +469,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
 
         index_group(ui, patch.filters.len());
 
-        labeled_group(ui, "Type", |ui| {
+        labeled_group(ui, "Type", Info::FilterType, |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("filter_{}_type", i),
                     "", filter.filter_type.name(), Info::FilterType,
@@ -479,7 +479,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Cutoff", |ui| {
+        labeled_group(ui, "Cutoff", Info::FilterCutoff, |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 ui.shared_slider(&format!("filter_{}_cutoff", i), "", &filter.cutoff.0,
                     MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"), 2, true,
@@ -487,7 +487,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Resonance", |ui| {
+        labeled_group(ui, "Resonance", Info::FilterResonance, |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 ui.shared_slider(&format!("filter_{}_q", i), "",
                     &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None, 1, true,
@@ -495,7 +495,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Keytrack", |ui| {
+        labeled_group(ui, "Keytrack", Info::FilterKeytrack, |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("filter_{}_keytrack", i),
                     "", filter.key_tracking.name(), Info::FilterKeytrack,
@@ -505,7 +505,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "", |ui| {
+        labeled_group(ui, "", Info::None, |ui| {
             for i in 0..patch.filters.len() {
                 if ui.button("X", true, Info::Remove("this filter")) {
                     removed_filter = Some(i);
@@ -533,35 +533,35 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
 
         index_group(ui, patch.envs.len());
 
-        labeled_group(ui, "Attack", |ui| {
+        labeled_group(ui, "Attack", Info::Attack, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_A", i), "", &mut env.attack, 0.0..=10.0,
                     Some("s"), 2, true, Info::Attack);
             }
         });
 
-        labeled_group(ui, "Decay", |ui| {
+        labeled_group(ui, "Decay", Info::Decay, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_D", i), "", &mut env.decay, 0.01..=10.0,
                     Some("s"), 2, true, Info::Decay);
             }
         });
 
-        labeled_group(ui, "Sustain", |ui| {
+        labeled_group(ui, "Sustain", Info::Sustain, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0,
                     None, 1, true, Info::Sustain);
             }
         });
 
-        labeled_group(ui, "Release", |ui| {
+        labeled_group(ui, "Release", Info::Release, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
                 ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0,
                     Some("s"), 2, true, Info::Release);
             }
         });
 
-        labeled_group(ui, "", |ui| {
+        labeled_group(ui, "", Info::None, |ui| {
             for i in 0..patch.envs.len() {
                 if ui.button("X", true, Info::Remove("this envelope")) {
                     removed_env = Some(i);
@@ -589,7 +589,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
 
         index_group(ui, patch.lfos.len());
 
-        labeled_group(ui, "Waveform", |ui| {
+        labeled_group(ui, "Waveform", Info::Waveform, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("lfo_{}_wave", i),
                     "", lfo.waveform.name(), Info::Waveform,
@@ -599,7 +599,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Rate", |ui| {
+        labeled_group(ui, "Rate", Info::None, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
                     MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"), 2, lfo.waveform.uses_freq(),
@@ -607,14 +607,14 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Delay", |ui| {
+        labeled_group(ui, "Delay", Info::LfoDelay, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
                     0.0..=10.0, Some("s"), 2, true, Info::LfoDelay);
             }
         });
 
-        labeled_group(ui, "", |ui| {
+        labeled_group(ui, "", Info::None, |ui| {
             for i in 0..patch.lfos.len() {
                 if ui.button("X", true, Info::Remove("this LFO")) {
                     removed_lfo = Some(i);
@@ -645,7 +645,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
 
         index_group(ui, patch.mod_matrix.len());
 
-        labeled_group(ui, "Source", |ui| {
+        labeled_group(ui, "Source", Info::ModSource, |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("mod_{}_source", i),
                     "", &m.source.to_string(), Info::ModSource,
@@ -655,7 +655,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Target", |ui| {
+        labeled_group(ui, "Target", Info::ModDest, |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 if let Some(i) = ui.combo_box(&format!("mod_{}_target", i),
                     "", &m.target.to_string(), Info::ModDest,
@@ -665,7 +665,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "Depth", |ui| {
+        labeled_group(ui, "Depth", Info::ModDepth, |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
                 ui.formatted_shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0,
                     -1.0..=1.0, 1, true, Info::ModDepth,
@@ -673,7 +673,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
             }
         });
 
-        labeled_group(ui, "", |ui| {
+        labeled_group(ui, "", Info::None, |ui| {
             for i in 0..patch.mod_matrix.len() {
                 if ui.button("X", true, Info::Remove("this modulation")) {
                     removed_mod = Some(i);
@@ -695,16 +695,16 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
 
 fn index_group(ui: &mut UI, len: usize) {
     ui.start_group();
-    ui.label("#");
+    ui.label("#", Info::None);
     for i in 0..len {
         ui.offset_label(&(i + 1).to_string(), Info::None);
     }
     ui.end_group();
 }
 
-fn labeled_group(ui: &mut UI, label: &str, f: impl FnOnce(&mut UI) -> ()) {
+fn labeled_group(ui: &mut UI, label: &str, info: Info, f: impl FnOnce(&mut UI) -> ()) {
     ui.start_group();
-    ui.label(label);
+    ui.label(label, info);
     f(ui);
     ui.end_group();
 }
