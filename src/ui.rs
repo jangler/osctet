@@ -13,7 +13,7 @@ use text::GlyphAtlas;
 use textedit::TextEditState;
 use theme::Theme;
 
-use crate::{config::Config, input::{Hotkey, Modifiers}, module::EventData, pitch::Note, playback::Player, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{config::Config, input::{Action, Hotkey, Modifiers}, module::EventData, pitch::Note, playback::Player, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general_tab;
 pub mod pattern_tab;
@@ -49,6 +49,7 @@ pub fn new_file_dialog(player: &mut Player) -> FileDialog {
 
 enum Dialog {
     Alert(String),
+    OkCancel(String, Action),
 }
 
 /// Draws text with the top-left corner at (x, y), plus margins.
@@ -263,7 +264,8 @@ impl UI {
         self.tabs.get(key).copied()
     }
 
-    pub fn start_frame(&mut self, conf: &Config) {
+    /// Returns any action returned by a dialog.
+    pub fn start_frame(&mut self, conf: &Config) -> Option<Action> {
         self.bounds = Rect {
             x: 0.0,
             y: 0.0,
@@ -286,10 +288,10 @@ impl UI {
 
         clear_background(self.style.theme.panel_bg());
 
-        self.handle_dialog();
         self.info_box(conf);
         self.info = Info::None;
         self.ctrl_info = ControlInfo::None;
+        self.handle_dialog()
     }
 
     fn flip_layout(&mut self) {
@@ -597,7 +599,7 @@ impl UI {
 
     /// Check whether the mouse is within the rect and unoccluded.
     fn mouse_hits(&self, rect: Rect, id: &str) -> bool {
-        if self.mouse_consumed.as_ref().is_some_and(|s| s != id) || self.dialog.is_some() {
+        if self.mouse_consumed.as_ref().is_some_and(|s| s != id) {
             return false
         }
 
@@ -1352,6 +1354,11 @@ impl UI {
         self.open_dialog(Dialog::Alert(e.to_string()));
     }
 
+    /// Prompt for confirmation before performing an action.
+    pub fn confirm(&mut self, prompt: &str, action: Action) {
+        self.dialog = Some(Dialog::OkCancel(prompt.to_owned(), action));
+    }
+
     /// Temporarily use the info box to display a message.
     pub fn notify(&mut self, message: String) {
         self.notification = Some(Notification {
@@ -1560,14 +1567,17 @@ impl UI {
         self.push_text(x, y, base, color);
     }
 
-    // TODO: characters with descenders give this too large a bottom margin. make
-    //       the rect size independent of the particular characters
-    fn handle_dialog(&mut self) {
+    fn handle_dialog(&mut self) -> Option<Action> {
         const ID: &str = "dialog";
-        self.cursor_z += TOOLTIP_Z_OFFSET;
+        self.cursor_z += PANEL_Z_OFFSET;
 
-        let close = if let Some(dialog) = &self.dialog {
+        let mut close = false;
+        let mut action = None;
+
+        if let Some(dialog) = &self.dialog {
             match dialog {
+                // TODO: characters with descenders give this too large a bottom margin.
+                //       make the rect size independent of the particular characters
                 Dialog::Alert(s) => {
                     let s = s.clone();
                     let mut r = center(fit_strings(&self.style, &[s.clone()]));
@@ -1575,21 +1585,76 @@ impl UI {
                     self.push_rect(r, self.style.theme.panel_bg(),
                         Some(self.style.theme.border_unfocused()));
                     self.push_text(r.x, r.y, s, self.style.theme.fg());
+                    close = is_key_pressed(KeyCode::Escape)
+                        || (self.mouse_consumed.is_none()
+                            && is_mouse_button_pressed(MouseButton::Left))
+                }
+                Dialog::OkCancel(s, a) => {
+                    let a = *a;
+                    match self.ok_cancel_dialog(s.to_owned()) {
+                        Some(v) => {
+                            close = true;
+                            if v {
+                                action = Some(a);
+                            }
+                        }
+                        None => (),
+                    }
                 }
             };
-            is_key_pressed(KeyCode::Escape)
-                || (self.mouse_consumed.is_none()
-                    && is_mouse_button_pressed(MouseButton::Left))
-        } else {
-            false
-        };
+        }
 
         if close {
             self.dialog = None;
             self.mouse_consumed = Some(ID.to_string());
         }
 
-        self.cursor_z -= TOOLTIP_Z_OFFSET;
+        self.cursor_z -= PANEL_Z_OFFSET;
+        action
+    }
+
+    /// Returns Some(true) if OK, Some(false) if Cancel.
+    fn ok_cancel_dialog(&mut self, prompt: String) -> Option<bool> {
+        let margin = self.style.margin;
+        let buttons_w = self.style.atlas.text_width("OKCancel") + margin * 5.0;
+        let w = self.style.atlas.text_width(&prompt).max(buttons_w) + margin * 2.0;
+        let h = self.style.line_height() * 2.0 + margin * 3.0;
+        let rect = Rect {
+            x: ((screen_width() - w) * 0.5).round(),
+            y: ((screen_height() - h) * 0.5).round(),
+            w, h
+        };
+        self.push_rect(rect, self.style.theme.panel_bg(),
+            Some(self.style.theme.border_unfocused()));
+
+        let old_cursor = (self.cursor_x, self.cursor_y);
+        self.cursor_x = rect.x;
+        self.cursor_y = rect.y;
+
+        let mut result = None;
+
+        self.layout = Layout::Vertical;
+        self.offset_label(&prompt, Info::None);
+        self.flip_layout();
+
+        self.cursor_x = rect.x + rect.w - (buttons_w + margin * 2.0);
+        if self.button("OK", true, Info::None) {
+            result = Some(true);
+        }
+        if is_key_pressed(KeyCode::Enter) {
+            result = Some(true);
+        }
+
+        if self.button("Cancel", true, Info::None) {
+            result = Some(false);
+        }
+        if is_key_pressed(KeyCode::Escape) {
+            result = Some(false);
+        }
+
+        (self.cursor_x, self.cursor_y) = old_cursor;
+
+        result
     }
 }
 

@@ -485,7 +485,7 @@ impl fmt::Display for Hotkey {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
     IncrementDivision,
     DecrementDivision,
@@ -552,6 +552,7 @@ pub enum Action {
     CycleNotation,
     Panic,
     UseLastNote,
+    Quit,
 }
 
 impl Action {
@@ -622,6 +623,7 @@ impl Action {
             Self::CycleNotation => "Cycle notation",
             Self::Panic => "Panic",
             Self::UseLastNote => "Use last note",
+            Self::Quit => "Quit",
         }
     }
 }

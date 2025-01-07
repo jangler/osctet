@@ -208,10 +208,16 @@ impl App {
                         player.play_from(self.pattern_editor.cursor_tick(), &module)
                     }
                     Action::StopPlayback => player.stop(),
-                    // TODO: prompt if unsaved
-                    Action::NewSong => self.new_module(module, player),
-                    // TODO: prompt if unsaved
-                    Action::OpenSong=> self.open_module(module, player),
+                    Action::NewSong => if module.has_unsaved_changes {
+                        self.ui.confirm("Discard unsaved changes?", Action::NewSong);
+                    } else {
+                        self.new_module(module, player)
+                    },
+                    Action::OpenSong=> if module.has_unsaved_changes {
+                        self.ui.confirm("Discard unsaved changes?", Action::OpenSong);
+                    } else {
+                        self.open_module(module, player)
+                    },
                     Action::SaveSong => self.save_module(module, player),
                     Action::SaveSongAs => self.save_module_as(module, player),
                     Action::RenderSong => self.render_and_save(&module, player, false),
@@ -426,16 +432,18 @@ impl App {
 
     /// Returns false if it's quitting time.
     fn frame(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>) -> bool {
-        if is_quit_requested() {
-            if let Err(e) = self.config.save(self.ui.style.theme.clone()) {
-                eprintln!("error saving config: {}", e);
-            }
-            return false
-        }
-
         {
             let mut module = module.lock().unwrap();
             let mut player = player.lock().unwrap();
+
+            if is_quit_requested() {
+                if module.has_unsaved_changes {
+                    self.ui.confirm("Discard unsaved changes?", Action::Quit);
+                } else {
+                    self.save_config();
+                    return false
+                }
+            }
 
             if self.ui.accepting_keyboard_input() {
                 player.clear_notes_with_origin(KeyOrigin::Keyboard);
@@ -459,9 +467,13 @@ impl App {
 
         self.handle_render_updates();
         self.check_midi_reconnect();
-        self.process_ui(module, player);
+        self.process_ui(module, player)
+    }
 
-        true
+    fn save_config(&mut self) {
+        if let Err(e) = self.config.save(self.ui.style.theme.clone()) {
+            eprintln!("error saving config: {}", e);
+        }
     }
 
     fn handle_render_updates(&mut self) {
@@ -479,12 +491,24 @@ impl App {
         }
     }
 
-    fn process_ui(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>) {
-        self.ui.start_frame(&self.config);
-
+    /// Returns false if it's quitting time.
+    fn process_ui(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>
+    ) -> bool {
         {
             let mut module = module.lock().unwrap();
             let mut player = player.lock().unwrap();
+
+            if let Some(action) = self.ui.start_frame(&self.config) {
+                match action {
+                    Action::NewSong => self.new_module(&mut module, &mut player),
+                    Action::OpenSong => self.open_module(&mut module, &mut player),
+                    Action::Quit => {
+                        self.save_config();
+                        return false
+                    }
+                    _ => panic!("unhandled dialog action: {:?}", action),
+                }
+            }
 
             self.bottom_panel(&mut player);
 
@@ -505,6 +529,7 @@ impl App {
         }
 
         self.ui.end_frame();
+        true
     }
 
     fn bottom_panel(&mut self, player: &mut Player) {
