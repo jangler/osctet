@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::{dsp::{adsr_scalable, pow_shape}, smpl::SmplData};
 
 pub const REF_PITCH: f64 = 60.0; // C4
-pub const REF_FREQ: f32 = 261.6; // C4
+pub const REF_FREQ: f32 = 261.6256; // C4
 
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICES_PER_CHANNEL: usize = 3;
