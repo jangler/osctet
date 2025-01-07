@@ -152,7 +152,7 @@ impl Theme {
     }
 
     pub fn border_focused(&self) -> Color {
-        self.accent2_fg()
+        self.fg()
     }
 
     pub fn border_disabled(&self) -> Color {

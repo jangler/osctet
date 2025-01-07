@@ -1221,7 +1221,7 @@ impl UI {
         let mut return_val = None;
         for (i, option) in options.iter().enumerate() {
             if i == *index {
-                self.push_rect(hit_rect, self.style.theme.accent2_bg(), None);
+                self.push_rect(hit_rect, self.style.theme.content_bg_click(), None);
                 self.push_text(list_rect.x, hit_rect.y,
                     pointer.clone(), self.style.theme.fg());
             } else if self.mouse_hits(hit_rect, "instrument_list") {
