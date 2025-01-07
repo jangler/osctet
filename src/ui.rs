@@ -1186,10 +1186,12 @@ impl UI {
         min_chars: usize,
     ) -> Option<String> {
         const TEXT_ID: &str = "instrument_list";
+        let pointer = String::from(char::from_u32(0xbb).unwrap());
 
         let margin = self.style.margin;
         let atlas = &self.style.atlas;
         let line_height = self.style.line_height();
+        let char_width = self.style.atlas.char_width();
         let list_rect = Rect {
             x: self.cursor_x + margin,
             y: self.cursor_y + margin,
@@ -1200,7 +1202,7 @@ impl UI {
                         atlas.text_width(&state.text),
                     _ => 0.0,
                 })
-                + margin * 2.0,
+                + margin * 2.0 + char_width,
             h: line_height * options.len() as f32 + 2.0,
         };
 
@@ -1219,7 +1221,9 @@ impl UI {
         let mut return_val = None;
         for (i, option) in options.iter().enumerate() {
             if i == *index {
-                self.push_rect(hit_rect, self.style.theme.content_bg_click(), None);
+                self.push_rect(hit_rect, self.style.theme.accent2_bg(), None);
+                self.push_text(list_rect.x, hit_rect.y,
+                    pointer.clone(), self.style.theme.fg());
             } else if self.mouse_hits(hit_rect, "instrument_list") {
                 self.push_rect(hit_rect, self.style.theme.content_bg_hover(), None);
                 if lmb {
@@ -1240,7 +1244,12 @@ impl UI {
             }
 
             if Some(i) == self.instrument_edit_index {
-                if self.editable_text(hit_rect, 20) {
+                let rect = Rect {
+                    x: list_rect.x + char_width,
+                    w: hit_rect.w - char_width,
+                    ..hit_rect
+                };
+                if self.editable_text(rect, 20) {
                     if let Focus::Text(state) = &mut self.focus {
                         return_val = Some(state.text.clone());
                         self.focus = Focus::None;
@@ -1256,7 +1265,7 @@ impl UI {
                     self.instrument_edit_index = Some(i);
                     *index = i;
                 }
-                self.push_text(hit_rect.x, hit_rect.y,
+                self.push_text(list_rect.x + char_width, hit_rect.y,
                     option.to_owned(), self.style.theme.fg());
             }
             hit_rect.y += hit_rect.h;
