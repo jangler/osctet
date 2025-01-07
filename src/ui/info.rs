@@ -361,6 +361,8 @@ Enharmonic notes have unequal values in most tunings.".to_string(),
 "Toggle whether the pattern view tracks the playhead.".to_string(),
             Action::SelectAllChannels =>
                 text = "Expand the pattern selection to all channels.".to_string(),
+            Action::SelectAllRows =>
+                text = "Expand the pattern selection to all rows in song.".to_string(),
             Action::PlaceEvenly => text =
 "Place selected events evenly across the selected
 timespan.".to_string(),

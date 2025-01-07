@@ -169,6 +169,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::Home), Action::PatternStart),
         (Hotkey::new(Modifiers::None, KeyCode::End), Action::PatternEnd),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::A), Action::SelectAllChannels),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::L), Action::SelectAllRows),
 
         // events
         (Hotkey::new(Modifiers::None, KeyCode::Space), Action::UseLastNote),

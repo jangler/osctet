@@ -256,6 +256,7 @@ impl PatternEditor {
             //     self.record = true;
             // },
             Action::SelectAllChannels => self.select_all_channels(module),
+            Action::SelectAllRows => self.select_all_rows(module),
             Action::PlaceEvenly => self.place_events_evenly(module),
             Action::NextBeat => self.translate_cursor(TICKS_PER_BEAT as i64),
             Action::PrevBeat => self.translate_cursor(-(TICKS_PER_BEAT as i64)),
@@ -502,6 +503,11 @@ impl PatternEditor {
         self.edit_end.track = module.tracks.len() - 1;
         self.edit_end.channel = module.tracks[self.edit_end.track].channels.len() - 1;
         self.edit_end.column = MOD_COLUMN;
+    }
+
+    fn select_all_rows(&mut self, module: &Module) {
+        self.edit_start.tick = 0;
+        self.edit_end.tick = module.last_event_tick().unwrap_or(0);
     }
 
     fn place_events_evenly(&self, module: &mut Module) {
