@@ -22,7 +22,7 @@ pub struct PatternEditor {
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
     clipboard: Option<PatternClip>,
-    follow: bool,
+    pub follow: bool,
     record: bool,
     screen_tick: u32,
     screen_tick_max: u32,

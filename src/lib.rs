@@ -611,8 +611,10 @@ impl App {
     fn load_module(&mut self,
         old_module: &mut Module, module: Module, player: &mut Player) {
         *old_module = module;
+        let follow = self.pattern_editor.follow;
         self.pattern_editor = PatternEditor::new();
         self.pattern_editor.beat_division = old_module.division;
+        self.pattern_editor.follow = follow;
         self.patch_index = None;
         player.reinit(old_module.tracks.len());
         self.fx.reinit(&old_module.fx);
