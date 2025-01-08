@@ -585,9 +585,9 @@ impl PatternEditor {
         let n = ((end.beat() - start.beat()) * self.beat_division as f32).round() as u8;
         let d = self.beat_division;
         if n > 0 && n != d {
-            let lcm = n.gcd(d);
+            let gcd = n.gcd(d);
             insert_event_at_cursor(module, &self.edit_start,
-                EventData::RationalTempo(n / lcm, d / lcm), false);
+                EventData::RationalTempo(n / gcd, d / gcd), false);
         }
     }
 
