@@ -239,7 +239,10 @@ fn load_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
         .pick_file() {
         cfg.theme_folder = config::dir_as_string(&path);
         match Theme::load(path) {
-            Ok(t) => ui.style.theme = t,
+            Ok(t) => ui.style.theme = Theme {
+                gamma: ui.style.theme.gamma,
+                ..t
+            },
             Err(e) => ui.report(format!("Error loading theme: {e}")),
         }
     }
