@@ -469,7 +469,10 @@ impl PatternEditor {
         if tick % self.ticks_per_row() != 0 {
             self.beat_division = 2;
             while tick % self.ticks_per_row() != 0 {
-                self.beat_division += 1;
+                match self.beat_division.checked_add(1) {
+                    Some(i) => self.beat_division = i,
+                    None => break,
+                }
             }
         }
     }
