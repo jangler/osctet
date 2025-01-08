@@ -200,9 +200,9 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::CtrlAlt, KeyCode::V), Action::InsertPaste),
 
         // playback
+        (Hotkey::new(Modifiers::None, KeyCode::Enter), Action::PlayFromScreen),
+        (Hotkey::new(Modifiers::Shift, KeyCode::Enter), Action::PlayFromCursor),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::Enter), Action::PlayFromStart),
-        (Hotkey::new(Modifiers::Shift, KeyCode::Enter), Action::PlayFromScreen),
-        (Hotkey::new(Modifiers::None, KeyCode::Enter), Action::PlayFromCursor),
         (Hotkey::new(Modifiers::None, KeyCode::ScrollLock), Action::ToggleFollow),
         (Hotkey::new(Modifiers::None, KeyCode::F9), Action::MuteTrack),
         (Hotkey::new(Modifiers::None, KeyCode::F10), Action::SoloTrack),
