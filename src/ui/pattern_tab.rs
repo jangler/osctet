@@ -656,9 +656,9 @@ impl PatternEditor {
         }
     }
 
-    fn draw_channel(&self, ui: &mut UI, channel: &Channel, muted: bool) {
+    fn draw_channel(&self, ui: &mut UI, channel: &Channel, muted: bool, index: usize) {
         let beat_height = self.beat_height(ui);
-        self.draw_channel_line(ui);
+        self.draw_channel_line(ui, index == 0);
         self.draw_interpolation(ui, channel);
 
         // draw events
@@ -667,12 +667,17 @@ impl PatternEditor {
         }
     }
 
-    fn draw_channel_line(&self, ui: &mut UI) {
+    fn draw_channel_line(&self, ui: &mut UI, track_boundary: bool) {
         let scroll = self.scroll(ui);
         ui.cursor_z -= 1;
+        let color = if track_boundary {
+            ui.style.theme.control_bg()
+        } else {
+            ui.style.theme.panel_bg()
+        };
         ui.push_line(ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll,
             ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll + ui.bounds.h,
-            ui.style.theme.control_bg());
+            color);
         ui.cursor_z += 1;
     }
 
@@ -1056,11 +1061,11 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         let chan_width = channel_width(track_i, &ui.style);
         for (channel_i, channel) in track.channels.iter().enumerate() {
             ui.cursor_x = track_xs[track_i] + chan_width * channel_i as f32;
-            pe.draw_channel(ui, channel, player.track_muted(track_i));
+            pe.draw_channel(ui, channel, player.track_muted(track_i), channel_i);
         }
     }
     ui.cursor_x += channel_width(1, &ui.style);
-    pe.draw_channel_line(ui);
+    pe.draw_channel_line(ui, true);
 }
 
 /// Draws beat numbers and lines.
