@@ -214,12 +214,7 @@ impl PatternEditor {
                 self.paste(module, false);
             },
             Action::PrevRow => self.translate_cursor(-self.row_timespan()),
-            Action::NextRow => {       
-                for evt in module.scan_events(self.edit_start, self.edit_end) {
-                    dbg!(evt.event.tick);
-                }
-                self.translate_cursor(self.row_timespan())
-            }
+            Action::NextRow => self.translate_cursor(self.row_timespan()),
             Action::PrevColumn => shift_column_left(self, &module.tracks),
             Action::NextColumn => shift_column_right(self, &module.tracks),
             Action::NextChannel => shift_channel_right(self, &module.tracks),
@@ -264,7 +259,7 @@ impl PatternEditor {
             Action::PrevBeat => self.translate_cursor(Timespan::new(-1, 1)),
             Action::NextEvent => self.next_event(module),
             Action::PrevEvent => self.prev_event(module),
-            Action::PatternStart => self.translate_cursor(self.cursor_tick()),
+            Action::PatternStart => self.translate_cursor(-self.cursor_tick()),
             Action::PatternEnd => if let Some(tick) = module.last_event_tick() {
                 self.translate_cursor(tick - self.cursor_tick());
             }
@@ -771,8 +766,8 @@ impl PatternEditor {
 
     /// Scroll to a position that centers the given tick.
     fn scroll_to(&mut self, tick: Timespan) {
-        let offset = (self.screen_tick_max - self.screen_tick)
-            - self.row_timespan() * Timespan::new(1, 2);
+        let offset = (self.screen_tick_max - self.screen_tick - self.row_timespan())
+            * Timespan::new(1, 2);
         self.beat_scroll = (tick - offset).max(Timespan::ZERO);
     }
 
