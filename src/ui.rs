@@ -203,6 +203,7 @@ pub struct UI {
     saved_info: (Info, ControlInfo),
     info_delay: f32,
     bottom_right_corner: Vec2,
+    pending_focus: Option<String>,
 }
 
 impl UI {
@@ -241,6 +242,7 @@ impl UI {
             saved_info: (Info::None, ControlInfo::None),
             info_delay: INFO_DELAY,
             bottom_right_corner: Vec2::ZERO,
+            pending_focus: None,
         }
     }
 
@@ -1133,6 +1135,15 @@ impl UI {
     fn text_box(&mut self, id: &str, label: &str, width: f32, text: &str, max_width: usize,
         info: Info
     ) -> bool {
+        match &self.pending_focus {
+            Some(s) if s == id => {
+                self.focus =
+                    Focus::Text(TextEditState::new(id.to_owned(), text.to_owned()));
+                self.pending_focus = None;
+            }
+            _ => (),
+        }
+
         let box_rect = Rect {
             x: self.cursor_x + self.style.margin,
             y: self.cursor_y + self.style.margin,
@@ -1546,6 +1557,11 @@ impl UI {
             }
             self.cursor_z -= TOOLTIP_Z_OFFSET;
         }
+    }
+
+    /// Focus the control with the given ID.
+    pub fn focus(&mut self, id: &str) {
+        self.pending_focus = Some(id.to_owned());
     }
 
     /// Pushes a note to the draw list. The notation is drawn in the space of

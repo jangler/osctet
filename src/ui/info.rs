@@ -403,8 +403,10 @@ clipboard.".to_string(),
             Action::DecrementDivision => text = "Decrease beat division by 1.".to_string(),
             Action::DoubleDivision => text = "Double the beat division.".to_string(),
             Action::HalveDivision => text = "Halve the beat division.".to_string(),
+            Action::FocusDivision => text = "Focus the division field.".to_string(),
             Action::StopPlayback => text = "Stop song playback.".to_string(),
-            Action::NewSong => text = "Close the open song and start a new one.".to_string(),
+            Action::NewSong =>
+                text = "Close the open song and start a new one.".to_string(),
             Action::OpenSong => text = "Load a song from disk.".to_string(),
             Action::SaveSong => text =
 "Save the open song, using the path it was last

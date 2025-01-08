@@ -189,6 +189,7 @@ impl App {
                     Action::DecrementDivision => self.pattern_editor.dec_division(),
                     Action::DoubleDivision => self.pattern_editor.double_division(),
                     Action::HalveDivision => self.pattern_editor.halve_division(),
+                    Action::FocusDivision => self.ui.focus("Division"),
                     Action::IncrementOctave => self.octave += 1,
                     Action::DecrementOctave => self.octave -= 1,
                     Action::PlayFromStart => if player.is_playing() {
