@@ -1226,7 +1226,7 @@ impl ModTarget {
 impl Display for ModTarget {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Self::Gain => "Gain",
+            Self::Gain => "Level",
             Self::Pan => "Pan",
             Self::Pitch => "Pitch",
             Self::FinePitch => "Finetune",
