@@ -12,7 +12,7 @@ use fx::{FXSettings, GlobalFX};
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
-use module::{EventData, Module, TrackTarget, TICKS_PER_BEAT};
+use module::{EventData, Module, TrackTarget};
 use playback::{Player, RenderUpdate};
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
@@ -27,9 +27,10 @@ pub mod module;
 pub mod playback;
 mod dsp;
 mod smpl;
-mod beat;
+mod timespan;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
+use timespan::Timespan;
 use ui::general_tab::TableCache;
 use ui::info::Info;
 use ui::instruments_tab::fix_patch_index;
@@ -196,7 +197,7 @@ impl App {
                     Action::PlayFromStart => if player.is_playing() {
                         player.stop()
                     } else {
-                        player.play_from(0, &module)
+                        player.play_from(Timespan::ZERO, &module)
                     }
                     Action::PlayFromScreen => if player.is_playing() {
                         player.stop()
@@ -458,7 +459,7 @@ impl App {
 
             if player.is_playing() {
                 let end_tick = module.last_event_tick().unwrap_or_default()
-                    + TICKS_PER_BEAT;
+                    + Timespan::new(1, 1);
                 if player.get_tick() > end_tick {
                     player.stop()
                 }

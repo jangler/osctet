@@ -5,7 +5,7 @@ use std::{collections::HashSet, error::Error, fs::File, io::{BufReader, Read, Wr
 use flate2::{bufread::GzDecoder, write::GzEncoder};
 use serde::{Deserialize, Serialize};
 
-use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch};
+use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch, timespan::Timespan};
 
 pub const TICKS_PER_BEAT: u32 = 5040;
 
@@ -210,7 +210,9 @@ impl Module {
         });
     }
 
-    pub fn shift_channel_events(&mut self, start: Position, end: Position, distance: i32) {
+    pub fn shift_channel_events(&mut self,
+        start: Position, end: Position, distance: Timespan
+    ) {
         let (x_start, x_end) = ((start.track, start.channel), (end.track, end.channel));
         let mut channels = Vec::new();
         for (track_i, track) in self.tracks.iter().enumerate() {
@@ -233,13 +235,13 @@ impl Module {
     }
 
     /// Returns the nearest loop start to the given tick.
-    pub fn nearest_loop(&self, tick: u32) -> Option<u32> {
+    pub fn nearest_loop(&self, tick: Timespan) -> Option<Timespan> {
         self.tracks[0].channels.iter().flat_map(|c| {
             c.events.iter().filter_map(|e| match e.data {
                 EventData::Loop => Some(e.tick),
                 _ => None,
             })
-        }).max_by_key(|t| (*t as isize - tick as isize).abs())
+        }).max_by_key(|t| (*t - tick).abs())
     }
 
     /// Performs an edit operation and handles undo/redo stacks.
@@ -385,7 +387,7 @@ impl Module {
         self.track_history.drain(..).collect()
     }
 
-    pub fn find_loop_start(&self, before_tick: u32) -> Option<u32> {
+    pub fn find_loop_start(&self, before_tick: Timespan) -> Option<Timespan> {
         self.tracks[0].channels.iter().flat_map(|c| {
             c.events.iter()
                 .filter(|e| e.data == EventData::Loop && e.tick < before_tick)
@@ -436,7 +438,7 @@ impl Module {
     }
 
     /// Return the tick value of the last event in the pattern.
-    pub fn last_event_tick(&self) -> Option<u32> {
+    pub fn last_event_tick(&self) -> Option<Timespan> {
         self.tracks.iter().flat_map(|t| {
             t.channels.iter().flat_map(|c| {
                 c.events.iter().map(|e| e.tick)
@@ -445,7 +447,7 @@ impl Module {
     }
 
     /// Return the tempo at a given tick.
-    pub fn tempo_at(&self, tick: u32) -> f32 {
+    pub fn tempo_at(&self, tick: Timespan) -> f32 {
         let mut events: Vec<_> = self.tracks[0].channels.iter()
             .flat_map(|c| c.events.iter().filter(|e| e.tick < tick))
             .collect();
@@ -467,7 +469,7 @@ impl Module {
         let ctrl_events: Vec<_> = self.tracks[0].channels.iter()
             .flat_map(|c| c.events.iter())
             .collect();
-        let mut tick = 0;
+        let mut tick = Timespan::ZERO;
         let mut time = 0.0;
         let mut tempo = DEFAULT_TEMPO;
 
@@ -541,20 +543,20 @@ impl Channel {
     }
 
     /// Shifts events after `start` by `distance` ticks, returning deleted events.
-    pub fn shift_events(&mut self, start: u32, distance: i32) -> Vec<Event> {
+    pub fn shift_events(&mut self, start: Timespan, distance: Timespan) -> Vec<Event> {
         let mut deleted = Vec::new();
 
-        if distance < 0 {
+        if distance < Timespan::ZERO {
             let (keep, pass) = std::mem::take(&mut self.events).into_iter()
                 .partition(|e| e.tick < start
-                    || e.tick >= (start as i32 - distance) as u32);
+                    || e.tick >= start - distance);
             self.events = keep;
             deleted = pass;
         }
 
         for event in self.events.iter_mut() {
             if event.tick >= start {
-                event.tick = (event.tick as i32 + distance).max(0) as u32;
+                event.tick = (event.tick + distance).max(Timespan::ZERO);
             }
         }
 
@@ -576,7 +578,7 @@ impl Channel {
         })
     }
 
-    pub fn is_interpolated(&self, col: u8, tick: u32) -> bool {
+    pub fn is_interpolated(&self, col: u8, tick: Timespan) -> bool {
         let mut depth = 0;
 
         for event in self.interp_by_col(col) {
@@ -602,7 +604,7 @@ impl Channel {
     }
 
     /// Returns the last event before `tick` in `column`.
-    pub fn prev_event(&self, column: u8, tick: u32) -> Option<&Event> {
+    pub fn prev_event(&self, column: u8, tick: Timespan) -> Option<&Event> {
         self.events.iter()
             .filter(|e| e.tick < tick && e.data.logical_column() == column)
             .last()
@@ -611,7 +613,7 @@ impl Channel {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Event {
-    pub tick: u32,
+    pub tick: Timespan,
     pub data: EventData,
 }
 
@@ -675,19 +677,19 @@ pub struct Link {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Position {
-    pub tick: u32,
+    pub tick: Timespan,
     pub track: usize,
     pub channel: usize,
     pub column: u8,
 }
 
 impl Position {
-    pub fn new(tick: u32, track: usize, channel: usize, column: u8) -> Self {
+    pub fn new(tick: Timespan, track: usize, channel: usize, column: u8) -> Self {
         Self { tick, track, channel, column }
     }
 
     pub fn beat(&self) -> f32 {
-        self.tick as f32 / TICKS_PER_BEAT as f32
+        self.tick.as_f32()
     }
 
     /// Returns a tuple of horizontal indices for comparison.
@@ -734,8 +736,8 @@ pub enum Edit {
     RemovePatch(usize),
     ShiftEvents {
         channels: Vec<ChannelCoords>,
-        start: u32,
-        distance: i32,
+        start: Timespan,
+        distance: Timespan,
         insert: Vec<LocatedEvent>,
     },
     ReplaceEvents(Vec<LocatedEvent>),

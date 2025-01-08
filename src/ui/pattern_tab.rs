@@ -2,7 +2,7 @@ use std::{collections::HashSet, u8};
 
 use gcd::Gcd;
 
-use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch};
+use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch, timespan::Timespan};
 
 use super::*;
 
@@ -17,15 +17,15 @@ pub struct PatternEditor {
     edit_start: Position,
     edit_end: Position,
     pub beat_division: u8,
-    beat_scroll: f32,
+    beat_scroll: Timespan,
     h_scroll: f32,
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
     clipboard: Option<PatternClip>,
     pub follow: bool,
     record: bool,
-    screen_tick: u32,
-    screen_tick_max: u32,
+    screen_tick: Timespan,
+    screen_tick_max: Timespan,
 }
 
 struct PatternClip {
@@ -43,7 +43,7 @@ struct ClipEvent {
 impl PatternEditor {
     pub fn new() -> Self {
         let edit_cursor = Position {
-            tick: 0,
+            tick: Timespan::ZERO,
             track: 0,
             channel: 0,
             column: 0,
@@ -52,15 +52,15 @@ impl PatternEditor {
             edit_start: edit_cursor,
             edit_end: edit_cursor,
             beat_division: 4,
-            beat_scroll: 0.0,
+            beat_scroll: Timespan::ZERO,
             h_scroll: 0.0,
             tap_tempo_intervals: Vec::new(),
             pending_interval: None,
             clipboard: None,
             follow: false,
             record: false,
-            screen_tick: 0,
-            screen_tick_max: 0,
+            screen_tick: Timespan::ZERO,
+            screen_tick_max: Timespan::ZERO,
         }
     }
 
@@ -81,10 +81,10 @@ impl PatternEditor {
     }
 
     pub fn set_division(&mut self, division: u8) {
-        let division = division.max(1).min(u8::MAX/2);
+        let division = division.max(1);
         self.screen_tick_max = self.screen_tick
             + (self.screen_tick_max - self.screen_tick)
-            * self.beat_division as u32 / division as u32;
+            * Timespan::new(self.beat_division as i32, division);
         self.beat_division = division;
         self.cursor_to_division();
         self.scroll_to(self.cursor_tick());
@@ -94,7 +94,7 @@ impl PatternEditor {
         self.edit_start.track
     }
 
-    pub fn cursor_tick(&self) -> u32 {
+    pub fn cursor_tick(&self) -> Timespan {
         self.edit_start.tick
     }
 
@@ -146,16 +146,15 @@ impl PatternEditor {
         pos
     }
 
-    fn y_tick(&self, y: f32, ui: &UI) -> u32 {
+    fn y_tick(&self, y: f32, ui: &UI) -> Timespan {
         let beat_height = self.beat_height(ui);
-        ((y - ui.cursor_y - line_height(&ui.style.atlas) * 0.5)
-            / beat_height * self.beat_division as f32
-            * TICKS_PER_BEAT as f32 / self.beat_division as f32).round() as u32
+        let f = (y - ui.cursor_y - line_height(&ui.style.atlas) * 0.5) / beat_height;
+        Timespan::approximate(f.into())
     }
 
     /// Returns the tick of the first beat on-screen.
-    pub fn screen_beat_tick(&self) -> u32 {
-        (self.screen_tick as f32 / TICKS_PER_BEAT as f32).ceil() as u32 * TICKS_PER_BEAT
+    pub fn screen_beat_tick(&self) -> Timespan {
+        Timespan::new(self.screen_tick.as_f64().ceil() as i32, 1)
     }
 
     fn set_metrics(&mut self, viewport: Rect, ui: &UI) {
@@ -214,10 +213,13 @@ impl PatternEditor {
                 self.push_rows(module);
                 self.paste(module, false);
             },
-            Action::PrevRow => self.translate_cursor(
-                (TICKS_PER_BEAT / self.beat_division as u32) as i64 * -1),
-            Action::NextRow => self.translate_cursor(
-                (TICKS_PER_BEAT / self.beat_division as u32) as i64),
+            Action::PrevRow => self.translate_cursor(-self.row_timespan()),
+            Action::NextRow => {       
+                for evt in module.scan_events(self.edit_start, self.edit_end) {
+                    dbg!(evt.event.tick);
+                }
+                self.translate_cursor(self.row_timespan())
+            }
             Action::PrevColumn => shift_column_left(self, &module.tracks),
             Action::NextColumn => shift_column_right(self, &module.tracks),
             Action::NextChannel => shift_channel_right(self, &module.tracks),
@@ -258,13 +260,13 @@ impl PatternEditor {
             Action::SelectAllChannels => self.select_all_channels(module),
             Action::SelectAllRows => self.select_all_rows(module),
             Action::PlaceEvenly => self.place_events_evenly(module),
-            Action::NextBeat => self.translate_cursor(TICKS_PER_BEAT as i64),
-            Action::PrevBeat => self.translate_cursor(-(TICKS_PER_BEAT as i64)),
+            Action::NextBeat => self.translate_cursor(Timespan::new(1, 1)),
+            Action::PrevBeat => self.translate_cursor(Timespan::new(-1, 1)),
             Action::NextEvent => self.next_event(module),
             Action::PrevEvent => self.prev_event(module),
-            Action::PatternStart => self.translate_cursor(-(self.cursor_tick() as i64)),
+            Action::PatternStart => self.translate_cursor(self.cursor_tick()),
             Action::PatternEnd => if let Some(tick) = module.last_event_tick() {
-                self.translate_cursor(tick as i64 - self.cursor_tick() as i64);
+                self.translate_cursor(tick - self.cursor_tick());
             }
             Action::IncrementValues => self.shift_values(1, module),
             Action::DecrementValues => self.shift_values(-1, module),
@@ -298,7 +300,7 @@ impl PatternEditor {
                     .unwrap_or(Position {
                         track: module.tracks.len(),
                         channel: module.tracks.last().unwrap().channels.len() - 1,
-                        tick: 0,
+                        tick: Timespan::ZERO,
                         column: 0,
                     })
             };
@@ -445,12 +447,12 @@ impl PatternEditor {
         self.snap_to_event(module, |t| *t < tick);
     }
 
-    fn snap_to_event(&mut self, module: &Module, filter_fn: impl Fn(&u32) -> bool) {
+    fn snap_to_event(&mut self, module: &Module, filter_fn: impl Fn(&Timespan) -> bool) {
         let cursor = &mut self.edit_start;
         let tick = module.tracks[cursor.track].channels[cursor.channel].events.iter()
             .map(|e| e.tick)
             .filter(filter_fn)
-            .min_by_key(|t| (*t as i32 - cursor.tick as i32).abs());
+            .min_by_key(|t| (*t - cursor.tick).abs());
 
         if let Some(tick) = tick {
             if !is_shift_down() {
@@ -466,21 +468,19 @@ impl PatternEditor {
     /// division that contains the cursor tick.
     fn division_to_cursor(&mut self) {
         let tick = self.cursor_tick();
-        let old_div = self.beat_division;
 
         if self.off_division(tick) {
+            let old_div = self.beat_division;
             self.beat_division = 2;
-            while self.off_division(tick) {
-                match self.beat_division.checked_add(1) {
-                    Some(i) => self.beat_division = i,
-                    None => break,
-                }
-            }
-        }
 
-        let screen_h = (self.screen_tick_max - self.screen_tick)
-            / old_div as u32 * self.beat_division as u32;
-        self.screen_tick_max = self.screen_tick + screen_h;
+            while self.off_division(tick) {
+                self.beat_division += 1;
+            }
+
+            let div = self.beat_division;
+            self.beat_division = old_div;
+            self.set_division(div); // to set screen ticks
+        }
     }
 
     /// If the cursor tick is off-divison, set it to the nearest on-divison
@@ -491,18 +491,13 @@ impl PatternEditor {
     }
 
     /// Round a tick to the nearest on-division value.
-    pub fn round_tick(&self, tick: u32) -> u32 {
-        let tpr = TICKS_PER_BEAT as f32 / self.beat_division as f32;
-        let div = ((tick % TICKS_PER_BEAT) as f32 / tpr).round();
-        (tick / TICKS_PER_BEAT) * TICKS_PER_BEAT + (div * tpr).round() as u32
+    pub fn round_tick(&self, tick: Timespan) -> Timespan {
+        let n = (tick.as_f64() * self.beat_division as f64).round() as i32;
+        Timespan::new(n, self.beat_division)
     }
 
-    fn off_division(&self, tick: u32) -> bool {
-        tick != self.round_tick(tick)
-    }
-
-    fn ticks_per_row(&self) -> u32 {
-        TICKS_PER_BEAT / self.beat_division as u32
+    fn off_division(&self, tick: Timespan) -> bool {
+        self.beat_division % tick.den() != 0
     }
 
     fn select_all_channels(&mut self, module: &Module) {
@@ -515,13 +510,17 @@ impl PatternEditor {
     }
 
     fn select_all_rows(&mut self, module: &Module) {
-        self.edit_start.tick = 0;
-        self.edit_end.tick = module.last_event_tick().unwrap_or(0);
+        self.edit_start.tick = Timespan::ZERO;
+        self.edit_end.tick = module.last_event_tick().unwrap_or_default();
+    }
+
+    fn row_timespan(&self) -> Timespan {
+        Timespan::new(1, self.beat_division)
     }
 
     fn place_events_evenly(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
-        let tick_delta = end.tick - start.tick + self.ticks_per_row();
+        let tick_delta = end.tick - start.tick + self.row_timespan();
         let events = module.scan_events(start, end);
         let channels: HashSet<_> = events.iter().map(|e| (e.track, e.channel)).collect();
 
@@ -537,7 +536,7 @@ impl PatternEditor {
                     track,
                     channel,
                     event: Event {
-                        tick: start.tick + tick_delta / n as u32 * i as u32,
+                        tick: start.tick + tick_delta * Timespan::new(i as i32, n as u8),
                         data: e.event.data.clone()
                     }
                 })
@@ -612,7 +611,7 @@ impl PatternEditor {
 
     fn paste(&self, module: &mut Module, mix: bool) {
         if let Some(clip) = &self.clipboard {
-            let tick_offset = self.edit_start.tick as i32 - clip.start.tick as i32;
+            let tick_offset = self.edit_start.tick - clip.start.tick;
             let channel_offset = module.channels_between(clip.start, clip.end);
             let end = Position {
                 tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
@@ -621,7 +620,7 @@ impl PatternEditor {
                     .unwrap_or(Position {
                         track: module.tracks.len(),
                         channel: module.tracks.last().unwrap().channels.len() - 1,
-                        tick: 0,
+                        tick: Timespan::ZERO,
                         column: 0,
                     })
             };
@@ -633,14 +632,14 @@ impl PatternEditor {
                     .map(|pos| {
                         if x.event.data.is_ctrl() == (pos.track == 0)
                             && (!mix || !event_positions.contains(&Position {
-                                tick: (x.event.tick as i32 + tick_offset) as u32,
+                                tick: x.event.tick + tick_offset,
                                 ..pos
                             })) {
                             Some(LocatedEvent {
                                 track: pos.track,
                                 channel: pos.channel,
                                 event: Event {
-                                    tick: (x.event.tick as i32 + tick_offset) as u32,
+                                    tick: x.event.tick + tick_offset,
                                     data: x.event.data.clone(),
                                 },
                             })
@@ -693,7 +692,7 @@ impl PatternEditor {
     fn draw_interpolation(&self, ui: &mut UI, channel: &Channel) {
         ui.cursor_z -= 1;
         let beat_height = self.beat_height(ui);
-        let tpr = self.ticks_per_row();
+        let tpr = self.row_timespan();
         let colors = [
             with_alpha(0.5, ui.style.theme.fg()),
             with_alpha(0.5, ui.style.theme.accent1_fg()),
@@ -710,19 +709,20 @@ impl PatternEditor {
             let mut lines = Vec::new();
             let mut marks = Vec::new();
 
-            let mut draw_line = |start: u32, end: u32| {
-                let y1 = ui.cursor_y + (start + tpr / 4) as f32
-                    / TICKS_PER_BEAT as f32 * beat_height;
-                let y2 = ui.cursor_y + (end + tpr * 3 / 4) as f32
-                    / TICKS_PER_BEAT as f32 * beat_height;
+            let mut draw_line = |start: Timespan, end: Timespan| {
+                let y1 = ui.cursor_y
+                    + (start + tpr * Timespan::new(1, 4)).as_f32() * beat_height;
+                let y2 = ui.cursor_y
+                    + (end + tpr * Timespan::new(3, 4)).as_f32() * beat_height;
                 lines.push(Graphic::Line(x, y1, x, y2, colors[col as usize]));
             };
 
-            let mut draw_dup = |tick: u32| {
+            let mut draw_dup = |tick: Timespan| {
                 let offset = ui.style.margin * 0.5;
                 let (x1, x2) = (x - offset, x + offset);
-                let y = (ui.cursor_y + (tick + tpr / 2) as f32
-                    / TICKS_PER_BEAT as f32 * beat_height).round() + LINE_THICKNESS * 0.5;
+                let y = (ui.cursor_y
+                    + (tick + tpr * Timespan::new(1, 2)).as_f32() * beat_height).round()
+                    + LINE_THICKNESS * 0.5;
                 marks.push(Graphic::Line(x1, y, x2, y, colors[col as usize]));
             };
 
@@ -762,32 +762,31 @@ impl PatternEditor {
 
     /// Returns scroll in pixels instead of in beats.
     fn scroll(&self, ui: &UI) -> f32 {
-        self.beat_scroll * self.beat_height(ui) as f32
+        self.beat_scroll.as_f32() * self.beat_height(ui)
     }
 
     fn set_scroll(&mut self, scroll: f32, ui: &UI) {
-        self.beat_scroll = scroll / self.beat_height(ui);
+        self.beat_scroll = Timespan::approximate((scroll / self.beat_height(ui)).into());
     }
 
     /// Scroll to a position that centers the given tick.
-    fn scroll_to(&mut self, tick: u32) {
+    fn scroll_to(&mut self, tick: Timespan) {
         let offset = (self.screen_tick_max - self.screen_tick)
-            .saturating_sub(self.ticks_per_row()) / 2;
-        self.beat_scroll = tick.saturating_sub(offset) as f32 / TICKS_PER_BEAT as f32;
+            - self.row_timespan() * Timespan::new(1, 2);
+        self.beat_scroll = (tick - offset).max(Timespan::ZERO);
     }
 
     /// Inserts rows into the pattern, shifting events.
     fn push_rows(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
-        let ticks = end.tick - start.tick + TICKS_PER_BEAT / self.beat_division as u32;
-        module.shift_channel_events(start, end, ticks as i32);
+        let ticks = end.tick - start.tick + self.row_timespan();
+        module.shift_channel_events(start, end, ticks);
     }
 
     /// Deletes rows from the pattern, shifting events.
     fn pull_rows(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
-        let ticks = start.tick as i32 - end.tick as i32
-            - TICKS_PER_BEAT as i32 / self.beat_division as i32;
+        let ticks = start.tick - end.tick - self.row_timespan();
         module.shift_channel_events(start, end, ticks);
     }
 
@@ -837,7 +836,7 @@ impl PatternEditor {
             column: data.logical_column(),
         };
         if module.event_at(pos).is_some_and(|e| e.data != EventData::NoteOff) {
-            pos.tick += TICKS_PER_BEAT / self.beat_division as u32;
+            pos.tick += self.row_timespan();
         }
 
         module.insert_event(cursor.track, cursor.channel, Event {
@@ -846,12 +845,11 @@ impl PatternEditor {
         });
     }
 
-    fn translate_cursor(&mut self, offset: i64) {
-        if -offset > self.edit_end.tick as i64 {
-            self.edit_end.tick = 0;
+    fn translate_cursor(&mut self, offset: Timespan) {
+        if -offset > self.edit_end.tick {
+            self.edit_end.tick = Timespan::ZERO;
         } else {
-            self.edit_end.tick =
-                self.round_tick((self.edit_end.tick as i64 + offset) as u32);
+            self.edit_end.tick = self.round_tick(self.edit_end.tick + offset);
         }
 
         if !is_shift_down() {
@@ -869,12 +867,12 @@ impl PatternEditor {
         }
     }
 
-    fn tick_visible(&self, tick: u32) -> bool {
+    fn tick_visible(&self, tick: Timespan) -> bool {
         tick >= self.screen_tick && tick <= self.screen_tick_max
     }
 
     fn draw_event(&self, ui: &mut UI, evt: &Event, beat_height: f32, muted: bool) {
-        let y = ui.cursor_y + evt.tick as f32 / TICKS_PER_BEAT as f32 * beat_height;
+        let y = ui.cursor_y + evt.tick.as_f32() * beat_height;
         if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
             return
         }
@@ -989,9 +987,9 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     let beat_height = pe.beat_height(ui);
     let end_y = ui.bounds.h - ui.cursor_y
-        + (module.last_event_tick().unwrap_or(0)
-            .max(pe.edit_start.tick).max(pe.edit_end.tick) as f32)
-        * beat_height / TICKS_PER_BEAT as f32;
+        + (module.last_event_tick().unwrap_or_default()
+            .max(pe.edit_start.tick).max(pe.edit_end.tick).as_f32())
+        * beat_height;
     ui.push_line(ui.bounds.x, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.bounds.x + ui.bounds.w, ui.cursor_y - LINE_THICKNESS * 0.5,
         ui.style.theme.border_unfocused());
@@ -1004,9 +1002,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
         pe.scroll_to(playhead_tick);
     }
     if pe.record {
-        let ticks_per_row = pe.ticks_per_row();
-        let tick = (player.get_tick() as f32 / ticks_per_row as f32)
-            .round() as u32 * ticks_per_row;
+        let tick = pe.round_tick(player.get_tick());
         pe.edit_start.tick = tick;
         pe.edit_end.tick = tick;
     }
@@ -1253,10 +1249,10 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
     v
 }
 
-fn draw_playhead(ui: &mut UI, tick: u32, x: f32, beat_height: f32) {
+fn draw_playhead(ui: &mut UI, tick: Timespan, x: f32, beat_height: f32) {
     let rect = Rect {
         x,
-        y: ui.cursor_y + tick as f32 / TICKS_PER_BEAT as f32 * beat_height,
+        y: ui.cursor_y + tick.as_f32() * beat_height,
         w: ui.bounds.w,
         h: line_height(&ui.style.atlas),
     };

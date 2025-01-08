@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, Mutex}, thread};
 
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, MOD_COLUMN, NOTE_COLUMN, TICKS_PER_BEAT, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, MOD_COLUMN, NOTE_COLUMN, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}, timespan::Timespan};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 const LOOP_FADEOUT_TIME: f64 = 10.0;
@@ -13,7 +13,7 @@ pub struct Player {
     pub seq: Sequencer,
     synths: Vec<Synth>, // one per track
     playing: bool,
-    tick: u32,
+    tick: Timespan,
     playtime: f64,
     tempo: f32,
     looped: bool,
@@ -28,7 +28,7 @@ impl Player {
             seq,
             synths: (0..num_tracks).map(|_| Synth::new(sample_rate)).collect(),
             playing: false,
-            tick: 0,
+            tick: Timespan::ZERO,
             playtime: 0.0, // not total playtime!
             tempo: DEFAULT_TEMPO,
             looped: false,
@@ -44,13 +44,13 @@ impl Player {
         }
         self.synths = (0..num_tracks).map(|_| Synth::new(self.sample_rate)).collect();
         self.playing = false;
-        self.tick = 0;
+        self.tick = Timespan::ZERO;
         self.playtime = 0.0;
         self.tempo = DEFAULT_TEMPO;
         self.looped = false;
     }
 
-    pub fn get_tick(&self) -> u32 {
+    pub fn get_tick(&self) -> Timespan {
         self.tick
     }
 
@@ -70,13 +70,13 @@ impl Player {
         self.looped = false;
     }
 
-    pub fn play_from(&mut self, tick: u32, module: &Module) {
+    pub fn play_from(&mut self, tick: Timespan, module: &Module) {
         self.simulate_events(tick, module);
         self.tick = tick;
         self.play();
     }
 
-    pub fn record_from(&mut self, tick: u32, module: &Module) {
+    pub fn record_from(&mut self, tick: Timespan, module: &Module) {
         self.metronome = true;
         self.play_from(tick, module);
     }
@@ -170,7 +170,7 @@ impl Player {
             for (channel_i, channel) in track.channels.iter().enumerate() {
                 let mut prev_data = [None, None, None];
                 let mut next_event = [None, None, None];
-                let mut start_tick = [0, 0, 0];
+                let mut start_tick = [Timespan::ZERO, Timespan::ZERO, Timespan::ZERO];
                 let mut glide = [false, false, false];
 
                 for event in &channel.events {
@@ -248,15 +248,14 @@ impl Player {
             }
         }
 
-        if self.metronome && (self.tick as f32 / TICKS_PER_BEAT as f32).ceil()
-            != (prev_tick as f32 / TICKS_PER_BEAT as f32).ceil() {
+        if self.metronome && self.tick.as_f32().ceil() != prev_tick.as_f32().ceil() {
             self.seq.push_relative(0.0, 0.01, Fade::Smooth, 0.01, 0.01,
                 Box::new(square_hz(440.0 * 8.0) >> split::<U4>()));
         }
     }
 
     /// Update state as if the module had been played up to a given tick.
-    fn simulate_events(&mut self, tick: u32, module: &Module) {
+    fn simulate_events(&mut self, tick: Timespan, module: &Module) {
         self.tempo = DEFAULT_TEMPO;
 
         for track in 0..module.tracks.len() {
@@ -264,7 +263,7 @@ impl Player {
         }
     }
 
-    fn simulate_track_events(&mut self, tick: u32, module: &Module, track_i: usize) {
+    fn simulate_track_events(&mut self, tick: Timespan, module: &Module, track_i: usize) {
         self.synths[track_i].reset_memory();
 
         for (channel_i, channel) in module.tracks[track_i].channels.iter().enumerate() {
@@ -327,13 +326,13 @@ impl Player {
         }
     }
 
-    fn reinit_memory(&mut self, tick: u32, module: &Module) {
+    fn reinit_memory(&mut self, tick: Timespan, module: &Module) {
         for track in 0..module.tracks.len() {
             self.reinit_track_memory(tick, module, track);
         }
     }
 
-    fn reinit_track_memory(&mut self, tick: u32, module: &Module, track_i: usize) {
+    fn reinit_track_memory(&mut self, tick: Timespan, module: &Module, track_i: usize) {
         self.synths[track_i].reset_memory();
 
         for (channel_i, channel) in module.tracks[track_i].channels.iter().enumerate() {
@@ -457,12 +456,12 @@ impl Player {
     }
 }
 
-fn interval_ticks(dt: f64, tempo: f32) -> u32 {
-    (dt * tempo as f64 / 60.0 * TICKS_PER_BEAT as f64).round() as u32
+fn interval_ticks(dt: f64, tempo: f32) -> Timespan {
+    Timespan::approximate(dt * tempo as f64 / 60.0)
 }
 
-pub fn tick_interval(dtick: u32, tempo: f32) -> f64 {
-    dtick as f64 / tempo as f64 * 60.0 / TICKS_PER_BEAT as f64
+pub fn tick_interval(dtick: Timespan, tempo: f32) -> f64 {
+    dtick.as_f64() / tempo as f64 * 60.0
 }
 
 pub enum RenderUpdate {
@@ -564,10 +563,10 @@ pub fn render_tracks(module: Arc<Module>, path: PathBuf) -> Receiver<RenderUpdat
 }
 
 fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
-    start: u32, tick: u32, module: &Module
+    start: Timespan, tick: Timespan, module: &Module
 ) -> Option<EventData> {
     if let Some(next) = next {
-        let t = (tick - start) as f32 / (next.tick - start) as f32;
+        let t = (tick - start).as_f32() / (next.tick - start).as_f32();
 
         match next.data {
             EventData::Pitch(b) => {
