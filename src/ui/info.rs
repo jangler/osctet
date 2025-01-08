@@ -1,7 +1,7 @@
 use crate::{config::Config, input::Action};
 
 /// Info text types for specific controls.
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Info {
     None,
     OctaveRatio,

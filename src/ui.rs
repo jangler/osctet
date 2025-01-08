@@ -824,7 +824,7 @@ impl UI {
                 state.list_rect =
                     combo_box_list_rect(&self.style, button_rect, &state.options);
             }
-            self.combo_box_list(open)
+            self.combo_box_list(open, info.clone())
         } else {
             None
         };
@@ -842,13 +842,16 @@ impl UI {
     }
 
     /// Draw the list of the active combo box.
-    fn combo_box_list(&mut self, already_open: bool) -> Option<usize> {
+    fn combo_box_list(&mut self, already_open: bool, info: Info) -> Option<usize> {
         self.cursor_z += COMBO_Z_OFFSET;
         if let Focus::ComboBox(state) = &self.focus {
             let mut gfx = vec![
                 Graphic::Rect(state.list_rect, self.style.theme.panel_bg(),
                     Some(self.style.theme.border_unfocused()))
             ];
+            if state.list_rect.contains(mouse_position_vec2()) {
+                self.info = info;
+            }
 
             // draw options
             let mut hit_rect = Rect {
