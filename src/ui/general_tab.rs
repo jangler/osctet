@@ -55,8 +55,8 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
                 0.0..=1.0, None, 2, true, Info::None) {
                 commit = true;
             }
-            if ui.slider("room_size", "Room size", room_size,
-                10.0..=30.0, Some("m"), 1, true, Info::None) {
+            if ui.formatted_slider("room_size", "Room size", room_size,
+                10.0..=30.0, 1, true, Info::None, |f| format!("{f:.1} m"), |f| f) {
                 commit = true;
             }
             if ui.slider("decay_time", "Decay time", decay_time,

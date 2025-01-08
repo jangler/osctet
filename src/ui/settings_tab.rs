@@ -133,17 +133,17 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
     let mut hue = lchuv.hue.into_degrees();
 
     if !accent {
-        if ui.slider(&format!("{}_l", label), "Lightness", &mut l,
-            0.0..=100.0, None, 1, true, Info::None) {
+        if ui.formatted_slider(&format!("{}_l", label), "Lightness", &mut l,
+            0.0..=100.0, 1, true, Info::None, |f| format!("{f:.1}"), |f| f) {
             f(&mut ui.style.theme).l = l;
         }
     }
-    if ui.slider(&format!("{}_chroma", label), "Chroma",
-        &mut chroma, 0.0..=180.0, None, 1, true, Info::Chroma) {
+    if ui.formatted_slider(&format!("{}_chroma", label), "Chroma",
+        &mut chroma, 0.0..=180.0, 1, true, Info::Chroma, |f| format!("{f:.1}"), |f| f) {
         f(&mut ui.style.theme).chroma = chroma;
     }
-    if ui.slider(&format!("{}_hue", label), "Hue", &mut hue,
-        -180.0..=180.0, Some("degrees"), 1, true, Info::None) {
+    if ui.formatted_slider(&format!("{}_hue", label), "Hue", &mut hue,
+        -180.0..=180.0, 1, true, Info::None, |f| format!("{f:.1} degrees"), |f| f) {
         f(&mut ui.style.theme).hue = hue.into();
     }
 

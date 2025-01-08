@@ -211,7 +211,8 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
 fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
     ui.header("GENERAL", Info::None);
     ui.shared_slider("gain", "Level", &patch.gain.0, 0.0..=1.0, None, 2, true, Info::None);
-    ui.shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, None, 1, true, Info::None);
+    ui.formatted_shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, 1, true, Info::None,
+        |f| format!("{f:+.2}"), |f| f);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time,
         0.0..=0.5, Some("s"), 2, true, Info::GlideTime);
 
@@ -223,8 +224,8 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut
     //     patch.play_mode = PlayMode::VARIANTS[i];
     // }
 
-    ui.shared_slider("distortion", "Distortion",
-        &patch.distortion.0, 0.0..=1.0, None, 1, true, Info::Distortion);
+    ui.formatted_shared_slider("distortion", "Distortion", &patch.distortion.0,
+        0.0..=1.0, 1, true, Info::Distortion, |f| format!("{f:.2}"), |f| f);
     ui.shared_slider("fx_send", "FX send",
         &patch.fx_send.0, 0.0..=1.0, None, 1, true, Info::FxSend);
 
@@ -481,17 +482,17 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
 
         labeled_group(ui, "Cutoff", Info::FilterCutoff, |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
-                ui.shared_slider(&format!("filter_{}_cutoff", i), "", &filter.cutoff.0,
-                    MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, Some("Hz"), 2, true,
-                    Info::FilterCutoff);
+                ui.formatted_shared_slider(&format!("filter_{}_cutoff", i), "",
+                    &filter.cutoff.0, MIN_FILTER_CUTOFF..=MAX_FILTER_CUTOFF, 2, true,
+                    Info::FilterCutoff, |f| format!("{f:.0} Hz"), |f| f);
             }
         });
 
         labeled_group(ui, "Resonance", Info::FilterResonance, |ui| {
             for (i, filter) in patch.filters.iter_mut().enumerate() {
-                ui.shared_slider(&format!("filter_{}_q", i), "",
-                    &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, None, 1, true,
-                    Info::FilterResonance);
+                ui.formatted_shared_slider(&format!("filter_{}_q", i), "",
+                    &filter.resonance.0, MIN_FILTER_RESONANCE..=1.0, 1, true,
+                    Info::FilterResonance, |f| format!("{f:.2}"), |f| f);
             }
         });
 
@@ -601,16 +602,16 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
 
         labeled_group(ui, "Rate", Info::None, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
-                ui.shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
-                    MIN_LFO_RATE..=MAX_LFO_RATE, Some("Hz"), 2, lfo.waveform.uses_freq(),
-                    Info::None);
+                ui.formatted_shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
+                    MIN_LFO_RATE..=MAX_LFO_RATE, 2, lfo.waveform.uses_freq(),
+                    Info::None, |f| format!("{f:.2} Hz"), |f| f);
             }
         });
 
         labeled_group(ui, "Delay", Info::LfoDelay, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
-                ui.slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
-                    0.0..=10.0, Some("s"), 2, true, Info::LfoDelay);
+                ui.formatted_slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
+                    0.0..=10.0, 2, true, Info::LfoDelay, |f| format!("{f:.2} s"), |f| f);
             }
         });
 
