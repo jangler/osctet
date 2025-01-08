@@ -174,6 +174,15 @@ impl Focus {
             _ => false,
         }
     }
+
+    fn id(&self) -> Option<&str> {
+        match self {
+            Self::ComboBox(state) => Some(&state.id),
+            Self::Slider(s) | Self::Note(s) => Some(&s),
+            Self::Text(state) => Some(&state.id),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Focus {
@@ -211,6 +220,7 @@ pub struct UI {
     focus: Focus,
     pending_focus: Option<String>,
     lost_focus: Focus,
+    tab_nav_list: Vec<String>,
 }
 
 impl UI {
@@ -251,6 +261,7 @@ impl UI {
             focus: Focus::None,
             pending_focus: None,
             lost_focus: Focus::None,
+            tab_nav_list: Vec::new(),
         }
     }
 
@@ -295,6 +306,7 @@ impl UI {
         if self.focus.is_slider() && is_mouse_button_released(MouseButton::Left) {
             self.focus = Focus::None;
         }
+        self.tab_nav_list.clear();
 
         clear_background(self.style.theme.panel_bg());
 
@@ -374,7 +386,7 @@ impl UI {
         rect
     }
 
-    pub fn end_frame(&mut self) {
+    pub fn end_frame(&mut self, tab_nav: bool) {
         self.draw_queue.sort_by_key(|x| x.z);
         let screen_rect = Rect::new(0.0, 0.0, screen_width(), screen_height());
         for op in &self.draw_queue {
@@ -392,6 +404,31 @@ impl UI {
             x: self.bounds.x + self.bounds.w,
             y: self.bounds.y + self.bounds.h,
         };
+
+        if tab_nav && is_key_pressed(KeyCode::Tab) {
+            if is_shift_down() {
+                self.tab_focus(-1);
+            } else {
+                self.tab_focus(1);
+            }
+        }
+    }
+
+    fn tab_focus(&mut self, offset: isize) {
+        if self.tab_nav_list.is_empty() {
+            return
+        }
+
+        let index = self.focus.id()
+            .and_then(|id| self.tab_nav_list.iter().position(|s| s == id));
+
+        if let Some(index) = index {
+            let index = (index as isize + offset)
+                .rem_euclid(self.tab_nav_list.len() as isize);
+            self.pending_focus = Some(self.tab_nav_list[index as usize].clone());
+        } else {
+            self.pending_focus = self.tab_nav_list.get(0).cloned();
+        }
     }
 
     pub fn space(&mut self, scale: f32) {
@@ -1138,6 +1175,8 @@ impl UI {
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
         mut text: String, info: Info
     ) -> Option<String> {
+        self.tab_nav_list.push(label.to_string());
+
         let w = chars_wide as f32 * self.style.atlas.char_width()
             + self.style.margin * 2.0;
 

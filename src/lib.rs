@@ -529,7 +529,8 @@ impl App {
             }
         }
 
-        self.ui.end_frame();
+        let tab_nav = self.ui.get_tab(MAIN_TAB_ID).is_none_or(|i| i != TAB_PATTERN);
+        self.ui.end_frame(tab_nav);
         true
     }
 
