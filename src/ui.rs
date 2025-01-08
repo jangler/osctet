@@ -170,16 +170,21 @@ enum Focus {
 impl Focus {
     fn is_slider(&self) -> bool {
         match self {
-            Focus::Slider(_) => true,
+            Self::Slider(_) => true,
             _ => false,
         }
+    }
+}
+
+impl Default for Focus {
+    fn default() -> Self {
+        Self::None
     }
 }
 
 /// Draws widgets and tracks UI state.
 pub struct UI {
     pub style: Style,
-    focus: Focus,
     tabs: HashMap<String, usize>,
     bounds: Rect,
     cursor_x: f32,
@@ -203,7 +208,9 @@ pub struct UI {
     saved_info: (Info, ControlInfo),
     info_delay: f32,
     bottom_right_corner: Vec2,
+    focus: Focus,
     pending_focus: Option<String>,
+    lost_focus: Focus,
 }
 
 impl UI {
@@ -218,7 +225,6 @@ impl UI {
                 atlas,
                 theme: theme.unwrap_or_default(),
             },
-            focus: Focus::None,
             tabs: HashMap::new(),
             bounds: Default::default(),
             cursor_x: 0.0,
@@ -242,7 +248,9 @@ impl UI {
             saved_info: (Info::None, ControlInfo::None),
             info_delay: INFO_DELAY,
             bottom_right_corner: Vec2::ZERO,
+            focus: Focus::None,
             pending_focus: None,
+            lost_focus: Focus::None,
         }
     }
 
@@ -765,12 +773,12 @@ impl UI {
         if event == MouseEvent::Pressed && !open {
             let options = get_options();
             let list_rect = combo_box_list_rect(&self.style, button_rect, &options);
-            self.focus = Focus::ComboBox(ComboBoxState {
+            self.set_focus(Focus::ComboBox(ComboBoxState {
                 id: id.to_owned(),
                 options,
                 button_rect,
                 list_rect,
-            });
+            }));
         }
 
         let return_val = if open {
@@ -997,13 +1005,13 @@ impl UI {
         let hit = enabled && self.mouse_hits(hit_rect, id);
         if hit {
             if is_mouse_button_pressed(MouseButton::Left) {
-                self.focus = Focus::Slider(id.to_string());
+                self.set_focus(Focus::Slider(id.to_string()));
                 self.mouse_consumed = Some(id.to_string());
             }
             if is_mouse_button_pressed(MouseButton::Right) {
                 let text = display(*val).trim_start_matches('x')
                     .split([' ', ':']).next().unwrap().to_owned();
-                self.focus = Focus::Text(TextEditState::new(id.to_owned(), text));
+                self.set_focus(Focus::Text(TextEditState::new(id.to_owned(), text)));
             }
         }
         let grabbed = if let Focus::Slider(s) = &self.focus {
@@ -1013,7 +1021,7 @@ impl UI {
         };
 
         // update position, get handle color
-        let (fill, stroke, changed) = if grabbed {
+        let (fill, stroke, mut changed) = if grabbed {
             let f = ((mouse_pos.x - groove_x) / groove_w).max(0.0).powi(power);
             let new_val = interpolate(f, &range)
                 .max(*range.start())
@@ -1055,6 +1063,21 @@ impl UI {
             let text = display(*val);
             self.tooltip(&text, handle_rect.x,
                 self.cursor_y - (h + self.style.margin * 2.0));
+        }
+
+        // TODO: duplication with slider_text_entry
+        match &self.lost_focus {
+            Focus::Text(state) if state.id == id => {
+                match state.text.parse::<f32>() {
+                    Ok(f) => {
+                        *val = convert(f).max(*range.start()).min(*range.end());
+                        changed = true;
+                    },
+                    Err(e) => self.report(e),
+                }
+                self.focus = Focus::None;
+            }
+            _ => ()
         }
 
         self.end_widget(id, info, ControlInfo::Slider);
@@ -1113,22 +1136,32 @@ impl UI {
 
     /// Widget for editing a value as text.
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
-        text: String, info: Info
+        mut text: String, info: Info
     ) -> Option<String> {
         let w = chars_wide as f32 * self.style.atlas.char_width()
             + self.style.margin * 2.0;
+
+        let mut result = match &self.lost_focus {
+            Focus::Text(state) if state.id == label => {
+                let s = state.text.clone();
+                text = s.clone();
+                self.lost_focus = Focus::None;
+                Some(s)
+            }
+            _ => None,
+        };
 
         if self.text_box(label, label, w, &text, chars_wide, info) {
             if let Focus::Text(state) = &self.focus {
                 let s = state.text.clone();
                 self.focus = Focus::None;
-                Some(s)
+                result = Some(s)
             } else {
                 panic!("no focused text");
             }
-        } else {
-            None
         }
+
+        result
     }
 
     /// Returns true if the text was submitted (i.e. Enter was pressed).
@@ -1137,9 +1170,8 @@ impl UI {
     ) -> bool {
         match &self.pending_focus {
             Some(s) if s == id => {
-                self.focus =
-                    Focus::Text(TextEditState::new(id.to_owned(), text.to_owned()));
-                self.pending_focus = None;
+                let f = Focus::Text(TextEditState::new(id.to_owned(), text.to_owned()));
+                self.set_focus(f);
             }
             _ => (),
         }
@@ -1159,7 +1191,8 @@ impl UI {
 
         // focus/unfocus
         if !focused && hit && is_mouse_button_pressed(MouseButton::Left) {
-            self.focus = Focus::Text(TextEditState::new(id.to_owned(), text.to_owned()));
+            let f = Focus::Text(TextEditState::new(id.to_owned(), text.to_owned()));
+            self.set_focus(f);
             self.mouse_consumed = Some(id.to_string());
         } else if is_key_pressed(KeyCode::Escape) {
             self.focus = Focus::None;
@@ -1245,14 +1278,25 @@ impl UI {
             }
 
             // check for unfocus
-            if Some(i) == self.instrument_edit_index && is_key_pressed(KeyCode::Escape) {
-                self.focus = Focus::None;
-                self.instrument_edit_index = None;
-            }
-            if self.instrument_edit_index.is_some() {
-                match self.focus {
-                    Focus::Text(_) => (),
-                    _ => self.instrument_edit_index = None,
+            let mut option = option.clone();
+            if Some(i) == self.instrument_edit_index {
+                if is_key_pressed(KeyCode::Escape) {
+                    self.focus = Focus::None;
+                    self.instrument_edit_index = None;
+                }
+                match &self.focus {
+                    Focus::Text(state) if state.id == TEXT_ID => (),
+                    _ => {
+                        self.instrument_edit_index = None;
+                        match &self.lost_focus {
+                            Focus::Text(state) if state.id == TEXT_ID => {
+                                option = state.text.clone();
+                                return_val = Some(option.clone());
+                                self.lost_focus = Focus::None;
+                            }
+                            _ => (),
+                        }
+                    }
                 }
             }
 
@@ -1273,13 +1317,13 @@ impl UI {
                 if self.mouse_hits(hit_rect, "instrument_list")
                     && is_mouse_button_pressed(MouseButton::Right) && i > 0 {
                     let text = option.clone();
-                    self.focus =
-                        Focus::Text(TextEditState::new(TEXT_ID.to_string(), text));
+                    let f = Focus::Text(TextEditState::new(TEXT_ID.to_string(), text));
+                    self.set_focus(f);
                     self.instrument_edit_index = Some(i);
                     *index = i;
                 }
                 self.push_text(list_rect.x + char_width, hit_rect.y,
-                    option.to_owned(), self.style.theme.fg());
+                    option, self.style.theme.fg());
             }
             hit_rect.y += hit_rect.h;
         }
@@ -1415,7 +1459,7 @@ impl UI {
         let mouse_hit = self.mouse_hits(rect, id);
 
         if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
-            self.focus = Focus::Note(id.to_owned());
+            self.set_focus(Focus::Note(id.to_owned()));
         }
         let focused = match &self.focus {
             Focus::Note(s) => s == id,
@@ -1464,7 +1508,7 @@ impl UI {
         let mouse_hit = self.mouse_hits(rect, "hotkey_input");
 
         if mouse_hit && is_mouse_button_pressed(MouseButton::Left) {
-            self.focus = Focus::Hotkey(id.to_owned());
+            self.set_focus(Focus::Hotkey(id.to_owned()));
         }
         let focused = match &self.focus {
             Focus::Hotkey(s) => *s == id,
@@ -1562,6 +1606,12 @@ impl UI {
     /// Focus the control with the given ID.
     pub fn focus(&mut self, id: &str) {
         self.pending_focus = Some(id.to_owned());
+    }
+
+    fn set_focus(&mut self, focus: Focus) {
+        self.lost_focus = mem::take(&mut self.focus);
+        self.focus = focus;
+        self.pending_focus = None;
     }
 
     /// Pushes a note to the draw list. The notation is drawn in the space of
