@@ -1,10 +1,10 @@
 use std::{cmp::Ordering, ops};
 
 use gcd::Gcd;
-use serde::{Deserialize, Serialize};
+use serde::{de::{self, Visitor}, Deserialize, Deserializer, Serialize};
 
 /// Represents a time value as a beat fraction.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Timespan {
     n: i32,
     d: u8,
@@ -134,6 +134,52 @@ impl Into::<f64> for Timespan {
 impl Into::<f32> for Timespan {
     fn into(self) -> f32 {
         self.n as f32 / self.d as f32
+    }
+}
+
+// custom implementation to load from legacy save files
+impl<'de> Deserialize<'de> for Timespan {
+    fn deserialize<D>(d: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        d.deserialize_any(TimespanVisitor)
+    }
+}
+
+struct TimespanVisitor;
+
+const LEGACY_BASE: u64 = 5040;
+
+impl<'de> Visitor<'de> for TimespanVisitor {
+    type Value = Timespan;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "integer or struct Timespan")
+    }
+
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error
+    {
+        let gcd = v.gcd(LEGACY_BASE as u64);
+        let d = LEGACY_BASE / gcd;
+        Ok(if d <= u8::MAX as u64 {
+            Timespan::new((v / gcd) as i32, d as u8)
+        } else {
+            Timespan::approximate(v as f64 / LEGACY_BASE as f64)
+        })
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'de>
+    {
+        let n = seq.next_element()?
+            .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+        let d = seq.next_element()?
+            .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+        Ok(Timespan { n, d })
     }
 }
 
