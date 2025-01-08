@@ -17,7 +17,7 @@ pub struct PatternEditor {
     edit_start: Position,
     edit_end: Position,
     pub beat_division: u8,
-    beat_scroll: f32, // measured in beats
+    beat_scroll: f32,
     h_scroll: f32,
     tap_tempo_intervals: Vec<f32>,
     pending_interval: Option<f32>,
@@ -466,15 +466,21 @@ impl PatternEditor {
     /// division that contains the cursor tick.
     fn division_to_cursor(&mut self) {
         let tick = self.cursor_tick();
-        if tick % self.ticks_per_row() != 0 {
+        let old_div = self.beat_division;
+
+        if self.off_division(tick) {
             self.beat_division = 2;
-            while tick % self.ticks_per_row() != 0 {
+            while self.off_division(tick) {
                 match self.beat_division.checked_add(1) {
                     Some(i) => self.beat_division = i,
                     None => break,
                 }
             }
         }
+
+        let screen_h = (self.screen_tick_max - self.screen_tick)
+            / old_div as u32 * self.beat_division as u32;
+        self.screen_tick_max = self.screen_tick + screen_h;
     }
 
     /// If the cursor tick is off-divison, set it to the nearest on-divison
