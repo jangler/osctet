@@ -21,6 +21,8 @@ impl Timespan {
         }
     }
 
+    /// Returns a rational approximation of a float. Always uses the highest
+    /// possible denominator.
     pub fn approximate(f: f64) -> Self {
         let d = u8::MAX;
         let n = (f * d as f64).round() as i32;
@@ -39,10 +41,12 @@ impl Timespan {
         Self { n: self.n.abs(), d: self.d }
     }
 
+    /// Returns the numerator.
     pub fn num(&self) -> i32 {
         self.n
     }
 
+    /// Returns the denominator.
     pub fn den(&self) -> u8 {
         self.d
     }
@@ -149,7 +153,7 @@ impl<'de> Deserialize<'de> for Timespan {
 
 struct TimespanVisitor;
 
-const LEGACY_BASE: u64 = 5040;
+const LEGACY_DENOM: u64 = 5040;
 
 impl<'de> Visitor<'de> for TimespanVisitor {
     type Value = Timespan;
@@ -162,12 +166,12 @@ impl<'de> Visitor<'de> for TimespanVisitor {
     where
         E: serde::de::Error
     {
-        let gcd = v.gcd(LEGACY_BASE as u64);
-        let d = LEGACY_BASE / gcd;
+        let gcd = v.gcd(LEGACY_DENOM as u64);
+        let d = LEGACY_DENOM / gcd;
         Ok(if d <= u8::MAX as u64 {
             Timespan::new((v / gcd) as i32, d as u8)
         } else {
-            Timespan::approximate(v as f64 / LEGACY_BASE as f64)
+            Timespan::approximate(v as f64 / LEGACY_DENOM as f64)
         })
     }
 

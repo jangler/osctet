@@ -10,6 +10,7 @@ const CONFIG_FILENAME: &str = "config.toml";
 // this is a function instead of a constant to make serde happy
 fn default_font_size() -> usize { 1 }
 
+/// Determines the config file path based on the executable directory.
 fn config_path() -> Result<PathBuf, std::io::Error> {
     let mut path = env::current_exe()?;
     path.pop();
@@ -17,6 +18,7 @@ fn config_path() -> Result<PathBuf, std::io::Error> {
     Ok(path)
 }
 
+/// Stores local configuration.
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub default_midi_input: Option<String>,
@@ -42,6 +44,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Load config from disk and initialize.
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let s = std::fs::read_to_string(config_path()?)?;
         let mut c: Self = toml::from_str(&s)?;
@@ -68,6 +71,8 @@ impl Config {
         };
     }
 
+    /// Save the current config to disk. A Theme is passed here since the Theme
+    /// modified in the settings screen is the Ui copy, not the Config copy.
     pub fn save(&mut self, theme: Theme) -> Result<(), Box<dyn Error>> {
         self.theme = Some(theme);
         let s = toml::to_string_pretty(self)?;
@@ -75,14 +80,17 @@ impl Config {
         Ok(())
     }
 
+    /// Iterate over keymap entries.
     pub fn iter_keymap(&mut self) -> impl Iterator<Item = &mut (Hotkey, Action)> {
         self.keys.iter_mut()
     }
 
+    /// Returns the action associated with the given hotkey.
     pub fn hotkey_action(&self, hotkey: &Hotkey) -> Option<&Action> {
         self.key_map.get(hotkey)
     }
 
+    /// Returns true if the action's associated hotkey is down.
     pub fn action_is_down(&self, action: Action) -> bool {
         for (k, a) in &self.keys {
             if *a == action && k.is_down() {
@@ -92,10 +100,12 @@ impl Config {
         false
     }
 
+    /// Call to reinitialize data after hotkeys are edited.
     pub fn update_hotkeys(&mut self) {
         self.key_map = self.keys.iter().cloned().collect();
     }
 
+    /// Return a string in the format "(hotkey) - (action)".
     pub fn hotkey_string(&self, action: Action) -> String {
         let key_string = self.keys.iter()
             .find(|(_, a)| *a == action)
@@ -129,11 +139,14 @@ impl Default for Config {
     }
 }
 
+/// Returns the directory of a path as a string.
 pub fn dir_as_string(p: &PathBuf) -> Option<String> {
     p.parent().map(|p| p.to_str().map(|s| s.to_owned())).flatten()
 }
 
+/// Returns the default hotkey-action mapping.
 fn default_keys() -> Vec<(Hotkey, Action)> {
+    // this is a function instead of a constant so we can use `Hotkey::new`
     vec![
         // global
         (Hotkey::new(Modifiers::Ctrl, KeyCode::N), Action::NewSong),

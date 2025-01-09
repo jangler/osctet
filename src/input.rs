@@ -1,3 +1,5 @@
+//! Code for processing keyboard and MIDI input.
+
 use std::fmt;
 
 use macroquad::input::{is_key_down, KeyCode};
@@ -14,12 +16,14 @@ pub const CC_DATA_ENTRY_MSB: u8 = 6;
 pub const CC_DATA_ENTRY_LSB: u8 = 38;
 pub const RPN_PITCH_BEND_SENSITIVITY: (u8, u8) = (0, 0);
 
+/// Returns the last byte of a keycode name. This is used as the equivalent of
+/// a MIDI key number for tracking held notes.
 pub fn u8_from_key(k: KeyCode) -> u8 {
     format!("{:?}", k).bytes().last().unwrap_or_default()
 }
 
-// sharps aren't much use for keyboard mapping if they're equal to unison
-// or the whole tone
+/// Returns true if sharps & flats are useful for a given tuning. Sharps are
+/// considered useless if they're identical to unison or the whole tone.
 fn use_sharps(t: &Tuning) -> bool {
     let d4 = Note::new(0, Nominal::D, 0, 4);
     let ds4 = Note { sharps: 1, ..d4 };
@@ -27,6 +31,7 @@ fn use_sharps(t: &Tuning) -> bool {
         t.midi_pitch(&ds4) != t.midi_pitch(&Note { nominal: Nominal::E, ..d4 })
 }
 
+/// Translates a key combination into a note.
 pub fn note_from_key(key: Hotkey, t: &Tuning, equave: i8, cfg: &Config) -> Option<Note> {
     cfg.note_keys.iter()
         .find(|(k, _)| *k == key)
@@ -46,6 +51,7 @@ pub fn note_from_key(key: Hotkey, t: &Tuning, equave: i8, cfg: &Config) -> Optio
         })
 }
 
+/// Returns the default key-to-note mapping.
 pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
     let f1 = |key| Hotkey {
         key,
@@ -95,6 +101,7 @@ pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
     ]
 }
 
+/// Translates a MIDI key number into a note.
 pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
     let f = |nominal, accidentals| {
         adjust_note_for_modifier_keys(Note {
@@ -121,6 +128,8 @@ pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
     }
 }
 
+/// Adjust a note based on transposition/alternation actions that are currently
+/// activated.
 pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config, tuning: &Tuning) -> Note {
     let mut note = Note {
         arrows: note.arrows,
@@ -155,6 +164,8 @@ pub fn adjust_note_for_modifier_keys(note: Note, cfg: &Config, tuning: &Tuning) 
     }
 }
 
+/// Return the traditional enharmonic alternative for a note. For example,
+/// A# <-> Bb, B <-> Cb, C <-> B#.
 fn enharmonic_alternative(note: Note, tuning: &Tuning) -> Note {
     let bias = match note.nominal {
         Nominal::E | Nominal::B => 1,
@@ -183,7 +194,8 @@ fn enharmonic_alternative(note: Note, tuning: &Tuning) -> Note {
     }
 }
 
-// program change is omitted; we have no use for it
+/// Decodes MIDI events. Program change is omitted since this project has no
+/// use for it.
 pub enum MidiEvent {
     NoteOff {
         channel: u8,
@@ -216,8 +228,10 @@ pub enum MidiEvent {
 }
 
 impl MidiEvent {
-    const PITCH_CENTER: i16 = 0x2000; // center value of pitch message
+    /// The zero value of a pitch bend message.
+    const PITCH_CENTER: i16 = 0x2000;
 
+    /// Parses a byte sequence into an event struct.
     pub fn parse(data: &[u8]) -> Option<Self> {
         // all the messages we're interested in are at least 2 bytes
         if data.len() < 2 { return None }
@@ -368,6 +382,7 @@ enum KeyCodeDef {
     Unknown = 0x01ff,
 }
 
+/// Translates a keycode to a string representation for hotkey UI.
 fn key_to_string(key: KeyCode) -> String {
     let s = match key {
         KeyCode::Apostrophe => "'",
@@ -412,6 +427,7 @@ pub enum Modifiers {
 }
 
 impl Modifiers {
+    /// Returns the currently held modifiers.
     pub fn current() -> Self {
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         let alt = is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt);
@@ -428,6 +444,8 @@ impl Modifiers {
         }
     }
 
+    /// Returns a version of this modifier with shift omitted. This is used
+    /// for actions that have special alternative behavior when shift is held.
     pub fn without_shift(&self) -> Self {
         match self {
             Self::Shift => Self::None,
@@ -454,6 +472,7 @@ impl fmt::Display for Modifiers {
     }
 }
 
+/// Key combination.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub struct Hotkey {
     pub mods: Modifiers,
@@ -466,10 +485,13 @@ impl Hotkey {
         Self { mods, key }
     }
 
+    /// Checks whether the hotkey is currently held.
     pub fn is_down(&self) -> bool {
         is_key_down(self.key) && self.mods == Modifiers::current()
     }
 
+    /// Returns a verison of the hotkey without shift. This is used for
+    /// actions that have special alternative behavior when shift is held.
     pub fn without_shift(&self) -> Self {
         Self { mods: self.mods.without_shift(), key: self.key }
     }
@@ -485,6 +507,8 @@ impl fmt::Display for Hotkey {
     }
 }
 
+/// Mappable key commands. Can also be used in situations like confirmation
+/// dialogs where commands need to be deferred pending further input.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
     IncrementDivision,
@@ -557,6 +581,7 @@ pub enum Action {
 }
 
 impl Action {
+    /// Returns the UI string for the action.
     pub fn name(&self) -> &'static str {
         match self {
             Self::IncrementDivision => "Increment division",
@@ -637,6 +662,7 @@ mod tests {
     #[test]
     fn test_tuning_uses_sharps() {
         assert!(use_sharps(&Tuning::divide(2.0, 12, 1).unwrap()));
+        // supersharp tunings are wonky, but sharps are still useful
         assert!(use_sharps(&Tuning::divide(2.0, 13, 1).unwrap()));
         assert!(!use_sharps(&Tuning::divide(2.0, 10, 1).unwrap()));
         assert!(!use_sharps(&Tuning::divide(2.0, 14, 1).unwrap()));

@@ -107,6 +107,7 @@ impl Default for ControlInfo {
     }
 }
 
+/// Returns help text.
 pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     let mut text = String::new();
     let mut actions = Vec::new();

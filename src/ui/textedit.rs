@@ -1,5 +1,7 @@
 use macroquad::input::*;
 
+/// UI state of a text field. The `id` field allows determining which control
+/// the state belongs to.
 pub struct TextEditState {
     pub id: String,
     pub text: String,

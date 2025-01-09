@@ -4,6 +4,7 @@ use std::ops::RangeInclusive;
 
 use memmem::{Searcher, TwoWaySearcher};
 
+/// Relevant data from a "smpl" chunk.
 #[derive(Debug)]
 pub struct SmplData {
     pub midi_pitch: f32,
@@ -11,13 +12,15 @@ pub struct SmplData {
 }
 
 impl SmplData {
+    /// Search for and read a sample chunk in the bytes of a wave file.
     pub fn from_wave(data: &[u8]) -> Option<Self> {
         TwoWaySearcher::new("smpl".as_bytes())
             .search_in(data)
             .and_then(|index| Self::from_chunk(&data[index..]))
     }
 
-    pub fn from_chunk(data: &[u8]) -> Option<Self> {
+    /// Read a sample chunk.
+    fn from_chunk(data: &[u8]) -> Option<Self> {
         let unity_note = u32::from_le_bytes(
             data.get(0x14..0x18)?.try_into().ok()?);
         let pitch_fraction = u32::from_le_bytes(

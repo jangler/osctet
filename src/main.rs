@@ -7,8 +7,10 @@ use macroquad::{input::prevent_quit, miniquad::conf::Icon, prelude::Conf, textur
 
 use osctet::{APP_NAME, run};
 
+/// Filename to write panic messages to.
 const PANIC_FILE: &str = "error.txt";
 
+/// Returns initial WM settings.
 fn window_conf() -> Conf {
     Conf {
         window_title: APP_NAME.to_owned(),
@@ -31,8 +33,10 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // intercept quit so we can run actions before closing
     prevent_quit();
 
+    // in release mode, write panics to a test file as well as stderr
     if cfg!(not(debug_assertions)) {
         panic::set_hook(Box::new(|info| {
             let message = if let Some(location) = info.location() {
@@ -46,5 +50,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }));
     }
 
+    // pass the first arg, hopefully a module path
     run(env::args().nth(1)).await
 }

@@ -5,6 +5,9 @@ use std::{collections::HashMap, error::Error, fs::File, io::BufReader, path::Pat
 use bdf_reader::{Bitmap, Font};
 use macroquad::{color::Color, math::Rect, texture::{build_textures_atlas, draw_texture, Texture2D}};
 
+// character codes -- these are invalid as character literals,
+// so we use u32 and convert.
+
 pub const SHARP: u32 = 0x81;
 pub const DOUBLE_SHARP: u32 = 0x82;
 pub const SUB_SHARP: u32 = 0x83;
@@ -26,6 +29,7 @@ pub const SUP_8: u32 = 0x94;
 pub const SUP_9: u32 = 0x95;
 pub const SUP_QUESTION: u32 = 0x96;
 
+/// Bytes of included font files.
 pub const FONT_BYTES: [&[u8]; 4] = [
     include_bytes!("../../font/DinaMedium-8.bdf"),
     include_bytes!("../../font/DinaMedium-10.bdf"),
@@ -88,6 +92,8 @@ impl GlyphAtlas {
                 None => eprintln!("invalid char encoding: {}", glyph.encoding())
             }
         }
+
+        // takes time, but makes drawing much faster
         build_textures_atlas();
 
         let (cap_height, offset_y) = if let Some(glyph) = font.glyph('X') {
@@ -172,6 +178,7 @@ fn count_bitmap_rows(bitmap: Bitmap) -> usize {
         .count()
 }
 
+/// Returns the index of the first non-blank row in a bitmap.
 fn first_bitmap_row(bitmap: Bitmap) -> usize {
     (0..bitmap.height())
         .position(|y| (0..bitmap.width()).any(|x| bitmap.get(x, y).is_ok_and(|v| v)))

@@ -1,4 +1,4 @@
-// global FX
+//! Global FX.
 
 use fundsp::hacker32::*;
 use realseq::SequencerBackend;
@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dsp::compressor;
 
-// serializable global FX settings
+// Serializable FX settings, to be stored in save files.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FXSettings {
     pub spatial: SpatialFx,
@@ -22,7 +22,7 @@ impl Default for FXSettings {
     }
 }
 
-// controls updates of global FX
+/// Handles updates of global FX.
 pub struct GlobalFX {
     pub net: Net,
     spatial_id: NodeId,
@@ -50,6 +50,7 @@ impl GlobalFX {
         Self::new(Sequencer::new(false, 4).backend(), settings)
     }
 
+    /// Reinitialize all FX.
     pub fn reinit(&mut self, settings: &FXSettings) {
         self.net.crossfade(self.spatial_id, Fade::Smooth, 0.1,
             settings.spatial.make_node());
@@ -58,10 +59,12 @@ impl GlobalFX {
         self.net.commit();
     }
 
+    /// Update spatial FX.
     pub fn commit_spatial(&mut self, spatial: &SpatialFx) {
         self.crossfade(self.spatial_id, spatial.make_node());
     }
 
+    /// Update compression FX.
     pub fn commit_comp(&mut self, comp: &Compression) {
         self.crossfade(self.comp_id, comp.make_node());
     }
@@ -72,6 +75,7 @@ impl GlobalFX {
     }
 }
 
+/// Compression FX settings.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Compression {
     pub gain: f32,
@@ -104,6 +108,7 @@ impl Default for Compression {
     }
 }
 
+/// Spatial FX settings (delay/reverb).
 #[derive(Clone, Serialize, Deserialize)]
 pub enum SpatialFx {
     None,

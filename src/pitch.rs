@@ -16,10 +16,12 @@ const DEFAULT_ROOT: Note = Note {
     equave: 4,
 };
 
+/// Converts a freq ratio to cents.
 fn cents(ratio: f32) -> f32 {
     1200.0 * ratio.log2() / 2.0_f32.log2()
 }
 
+/// Converts cents to a freq ratio.
 fn find_ratio(cents: f32) -> f32 {
     2.0_f32.powf(2.0_f32.log2() * cents / 1200.0)
 }
@@ -33,7 +35,8 @@ impl Nominal {
     const VARIANTS: [Nominal; 7] =
         [Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G];
 
-    // (period, generator)
+    /// Returns the (period, generator) mapping of this nominal, relative to
+    /// the reference pitch.
     fn vector(&self) -> (i32, i32) {
         match self {
             Nominal::A => (0, 0),
@@ -46,6 +49,7 @@ impl Nominal {
         }
     }
 
+    /// Returns the character used for the nominal.
     pub fn char(&self) -> char {
         match self {
             Nominal::A => 'A',
@@ -93,6 +97,7 @@ pub struct Tuning {
 }
 
 impl Tuning {
+    /// Generate a tuning by dividing a ratio into equal steps.
     pub fn divide(ratio: f32, steps: u16, arrow_steps: u8) -> Result<Tuning, &'static str> {
         if ratio <= 1.0 {
             return Err("ratio must be greater than 1");
@@ -131,19 +136,23 @@ impl Tuning {
         })
     }
 
+    /// Returns the step mapping of the generator ("fifth").
     fn generator_steps(&self) -> i32 {
         (self.scale.len() as f32 * 0.585).round() as i32
     }
 
+    /// Returns the step mapping of a sharp accidental.
     fn sharp_steps(&self) -> i32 {
         self.generator_steps() * 7 - self.scale.len() as i32 * 4
     }
 
+    /// Returns the step mapping of a nominal, relative to the reference pitch.
     fn nominal_steps(&self, nominal: Nominal) -> i32 {
         let (octaves, fifths) = nominal.vector();
         octaves * self.scale.len() as i32 + fifths * self.generator_steps()
     }
 
+    /// Translates notation to a concrete pitch.
     pub fn midi_pitch(&self, note: &Note) -> f32 {
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let root_steps = self.nominal_steps(self.root.nominal)
@@ -161,8 +170,9 @@ impl Tuning {
             + self.scale[scale_index] / 100.0
     }
 
-    // TODO: fix duplication of code with midi_pitch
+    /// Returns the pitch of the scale root.
     fn root_pitch(&self) -> f32 {
+        // TODO: fix duplication of code with midi_pitch
         let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
         let steps = self.nominal_steps(self.root.nominal)
             + self.sharp_steps() * self.root.sharps as i32
@@ -175,10 +185,12 @@ impl Tuning {
             + self.scale[scale_index] / 100.0
     }
 
+    /// Returns the ratio of this scale's period.
     pub fn equave(&self) -> f32 {
         find_ratio(*self.scale.last().unwrap())
     }
 
+    /// Returns the number of steps in the period.
     pub fn size(&self) -> u16 {
         self.scale.len() as u16
     }
@@ -289,6 +301,7 @@ fn parse_interval(s: &str) -> Option<f32> {
     }
 }
 
+/// Abstract notational representation of pitch.
 #[derive(PartialEq, Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Note {
     pub arrows: i8,
@@ -302,6 +315,7 @@ impl Note {
         Note { arrows, nominal, sharps, equave }
     }
 
+    /// Returns the character code used for this note's arrows.
     pub fn arrow_char(&self) -> char {
         char::from_u32(match self.arrows {
             ..=-3 => text::SUB_DOWN,
@@ -314,6 +328,7 @@ impl Note {
         }).unwrap()
     }
 
+    /// Returns the character code used for this note's sharps/flats.
     pub fn accidental_char(&self) -> char {
         char::from_u32(match self.sharps {
             ..=-3 => text::SUB_FLAT,
