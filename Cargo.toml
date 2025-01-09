@@ -6,7 +6,7 @@ license = "AGPL-3.0-only"
 
 [dependencies]
 cpal = { version = "0.15.3", features = ["jack"] }
-fundsp = { git = "https://github.com/SamiPerttu/fundsp.git" }
+fundsp = { git = "https://github.com/SamiPerttu/fundsp.git", rev = "a4f126b" }
 midir = "0.10.0"
 serde = { version = "1.0.214", features = ["derive"] }
 toml = "0.8.19"
