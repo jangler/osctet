@@ -386,10 +386,10 @@ impl Module {
         self.track_history.drain(..).collect()
     }
 
-    pub fn find_loop_start(&self, before_tick: Timespan) -> Option<Timespan> {
+    pub fn find_loop_start(&self, before_time: f64) -> Option<Timespan> {
         self.tracks[0].channels.iter().flat_map(|c| {
             c.events.iter()
-                .filter(|e| e.data == EventData::Loop && e.tick < before_tick)
+                .filter(|e| e.data == EventData::Loop && e.tick.as_f64() < before_time)
                 .map(|e| e.tick)
         }).max()
     }

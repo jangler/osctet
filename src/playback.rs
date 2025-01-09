@@ -13,8 +13,7 @@ pub struct Player {
     pub seq: Sequencer,
     synths: Vec<Synth>, // one per track
     playing: bool,
-    tick: Timespan,
-    playtime: f64,
+    beat: f64,
     tempo: f32,
     looped: bool,
     metronome: bool,
@@ -28,8 +27,7 @@ impl Player {
             seq,
             synths: (0..num_tracks).map(|_| Synth::new(sample_rate)).collect(),
             playing: false,
-            tick: Timespan::ZERO,
-            playtime: 0.0, // not total playtime!
+            beat: 0.0,
             tempo: DEFAULT_TEMPO,
             looped: false,
             metronome: false,
@@ -44,14 +42,13 @@ impl Player {
         }
         self.synths = (0..num_tracks).map(|_| Synth::new(self.sample_rate)).collect();
         self.playing = false;
-        self.tick = Timespan::ZERO;
-        self.playtime = 0.0;
+        self.beat = 0.0;
         self.tempo = DEFAULT_TEMPO;
         self.looped = false;
     }
 
     pub fn get_tick(&self) -> Timespan {
-        self.tick
+        Timespan::approximate(self.beat)
     }
 
     pub fn is_playing(&self) -> bool {
@@ -66,13 +63,12 @@ impl Player {
 
     pub fn play(&mut self) {
         self.playing = true;
-        self.playtime = 0.0;
         self.looped = false;
     }
 
     pub fn play_from(&mut self, tick: Timespan, module: &Module) {
         self.simulate_events(tick, module);
-        self.tick = tick;
+        self.beat = tick.as_f64();
         self.play();
     }
 
@@ -159,10 +155,8 @@ impl Player {
             return
         }
 
-        self.playtime += dt;
-        let prev_tick = self.tick;
-        self.tick += interval_ticks(self.playtime, self.tempo);
-        self.playtime -= tick_interval(self.tick - prev_tick, self.tempo);
+        let prev_time = self.beat;
+        self.beat += interval_ticks(dt, self.tempo);
 
         let mut events = Vec::new();
 
@@ -176,8 +170,9 @@ impl Player {
                 for event in &channel.events {
                     let col = event.data.logical_column();
 
-                    if event.tick < self.tick {
-                        if event.tick >= prev_tick {
+                    let t = event.tick.as_f64();
+                    if t < self.beat {
+                        if t >= prev_time {
                             events.push(LocatedEvent {
                                 event: event.clone(),
                                 track: track_i,
@@ -212,13 +207,14 @@ impl Player {
                 for i in 0..prev_data.len() {
                     if glide[i] {
                         if let Some(data) = interpolate_events(
-                            prev_data[i], next_event[i], start_tick[i], self.tick, &module
+                            prev_data[i], next_event[i], start_tick[i],
+                            self.beat as f32, &module
                         ) {
                             events.push(LocatedEvent {
                                 track: track_i,
                                 channel: channel_i,
                                 event: Event {
-                                    tick: self.tick,
+                                    tick: Timespan::approximate(self.beat),
                                     data,
                                 },
                             });
@@ -248,7 +244,7 @@ impl Player {
             }
         }
 
-        if self.metronome && self.tick.as_f32().ceil() != prev_tick.as_f32().ceil() {
+        if self.metronome && self.beat.ceil() != prev_time.ceil() {
             self.seq.push_relative(0.0, 0.01, Fade::Smooth, 0.01, 0.01,
                 Box::new(square_hz(440.0 * 8.0) >> split::<U4>()));
         }
@@ -369,7 +365,7 @@ impl Player {
         if synth.muted {
             synth.clear_all_notes(&mut self.seq);
         } else if self.playing {
-            self.simulate_track_events(self.tick, module, track_i);
+            self.simulate_track_events(Timespan::approximate(self.beat), module, track_i);
         }
     }
 
@@ -437,8 +433,8 @@ impl Player {
             }
             EventData::Tempo(t) => self.tempo = t,
             EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
-            EventData::End => if let Some(tick) = module.find_loop_start(self.tick) {
-                self.tick = tick;
+            EventData::End => if let Some(tick) = module.find_loop_start(self.beat) {
+                self.beat = tick.as_f64();
                 self.reinit_memory(tick, module);
                 self.looped = true;
             } else {
@@ -456,8 +452,8 @@ impl Player {
     }
 }
 
-fn interval_ticks(dt: f64, tempo: f32) -> Timespan {
-    Timespan::approximate(dt * tempo as f64 / 60.0)
+fn interval_ticks(dt: f64, tempo: f32) -> f64 {
+    dt * tempo as f64 / 60.0
 }
 
 pub fn tick_interval(dtick: Timespan, tempo: f32) -> f64 {
@@ -563,10 +559,10 @@ pub fn render_tracks(module: Arc<Module>, path: PathBuf) -> Receiver<RenderUpdat
 }
 
 fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
-    start: Timespan, tick: Timespan, module: &Module
+    start: Timespan, time: f32, module: &Module
 ) -> Option<EventData> {
     if let Some(next) = next {
-        let t = (tick - start).as_f32() / (next.tick - start).as_f32();
+        let t = (time - start.as_f32()) / (next.tick.as_f32() - start.as_f32());
 
         match next.data {
             EventData::Pitch(b) => {
