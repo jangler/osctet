@@ -2,13 +2,13 @@ use macroquad::input::{KeyCode, is_key_pressed};
 
 use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
 
-use super::{info::Info, Layout, UI};
+use super::{info::Info, Layout, Ui};
 
 // for file dialogs
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "oscins";
 
-pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
+pub fn draw(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     scroll: &mut f32, cfg: &mut Config, player: &mut Player
 ) {
     if is_key_pressed(KeyCode::Up) {
@@ -41,7 +41,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
-fn patch_list(ui: &mut UI, module: &mut Module, patch_index: &mut Option<usize>,
+fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     cfg: &mut Config, player: &mut Player
 ) {
     let mut edits = Vec::new();
@@ -151,7 +151,7 @@ pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
     }
 }
 
-fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
+fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
     if !module.kit.is_empty() {
         ui.start_group();
         let mut removed_index = None;
@@ -208,7 +208,7 @@ fn kit_controls(ui: &mut UI, module: &mut Module, player: &mut Player) {
     }
 }
 
-fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
+fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
     ui.header("GENERAL", Info::None);
     ui.shared_slider("gain", "Level", &patch.gain.0, 0.0..=1.0, None, 2, true, Info::None);
     ui.formatted_shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, 1, true, Info::None,
@@ -242,7 +242,7 @@ fn patch_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config, player: &mut
     ui.space(2.0);
 }
 
-fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
+fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
     player: &mut Player
 ) {
     ui.header("GENERATORS", Info::Generators);
@@ -422,7 +422,7 @@ fn oscillator_controls(ui: &mut UI, patch: &mut Patch, cfg: &mut Config,
     }
 }
 
-fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config,
+fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
     player: &mut Player
 ) -> bool {
     if let Some(path) = super::new_file_dialog(player)
@@ -443,7 +443,7 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut UI, cfg: &mut Config,
     false
 }
 
-fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) -> bool {
+fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut Ui) -> bool {
     if let Some(path) = &data.path {
         match PcmData::load_offset(path, offset) {
             Ok(result) => {
@@ -461,7 +461,7 @@ fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut UI) -> bool {
     false
 }
 
-fn filter_controls(ui: &mut UI, patch: &mut Patch) {
+fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
     ui.header("FILTERS", Info::Filters);
 
     if !patch.filters.is_empty() {
@@ -525,7 +525,7 @@ fn filter_controls(ui: &mut UI, patch: &mut Patch) {
     }
 }
 
-fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
+fn envelope_controls(ui: &mut Ui, patch: &mut Patch) {
     ui.header("ENVELOPES", Info::Envelopes);
 
     if !patch.envs.is_empty() {
@@ -581,7 +581,7 @@ fn envelope_controls(ui: &mut UI, patch: &mut Patch) {
     }
 }
 
-fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
+fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
     ui.header("LFOS", Info::Lfos);
 
     if !patch.lfos.is_empty() {
@@ -634,7 +634,7 @@ fn lfo_controls(ui: &mut UI, patch: &mut Patch) {
     }
 }
 
-fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
+fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
     ui.header("MOD MATRIX", Info::ModMatrix);
 
     if !patch.mod_matrix.is_empty() {
@@ -694,7 +694,7 @@ fn modulation_controls(ui: &mut UI, patch: &mut Patch) {
     }
 }
 
-fn index_group(ui: &mut UI, len: usize) {
+fn index_group(ui: &mut Ui, len: usize) {
     ui.start_group();
     ui.label("#", Info::None);
     for i in 0..len {
@@ -703,7 +703,7 @@ fn index_group(ui: &mut UI, len: usize) {
     ui.end_group();
 }
 
-fn labeled_group(ui: &mut UI, label: &str, info: Info, f: impl FnOnce(&mut UI) -> ()) {
+fn labeled_group(ui: &mut Ui, label: &str, info: Info, f: impl FnOnce(&mut Ui) -> ()) {
     ui.start_group();
     ui.label(label, info);
     f(ui);

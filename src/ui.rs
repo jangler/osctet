@@ -192,7 +192,7 @@ impl Default for Focus {
 }
 
 /// Draws widgets and tracks UI state.
-pub struct UI {
+pub struct Ui {
     pub style: Style,
     tabs: HashMap<String, usize>,
     bounds: Rect,
@@ -223,7 +223,7 @@ pub struct UI {
     tab_nav_list: Vec<String>,
 }
 
-impl UI {
+impl Ui {
     pub fn new(theme: Option<Theme>, font_index: usize) -> Self {
         let atlas = GlyphAtlas::from_bdf_bytes(text::FONT_BYTES.get(font_index)
             .unwrap_or(&text::FONT_BYTES[0]))

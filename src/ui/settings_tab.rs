@@ -2,9 +2,9 @@ use palette::Lchuv;
 
 use crate::{config::{self, Config}, playback::Player, Midi};
 
-use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, UI};
+use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, Ui};
 
-pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
+pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     player: &mut Player, midi: &mut Midi
 ) {
     ui.layout = Layout::Horizontal;
@@ -123,7 +123,7 @@ pub fn draw(ui: &mut UI, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
-fn color_controls(ui: &mut UI, label: &str, accent: bool,
+fn color_controls(ui: &mut Ui, label: &str, accent: bool,
     f: impl Fn(&mut Theme) -> &mut Lchuv) {
     ui.start_group();
     ui.label(label, Info::None);
@@ -150,7 +150,7 @@ fn color_controls(ui: &mut UI, label: &str, accent: bool,
     ui.end_group();
 }
 
-fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
+fn hotkey_controls(ui: &mut Ui, cfg: &mut Config) -> usize {
     ui.header("KEY COMMANDS", Info::None);
     ui.start_group();
 
@@ -184,7 +184,7 @@ fn hotkey_controls(ui: &mut UI, cfg: &mut Config) -> usize {
     id
 }
 
-fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
+fn note_key_controls(ui: &mut Ui, cfg: &mut Config, hotkey_input_id: usize) {
     ui.header("NOTE LAYOUT", Info::NoteLayout);
 
     let mut hotkey_input_id = hotkey_input_id;
@@ -201,13 +201,13 @@ fn note_key_controls(ui: &mut UI, cfg: &mut Config, hotkey_input_id: usize) {
     }
 }
 
-fn entries_per_col(ui: &UI, max_chars: usize, len: usize) -> usize {
+fn entries_per_col(ui: &Ui, max_chars: usize, len: usize) -> usize {
     let char_width = ui.style.atlas.char_width();
     let cols = (ui.bounds.w / (max_chars as f32 * char_width)) as usize;
     (len as f32 / cols as f32).ceil() as usize
 }
 
-fn set_font(cfg: &mut Config, ui: &mut UI, size: usize) {
+fn set_font(cfg: &mut Config, ui: &mut Ui, size: usize) {
     if let Some(bytes) = text::FONT_BYTES.get(size) {
         let atlas = GlyphAtlas::from_bdf_bytes(bytes).unwrap();
         ui.style.margin = atlas.max_height() - atlas.cap_height();
@@ -219,7 +219,7 @@ fn set_font(cfg: &mut Config, ui: &mut UI, size: usize) {
 const THEME_FILTER_NAME: &str = "Osctet theme";
 const THEME_FILTER_EXT: &str = "oscthm";
 
-fn save_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
+fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     if let Some(mut path) = super::new_file_dialog(player)
         .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
         .set_directory(cfg.theme_folder.clone().unwrap_or(String::from(".")))
@@ -232,7 +232,7 @@ fn save_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
     }
 }
 
-fn load_theme(ui: &mut UI, cfg: &mut Config, player: &mut Player) {
+fn load_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     if let Some(path) = super::new_file_dialog(player)
         .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
         .set_directory(cfg.theme_folder.clone().unwrap_or(String::from(".")))

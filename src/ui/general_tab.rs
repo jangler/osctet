@@ -11,7 +11,7 @@ pub struct TableCache {
     table: Vec<Vec<String>>,
 }
 
-pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
+pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
     player: &mut Player, scroll: &mut f32, table_cache: &mut Option<TableCache>,
 ) {
     ui.layout = Layout::Horizontal;
@@ -36,7 +36,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
-fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
+fn fx_controls(ui: &mut Ui, settings: &mut FXSettings, fx: &mut GlobalFX) {
     ui.space(2.0);
     ui.header("SPATIAL FX", Info::None);
     let mut commit = false;
@@ -126,7 +126,7 @@ fn fx_controls(ui: &mut UI, settings: &mut FXSettings, fx: &mut GlobalFX) {
     }
 }
 
-fn tuning_controls(ui: &mut UI, tuning: &mut Tuning, cfg: &mut Config,
+fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
     player: &mut Player, table_cache: &mut Option<TableCache>
 ) {
     ui.space(2.0);
@@ -224,7 +224,7 @@ fn make_table(t: &Tuning) -> Vec<Vec<String>> {
     columns
 }
 
-fn draw_table(ui: &mut UI, labels: &[&str], table: &Vec<Vec<String>>) {
+fn draw_table(ui: &mut Ui, labels: &[&str], table: &Vec<Vec<String>>) {
     for (label, column) in labels.iter().zip(table) {
         ui.start_group();
         ui.label(label, Info::None);

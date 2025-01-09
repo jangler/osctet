@@ -110,7 +110,7 @@ struct App {
     config: Config,
     fx: GlobalFX,
     patch_index: Option<usize>, // if None, kit is selected
-    ui: ui::UI,
+    ui: ui::Ui,
     pattern_editor: PatternEditor,
     general_scroll: f32,
     instruments_scroll: f32,
@@ -129,7 +129,7 @@ impl App {
         App {
             octave: 3,
             midi,
-            ui: ui::UI::new(config.theme.clone(), config.font_size),
+            ui: ui::Ui::new(config.theme.clone(), config.font_size),
             config,
             fx: global_fx,
             patch_index: Some(0),

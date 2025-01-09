@@ -98,22 +98,22 @@ impl PatternEditor {
         self.edit_start.tick
     }
 
-    pub fn in_digit_column(&self, ui: &UI) -> bool {
+    pub fn in_digit_column(&self, ui: &Ui) -> bool {
         ui.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
             && self.edit_start.column != NOTE_COLUMN
     }
 
-    pub fn in_global_track(&self, ui: &UI) -> bool {
+    pub fn in_global_track(&self, ui: &Ui) -> bool {
         ui.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
             && self.edit_start.track == 0
     }
 
-    fn beat_height(&self, ui: &UI) -> f32 {
+    fn beat_height(&self, ui: &Ui) -> f32 {
         line_height(&ui.style.atlas) * self.beat_division as f32
     }
 
     /// Convert mouse coordinates to a Position.
-    fn position_from_mouse(&self, ui: &UI, track_xs: &[f32], tracks: &[Track]) -> Position {
+    fn position_from_mouse(&self, ui: &Ui, track_xs: &[f32], tracks: &[Track]) -> Position {
         let (x, y) = mouse_position();
         let mut pos = Position {
             tick: self.round_tick(self.y_tick(y, ui)),
@@ -146,7 +146,7 @@ impl PatternEditor {
         pos
     }
 
-    fn y_tick(&self, y: f32, ui: &UI) -> Timespan {
+    fn y_tick(&self, y: f32, ui: &Ui) -> Timespan {
         let beat_height = self.beat_height(ui);
         let f = (y - ui.cursor_y - line_height(&ui.style.atlas) * 0.5) / beat_height;
         Timespan::approximate(f.into())
@@ -157,7 +157,7 @@ impl PatternEditor {
         Timespan::new(self.screen_tick.as_f64().ceil() as i32, 1)
     }
 
-    fn set_metrics(&mut self, viewport: Rect, ui: &UI) {
+    fn set_metrics(&mut self, viewport: Rect, ui: &Ui) {
         self.screen_tick = self.y_tick(viewport.y, ui);
         self.screen_tick_max = self.y_tick(viewport.y + viewport.h, ui);
     }
@@ -184,7 +184,7 @@ impl PatternEditor {
         (tl, br)
     }
 
-    fn draw_cursor(&self, ui: &mut UI, track_xs: &[f32]) {
+    fn draw_cursor(&self, ui: &mut Ui, track_xs: &[f32]) {
         let (tl, br) = self.selection_corners();
         let beat_height = self.beat_height(ui);
         let start = position_coords(tl, &ui.style, track_xs, false, beat_height);
@@ -659,7 +659,7 @@ impl PatternEditor {
         }
     }
 
-    fn draw_channel(&self, ui: &mut UI, channel: &Channel, muted: bool, index: usize) {
+    fn draw_channel(&self, ui: &mut Ui, channel: &Channel, muted: bool, index: usize) {
         let beat_height = self.beat_height(ui);
         self.draw_channel_line(ui, index == 0);
         self.draw_interpolation(ui, channel);
@@ -670,7 +670,7 @@ impl PatternEditor {
         }
     }
 
-    fn draw_channel_line(&self, ui: &mut UI, track_boundary: bool) {
+    fn draw_channel_line(&self, ui: &mut Ui, track_boundary: bool) {
         let scroll = self.scroll(ui);
         ui.cursor_z -= 1;
         let color = if track_boundary {
@@ -684,7 +684,7 @@ impl PatternEditor {
         ui.cursor_z += 1;
     }
 
-    fn draw_interpolation(&self, ui: &mut UI, channel: &Channel) {
+    fn draw_interpolation(&self, ui: &mut Ui, channel: &Channel) {
         ui.cursor_z -= 1;
         let beat_height = self.beat_height(ui);
         let tpr = self.row_timespan();
@@ -756,11 +756,11 @@ impl PatternEditor {
     }
 
     /// Returns scroll in pixels instead of in beats.
-    fn scroll(&self, ui: &UI) -> f32 {
+    fn scroll(&self, ui: &Ui) -> f32 {
         self.beat_scroll.as_f32() * self.beat_height(ui)
     }
 
-    fn set_scroll(&mut self, scroll: f32, ui: &UI) {
+    fn set_scroll(&mut self, scroll: f32, ui: &Ui) {
         self.beat_scroll = Timespan::approximate((scroll / self.beat_height(ui)).into());
     }
 
@@ -866,7 +866,7 @@ impl PatternEditor {
         tick >= self.screen_tick && tick <= self.screen_tick_max
     }
 
-    fn draw_event(&self, ui: &mut UI, evt: &Event, beat_height: f32, muted: bool) {
+    fn draw_event(&self, ui: &mut Ui, evt: &Event, beat_height: f32, muted: bool) {
         let y = ui.cursor_y + evt.tick.as_f32() * beat_height;
         if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
             return
@@ -937,7 +937,7 @@ impl PatternEditor {
     }
 }
 
-pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut PatternEditor,
+pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut PatternEditor,
     conf: &Config
 ) {
     if let Some(interval) = pe.pending_interval.as_mut() {
@@ -1069,7 +1069,7 @@ pub fn draw(ui: &mut UI, module: &mut Module, player: &mut Player, pe: &mut Patt
 }
 
 /// Draws beat numbers and lines.
-fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
+fn draw_beats(ui: &mut Ui, x: f32, beat_height: f32) {
     let mut beat = 1;
     let mut y = ui.cursor_y;
     let line_height = line_height(&ui.style.atlas);
@@ -1090,7 +1090,7 @@ fn draw_beats(ui: &mut UI, x: f32, beat_height: f32) {
 }
 
 /// Returns x positions of each track, plus one extra position.
-fn draw_track_headers(ui: &mut UI, module: &mut Module, player: &mut Player,
+fn draw_track_headers(ui: &mut Ui, module: &mut Module, player: &mut Player,
     pe: &mut PatternEditor
 ) -> Vec<f32> {
     let mut edit = None;
@@ -1244,7 +1244,7 @@ fn track_targets(patches: &[Patch]) -> Vec<String> {
     v
 }
 
-fn draw_playhead(ui: &mut UI, tick: Timespan, x: f32, beat_height: f32) {
+fn draw_playhead(ui: &mut Ui, tick: Timespan, x: f32, beat_height: f32) {
     let rect = Rect {
         x,
         y: ui.cursor_y + tick.as_f32() * beat_height,
