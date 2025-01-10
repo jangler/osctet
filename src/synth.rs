@@ -1271,18 +1271,16 @@ impl Voice {
             * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x));
         let filter_net = settings.make_filter_net(&vars);
 
-        // use dry signal if clip gain is set to 1.0
-        // TODO: doubling this could be costly. it would be better to code the
-        //       behavior into a custom audionode
-        let clip = pass()
-            * (var(&settings.distortion.0)
+        // use dry signal if distortion is zero
+        let clip = (
+            var(&settings.distortion.0)
                 + settings.dsp_component(&vars, ModTarget::ClipGain, &[])
-                >> shape_fn(|x| if x == 0.0 { 1.0 } else { 0.0 }))
-            & pass()
-            * (var(&settings.distortion.0)
-                + settings.dsp_component(&vars, ModTarget::ClipGain, &[])
-                >> shape_fn(|x| if x == 0.0 { 0.0 } else { (1.0 - clamp01(x)).recip() }))
-            >> shape(Clip(1.0));
+            | pass()
+        ) >> map(|i: &Frame<f32, U2>| if i[0] == 0.0 {
+            i[1]
+        } else {
+            clamp11(i[1] * (1.0 - clamp01(i[0])).recip())
+        });
 
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
             | (var(&settings.pan.0) >> follow(SMOOTH_TIME)

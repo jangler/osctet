@@ -40,6 +40,10 @@ fn lfo_noise(c: &mut Criterion) {
     render_module(c, "lfo_noise.osctet");
 }
 
+fn undecad(c: &mut Criterion) {
+    render_module(c, "undecad.osctet");
+}
+
 criterion_group!(benches,
-    scale_dry, scale_reverb, scale_delay, interpolation, lfo, noise, lfo_noise);
+    scale_dry, scale_reverb, scale_delay, interpolation, lfo, noise, lfo_noise, undecad);
 criterion_main!(benches);
