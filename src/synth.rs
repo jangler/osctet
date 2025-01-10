@@ -17,31 +17,41 @@ pub const REF_FREQ: f32 = 261.6256; // C4
 const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
 const VOICES_PER_CHANNEL: usize = 3;
 
+/// Minimum env scale is just the inverse.
 pub const MAX_ENV_SCALE: f32 = 16.0;
 
 pub const MIN_FREQ_RATIO: f32 = 0.25;
 pub const MAX_FREQ_RATIO: f32 = 16.0;
 
+// Hz values
 pub const MIN_LFO_RATE: f32 = 0.1;
 pub const MAX_LFO_RATE: f32 = 20.0;
 
+// Hz values
 pub const MIN_FILTER_CUTOFF: f32 = 20.0;
 pub const MAX_FILTER_CUTOFF: f32 = 22_000.0;
+
 pub const FILTER_CUTOFF_MOD_BASE: f32 = MAX_FILTER_CUTOFF / MIN_FILTER_CUTOFF;
 
+/// FunDSP's filters drop a lot in level near zero resonance, so limit the
+/// minimum resonance.
 pub const MIN_FILTER_RESONANCE: f32 = 0.1;
 
+// Hz values
 const PITCH_FLOOR: f32 = 20.0;
 const PITCH_CEILING: f32 = 5000.0;
+
 pub const PITCH_MOD_BASE: f32 = 16.0;
 
+/// Smoothing time for transitions.
 pub const SMOOTH_TIME: f32 = 0.01;
 
+/// Arbitrary constant for scaling FM depth.
 const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 
 const LFO_DELAY_CURVE: f32 = 3.0; // cubic
 
-// wrap this type so we can serialize it
+/// Wraps a Shared value for serialization.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(from = "f32", into = "f32")]
 pub struct Parameter(pub Shared);
@@ -64,6 +74,7 @@ impl Default for Parameter {
     }
 }
 
+/// Source type for note keys.
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub enum KeyOrigin {
     Keyboard,
@@ -71,6 +82,7 @@ pub enum KeyOrigin {
     Pattern,
 }
 
+/// Source for note keys, to track on/offs.
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct Key {
     pub origin: KeyOrigin,
@@ -78,6 +90,7 @@ pub struct Key {
     pub key: u8,
 }
 
+/// How to behave when a note starts before the last has ended.
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum PlayMode {
     Poly,
@@ -88,6 +101,7 @@ pub enum PlayMode {
 impl PlayMode {
     pub const VARIANTS: [PlayMode; 3] = [Self::Poly, Self::Mono, Self::SingleTrigger];
 
+    /// Returns the UI string for this play mode.
     pub fn name(&self) -> &str {
         match self {
             Self::Poly => "Poly",
@@ -97,6 +111,7 @@ impl PlayMode {
     }
 }
 
+/// Generator/LFO wave source.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Waveform {
     Sawtooth,
@@ -109,6 +124,7 @@ pub enum Waveform {
 }
 
 impl Waveform {
+    /// Variants that generators can use.
     pub const VARIANTS: [Waveform; 7] = [
         Self::Sawtooth,
         Self::Pulse,
@@ -119,6 +135,7 @@ impl Waveform {
         Self::Pcm(None),
     ];
 
+    /// Variants that LFOs can use.
     pub const LFO_VARIANTS: [Waveform; 6] = [
         Self::Sawtooth,
         Self::Pulse,
@@ -128,6 +145,7 @@ impl Waveform {
         Self::Noise,
     ];
 
+    /// Returns UI string.
     pub fn name(&self) -> &str {
         match self {
             Self::Sawtooth => "Sawtooth",
@@ -153,6 +171,7 @@ impl Waveform {
         true
     }
 
+    /// Make a generator DSP net.
     fn make_osc_net(&self,
         settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net
     ) -> Net {
@@ -190,6 +209,7 @@ impl Waveform {
         Net::wrap(au)
     }
 
+    /// Make an LFO DSP net.
     fn make_lfo_net(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
@@ -215,6 +235,7 @@ impl Waveform {
         Net::wrap(au)
     }
 
+    /// Check whether this waveform is affected by the "tone" control.
     fn has_tone_control(&self) -> bool {
         match *self {
             Waveform::Pulse | Waveform::Noise => true,
@@ -223,6 +244,7 @@ impl Waveform {
     }
 }
 
+/// Stores data for PCM waveforms.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PcmData {
     data: Vec<u8>, // for serialization
@@ -236,15 +258,18 @@ pub struct PcmData {
     pub midi_pitch: Option<f32>,
 }
 
+/// For serde.
 fn empty_wave() -> Arc<Wave> {
     Arc::new(Wave::new(1, 44100.0))
 }
 
 // TODO: costly clones here
 impl PcmData {
+    /// Supported file extensions for loading.
     pub const FILE_EXTENSIONS: [&str; 11] =
         ["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4", "ogg", "wav", "webm"];
 
+    /// Load PCM from an audio file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let data = fs::read(&path)?;
         let mut wave = Wave::load_slice(data.clone())?;
@@ -268,12 +293,7 @@ impl PcmData {
     /// Loads the audio file with position offset by `offset` in the file's
     /// directory.
     pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
-        Self::load(Self::next_file(path, offset))
-    }
-
-    /// Return the next/previous PCM file path in the path's directory.
-    fn next_file(path: &PathBuf, offset: isize) -> PathBuf {
-        path.parent().map(|p| {
+        let path = path.parent().map(|p| {
             fs::read_dir(p).map(|entries| {
                 // TODO: files ending in ex. .WAV instead of .wav won't match
                 let entries: Vec<_> = entries.flatten()
@@ -287,7 +307,9 @@ impl PcmData {
                     entries[i].path()
                 })
             }).ok()
-        }).flatten().flatten().unwrap_or(path.to_owned())
+        }).flatten().flatten().unwrap_or(path.to_owned());
+
+        Self::load(path)
     }
 
     /// Deserialized PcmData needs to be initialized before use.
@@ -412,6 +434,7 @@ impl Synth {
         }
     }
 
+    /// Reset channel-state-type memory.
     pub fn reset_memory(&mut self) {
         self.bend_memory.fill(0.0);
         self.mod_memory.fill(0.0);
@@ -419,6 +442,7 @@ impl Synth {
         self.prev_freq = None;
     }
 
+    /// Add channel memory slots to make `index` in bounds.
     fn expand_memory(&mut self, index: usize) {
         while self.bend_memory.len() <= index {
             self.bend_memory.push(0.0);
@@ -548,6 +572,7 @@ impl Synth {
         }
     }
 
+    /// Handle a MIDI-style pitch bend.
     pub fn pitch_bend(&mut self, channel: u8, bend: f32) {
         self.expand_memory(channel as usize);
         self.bend_memory[channel as usize] = bend;
@@ -558,6 +583,7 @@ impl Synth {
         }
     }
 
+    /// Set `key` note's pitch to `pitch` (as MIDI pitch).
     pub fn bend_to(&mut self, key: Key, pitch: f32) {
         if let Some(voice) = self.active_voices.get_mut(&key) {
             self.prev_freq = Some(midi_hz(pitch));
@@ -579,6 +605,7 @@ impl Synth {
         }
     }
 
+    /// Set modulation level.
     pub fn modulate(&mut self, channel: u8, depth: f32) {
         self.set_mod_memory(channel, depth);
         for (key, voice) in self.active_voices.iter_mut() {
@@ -642,6 +669,7 @@ impl Patch {
         }
     }
 
+    /// Initialize all PCM generators.
     pub fn init_pcm(&mut self) {
         for osc in self.oscs.iter_mut() {
             if let Waveform::Pcm(data) = &mut osc.waveform {
@@ -654,6 +682,7 @@ impl Patch {
         }
     }
 
+    /// Load a patch from disk.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         let mut patch = rmp_serde::from_slice::<Self>(&input)?;
@@ -661,18 +690,23 @@ impl Patch {
         Ok(patch)
     }
 
+    /// Save the patch to disk.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
         Ok(fs::write(path, contents)?)
     }
 
+    /// Create a copy of the patch.
     pub fn duplicate(&self) -> Result<Self, Box<dyn Error>> {
+        // we don't clone() here, since that wouldn't create unique copies
+        // of Shared instances
         let data = rmp_serde::to_vec(self)?;
         let mut patch = rmp_serde::from_slice::<Self>(&data)?;
         patch.name = format!("Copy of {}", patch.name);
         Ok(patch)
     }
 
+    /// Returns the DSP net for the patch, given voice parameters.
     fn dsp_component(&self, vars: &VoiceVars, target: ModTarget, path: &[ModSource]) -> Net {
         let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
         for (i, m) in self.mod_matrix.iter().enumerate() {
@@ -687,6 +721,7 @@ impl Patch {
         net
     }
 
+    /// Returns valid modulation sources for the patch.
     pub fn mod_sources(&self) -> Vec<ModSource> {
         let mut v = vec![ModSource::Pitch, ModSource::Pressure, ModSource::Modulation, ModSource::Random];
         for i in 0..self.envs.len() {
@@ -698,6 +733,7 @@ impl Patch {
         v
     }
 
+    /// Returns valid modulation destinations for the patch.
     pub fn mod_targets(&self) -> Vec<ModTarget> {
         let mut v = vec![
             ModTarget::Gain,
@@ -730,6 +766,7 @@ impl Patch {
         v
     }
 
+    /// Remove a generator, updating other settings as needed.
     pub fn remove_osc(&mut self, i: usize) {
         if i < self.oscs.len() {
             self.oscs.remove(i);
@@ -765,6 +802,7 @@ impl Patch {
         }
     }
 
+    /// Remove a filter, updating other settings as needed.
     pub fn remove_filter(&mut self, i: usize) {
         if i < self.filters.len() {
             self.filters.remove(i);
@@ -786,6 +824,7 @@ impl Patch {
         }
     }
 
+    /// Remove an envelope, updating other settings as needed.
     pub fn remove_env(&mut self, i: usize) {
         if i < self.envs.len() {
             self.envs.remove(i);
@@ -802,6 +841,7 @@ impl Patch {
         }
     }
 
+    /// Remove an LFO, updating other settings as needed.
     pub fn remove_lfo(&mut self, i: usize) {
         if i < self.lfos.len() {
             self.lfos.remove(i);
@@ -824,6 +864,7 @@ impl Patch {
         }
     }
 
+    /// Remove a mod matrix entry, updating other settings as needed.
     pub fn remove_mod(&mut self, i: usize) {
         if i < self.mod_matrix.len() {
             self.mod_matrix.remove(i);
@@ -840,6 +881,7 @@ impl Patch {
         }
     }
 
+    /// Construct a DSP net for generator `i`.
     fn make_osc(&self, i: usize, vars: &VoiceVars) -> Net {
         let mut mixed_oscs = Net::new(0, 1);
         let mut am_oscs = Net::wrap(Box::new(constant(1.0)));
@@ -867,6 +909,7 @@ impl Patch {
             + mixed_oscs
     }
 
+    /// Construct a DSP net for all patch filters.
     fn make_filter_net(&self, vars: &VoiceVars) -> Net {
         let mut net = Net::wrap(Box::new(pass()));
         for (i, filter) in self.filters.iter().enumerate() {
@@ -915,6 +958,7 @@ impl Patch {
     }
 }
 
+/// Tone generator.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Oscillator {
     pub level: Parameter,
@@ -938,6 +982,7 @@ impl Oscillator {
     }
 }
 
+/// Destination for generator signals.
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum OscOutput {
     Mix(usize),
@@ -947,6 +992,7 @@ pub enum OscOutput {
 }
 
 impl OscOutput {
+    /// Returns valid choices for a generator at `index`.
     pub fn choices(index: usize) -> Vec<OscOutput> {
         if index == 0 {
             vec![OscOutput::Mix(0)]
@@ -975,6 +1021,7 @@ impl Display for OscOutput {
     }
 }
 
+/// Key tracking options for filter cutoff.
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum KeyTracking {
     None,
@@ -1012,6 +1059,7 @@ impl Filter {
         }
     }
 
+    /// Create DSP net.
     fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize) -> Net {
         let kt = match self.key_tracking {
             KeyTracking::None => Net::wrap(Box::new(constant(1.0))),

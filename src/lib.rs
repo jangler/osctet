@@ -42,8 +42,7 @@ const MODULE_FILETYPE_NAME: &str = "Osctet module";
 const MODULE_EXT: &str = "osctet";
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
-
+/// Handles MIDI connection and state.
 pub struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll
     // create a new input just for that (see Boddlnagg/midir#90).
@@ -73,11 +72,13 @@ impl Midi {
         m
     }
 
+    /// Create a new MIDI input for the application.
     fn new_input(&mut self) -> Result<MidiInput, InitError> {
         self.input_id += 1;
         MidiInput::new(&format!("{} input #{}", APP_NAME, self.input_id))
     }
 
+    /// Returns the currently selected input port.
     fn selected_port(&self) -> Result<MidiInputPort, &'static str> {
         if let Some(selection) = &self.port_selection {
             if let Some(input) = &self.input {
@@ -103,7 +104,9 @@ const TAB_GENERAL: usize = 0;
 const TAB_PATTERN: usize = 1;
 const TAB_INSTRUMENTS: usize = 2;
 const TAB_SETTINGS: usize = 3;
+const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
 
+/// Top-level store of application state.
 struct App {
     octave: i8,
     midi: Midi,
@@ -145,10 +148,13 @@ impl App {
         }
     }
 
-    // TODO: switching tracks while keyjazzing could result in stuck notes
-    // TODO: entering note input mode while keyjazzing could result in stuck notes
-    // TODO: can keyjazzing mess up synth memory in a way that matters?
+    // TODO: use most current vel/mod setting when keyjazzing in pattern
+
+    /// Returns the index of the current track to use for keyjazzing.
     fn keyjazz_track(&self) -> usize {
+        // TODO: switching tracks while keyjazzing could result in stuck notes
+        // TODO: entering note input mode while keyjazzing could result in stuck notes
+        // TODO: can keyjazzing mess up synth memory in a way that matters?
         if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
             self.pattern_editor.cursor_track()
         } else {
@@ -156,6 +162,7 @@ impl App {
         }
     }
 
+    /// Returns the current patch index to use for keyjazzing.
     fn keyjazz_patch_index(&self, module: &Module) -> Option<usize> {
         match module.tracks[self.keyjazz_track()].target {
             TrackTarget::Global | TrackTarget::None => self.patch_index,
@@ -164,11 +171,12 @@ impl App {
         }
     }
 
-    // TODO: use most current vel/mod setting when keyjazzing in pattern
+    /// Handle keyboard input.
     fn handle_keys(&mut self, module: &mut Module, player: &mut Player) {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
         let mods = Modifiers::current();
 
+        // translate released keys into note-offs
         for key in released {
             let hk = Hotkey::new(mods, key);
             if let Some(_) = input::note_from_key(
@@ -183,6 +191,7 @@ impl App {
             }
         }
 
+        // translate pressed keys into key commands
         for key in pressed {
             let hk = Hotkey::new(mods, key);
             if let Some(action) = self.config.hotkey_action(&hk) {
@@ -259,6 +268,7 @@ impl App {
                 }
             }
 
+            // translate pressed keys into note-ons
             if let Some(note) = input::note_from_key(
                 hk, &module.tuning, self.octave, &self.config) {
                 let key = Key {
@@ -280,6 +290,7 @@ impl App {
         }
     }
 
+    /// Attempt to connect to the selected MIDI port.
     fn midi_connect(&mut self) -> Result<MidiInputConnection<Sender<Vec<u8>>>, Box<dyn Error>> {
         match self.midi.selected_port() {
             Ok(port) => {
@@ -307,6 +318,7 @@ impl App {
         }
     }
 
+    /// Handle incoming MIDI messages.
     fn handle_midi(&mut self, module: &Module, player: &mut Player) {
         if let Some(rx) = &self.midi.rx {
             while let Ok(v) = rx.try_recv() {
@@ -407,6 +419,7 @@ impl App {
         }
     }
 
+    /// Reconnect if MIDI connection settings have changed.
     fn check_midi_reconnect(&mut self) {
         if self.midi.port_selection.is_some() && self.midi.port_selection != self.midi.port_name {
             match self.midi_connect() {
@@ -433,7 +446,7 @@ impl App {
         }
     }
 
-    /// Returns false if it's quitting time.
+    /// Do 1 frame. Returns false if it's quitting time.
     fn frame(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>) -> bool {
         {
             let mut module = module.lock().unwrap();
@@ -473,12 +486,14 @@ impl App {
         self.process_ui(module, player)
     }
 
+    /// Save config to disk, logging errors.
     fn save_config(&mut self) {
         if let Err(e) = self.config.save(self.ui.style.theme.clone()) {
             eprintln!("error saving config: {}", e);
         }
     }
 
+    /// Handle incoming render status updates.
     fn handle_render_updates(&mut self) {
         if let Some(rx) = &self.render_channel {
             while let Ok(update) = rx.try_recv() {
@@ -494,7 +509,7 @@ impl App {
         }
     }
 
-    /// Returns false if it's quitting time.
+    /// Process the UI for 1 frame. Returns false if it's quitting time.
     fn process_ui(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>
     ) -> bool {
         {
@@ -536,6 +551,7 @@ impl App {
         true
     }
 
+    /// Draw the status panel at the bottom of the screen.
     fn bottom_panel(&mut self, player: &mut Player) {
         self.ui.start_bottom_panel();
 
@@ -563,6 +579,7 @@ impl App {
         self.ui.end_bottom_panel();
     }
 
+    /// Browse for and start rendering a WAV file.
     fn render_and_save(&mut self, module: &Module, player: &mut Player, tracks: bool) {
         if module.ends() {
             if let Some(mut path) = ui::new_file_dialog(player)
@@ -585,11 +602,13 @@ impl App {
         }
     }
 
+    /// Handle the "new song" key command.
     fn new_module(&mut self, module: &mut Module, player: &mut Player) {
         self.load_module(module, Module::new(Default::default()), player);
         self.save_path = None;
     }
 
+    /// Handle the "save song" key command.
     fn save_module(&mut self, module: &mut Module, player: &mut Player) {
         if let Some(path) = &self.save_path {
             if let Err(e) = module.save(self.pattern_editor.beat_division, path) {
@@ -602,6 +621,7 @@ impl App {
         }
     }
 
+    /// Handle the "save song as" key command.
     fn save_module_as(&mut self, module: &mut Module, player: &mut Player) {
         if let Some(mut path) = ui::new_file_dialog(player)
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
@@ -620,6 +640,7 @@ impl App {
         }
     }
 
+    /// Handle the "open song" key command.
     fn open_module(&mut self, module: &mut Module, player: &mut Player) {
         if let Some(path) = ui::new_file_dialog(player)
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
@@ -637,6 +658,8 @@ impl App {
         }
     }
 
+    /// Replace the current module with `module`, reinitializing state as
+    /// needed.
     fn load_module(&mut self,
         old_module: &mut Module, module: Module, player: &mut Player) {
         *old_module = module;
@@ -664,6 +687,7 @@ fn get_audio_device() -> Option<cpal::Device> {
     cpal::default_host().default_output_device()
 }
 
+/// Returns the best available audio output stream config.
 fn preferred_config(device: &cpal::Device, desired_sr: SampleRate
 ) -> Result<StreamConfig, Box<dyn Error>> {
     device.supported_output_configs()?
@@ -712,6 +736,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let stream_module = module.clone();
     let stream_player = player.clone();
 
+    // audio callback
     let stream = audio_conf.and_then(|config| {
         Ok(device.unwrap().build_output_stream(
             &config, move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {

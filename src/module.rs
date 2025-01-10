@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch, timespan::Timespan};
 
-
 pub const GLOBAL_COLUMN: u8 = 0;
 pub const NOTE_COLUMN: u8 = 0;
 pub const VEL_COLUMN: u8 = 1;
 pub const MOD_COLUMN: u8 = 2;
 
+/// Stores all saved song data and undo state.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Module {
     pub title: String,
@@ -39,6 +39,7 @@ pub struct Module {
     pub has_unsaved_changes: bool,
 }
 
+/// Default beat division for serde.
 fn default_division() -> u8 { 4 }
 
 impl Module {
@@ -63,6 +64,7 @@ impl Module {
         }
     }
 
+    /// Load a module from `path`.
     pub fn load(path: &PathBuf) -> Result<Self, Box<dyn Error>> {
         let file = File::open(path)?;
         let mut input = Vec::new();
@@ -72,12 +74,15 @@ impl Module {
         Ok(module)
     }
 
+    /// Initialize sample data.
     fn init_pcm(&mut self) {
         for patch in &mut self.patches {
             patch.init_pcm();
         }
     }
 
+    /// Save the module to `path`. `division` is passed because the pattern
+    /// editor stores the working beat division, not the module.
     pub fn save(&mut self, division: u8, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         self.division = division;
         let contents = rmp_serde::to_vec(self)?;
@@ -87,6 +92,8 @@ impl Module {
         Ok(())
     }
 
+    /// Map a patch index and note to a patch and note, accounting for kit
+    /// mappings.
     pub fn map_input(&self,
         patch_index: Option<usize>, note: Note
     ) -> Option<(&Patch, Note)> {
@@ -97,12 +104,14 @@ impl Module {
         }
     }
 
+    /// Returns the kit patch that `note` to, if any.
     fn get_kit_patch(&self, note: Note) -> Option<(&Patch, Note)> {
         self.kit.iter()
             .find(|x| x.input_note == note)
             .map(|x| (self.patches.get(x.patch_index).unwrap(), x.patch_note))
     }
 
+    /// Remove the patch at `index`.
     fn remove_patch(&mut self, index: usize) -> Patch {
         let patch = self.patches.remove(index);
         self.kit.retain(|x| x.patch_index != index);
@@ -151,6 +160,7 @@ impl Module {
         events
     }
 
+    /// Returns the pattern event at `pos`.
     pub fn event_at(&mut self, pos: Position) -> Option<&mut Event> {
         if let Some(track) = self.tracks.get_mut(pos.track) {
             if let Some(channel) = track.channels.get_mut(pos.channel) {
@@ -161,7 +171,7 @@ impl Module {
         None
     }
 
-    /// Delete pattern events between two positions.
+    /// Push an edit that deletes pattern events between two positions.
     pub fn delete_events(&mut self, start: Position, end: Position) {
         let remove: Vec<_> = self.scan_events(start, end).iter()
             .map(|x| x.position())
@@ -174,6 +184,7 @@ impl Module {
         }
     }
 
+    /// Delete the single pattern event at `pos`.
     fn delete_event(&mut self, pos: Position) -> Option<Event> {
         let channel = &mut self.tracks[pos.track].channels[pos.channel];
         channel.events.iter()
@@ -181,6 +192,7 @@ impl Module {
             .map(|i| channel.events.remove(i))
     }
 
+    /// Maps a note based on track index.
     pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
         self.tracks.get(track).map(|track| {
             match track.target {
@@ -191,12 +203,14 @@ impl Module {
         }).flatten()
     }
 
+    /// Push an edit appending a new track.
     pub fn add_track(&mut self) {
         let index = self.tracks.len();
         let track = Track::new(TrackTarget::Patch(0));
         self.push_edit(Edit::InsertTrack(index, track));
     }
 
+    /// Push an edit inserting an event.
     pub fn insert_event(&mut self, track: usize, channel: usize, event: Event) {
         self.push_edit(Edit::PatternData {
             remove: vec![Position {
@@ -209,6 +223,7 @@ impl Module {
         });
     }
 
+    /// Push an edit shifting events forward or backward.
     pub fn shift_channel_events(&mut self,
         start: Position, end: Position, distance: Timespan
     ) {
@@ -382,10 +397,12 @@ impl Module {
         }
     }
 
+    /// Returns track insertions & removals made since the last call.
     pub fn drain_track_history(&mut self) -> Vec<TrackEdit> {
         self.track_history.drain(..).collect()
     }
 
+    /// Returns the first loop event before beat count `before_time`.
     pub fn find_loop_start(&self, before_time: f64) -> Option<Timespan> {
         self.tracks[0].channels.iter().flat_map(|c| {
             c.events.iter()
@@ -394,7 +411,7 @@ impl Module {
         }).max()
     }
 
-    /// Returns true if the module ends.
+    /// Returns true if the module has an End event.
     pub fn ends(&self) -> bool {
         for channel in &self.tracks[0].channels {
             for event in &channel.events {
@@ -499,6 +516,7 @@ impl Module {
     }
 }
 
+/// Kit mapping.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct KitEntry {
     pub input_note: Note,
@@ -521,6 +539,7 @@ impl Track {
     }
 }
 
+/// Track "output" mapping.
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum TrackTarget {
     None,
@@ -529,6 +548,7 @@ pub enum TrackTarget {
     Patch(usize),
 }
 
+/// Contains an event sequence. Is a struct for legacy reasons.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
@@ -564,10 +584,13 @@ impl Channel {
         deleted
     }
 
+    /// Sort events in the channel by their position. Some functions expect
+    /// channel data to be sorted.
     pub fn sort_events(&mut self) {
         self.events.sort_by_key(|e| (e.tick, e.data.spatial_column()));
     }
 
+    /// Return interpolation events in a (spatial) column.
     pub fn interp_by_col(&self, col: u8) -> impl Iterator<Item = &Event> + use<'_> {
         self.events.iter().filter_map(move |e| match e.data {
             EventData::StartGlide(i)
@@ -577,6 +600,7 @@ impl Channel {
         })
     }
 
+    /// Returns true if the (spatial) column is interpolated at `tick`.
     pub fn is_interpolated(&self, col: u8, tick: Timespan) -> bool {
         let mut depth = 0;
 
@@ -610,12 +634,14 @@ impl Channel {
     }
 }
 
+/// Channel event.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Event {
     pub tick: Timespan,
     pub data: EventData,
 }
 
+/// Types of pattern event data.
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum EventData {
     Pitch(Note),
@@ -639,13 +665,19 @@ pub enum EventData {
 }
 
 impl EventData {
+    /// Maximum value in a digit column.
     pub const DIGIT_MAX: u8 = 0xf;
+
+    /// Binary or'ed with "spatial column" value.
     pub const INTERP_COL_FLAG: u8 = 0x80;
 
+    /// Returns the column where the event should be drawn.
     pub fn spatial_column(&self) -> u8 {
         self.logical_column() & !Self::INTERP_COL_FLAG
     }
 
+    /// Returns a logical column value. Used to distinguish
+    /// interpolation from "normal" events.
     pub fn logical_column(&self) -> u8 {
         match *self {
             Self::Pressure(_) => VEL_COLUMN,
@@ -666,14 +698,7 @@ impl EventData {
     }
 }
 
-/// Defines a linked copy region.
-#[derive(Serialize, Deserialize)]
-pub struct Link {
-    pub src_tick: u32,
-    pub dst_tick: u32,
-    pub duration: u32,
-}
-
+/// Pattern position.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Position {
     pub tick: Timespan,
@@ -687,6 +712,7 @@ impl Position {
         Self { tick, track, channel, column }
     }
 
+    /// Returns the position's beat as a zero-indexed float.
     pub fn beat(&self) -> f32 {
         self.tick.as_f32()
     }
@@ -696,6 +722,7 @@ impl Position {
         (self.track, self.channel, self.column)
     }
 
+    /// Recalculate the position for an offset in channels.
     /// Returns None if the position is out of range.
     pub fn add_channels(&self, channels: usize, tracks: &Vec<Track>) -> Option<Self> {
         let mut track = self.track;
@@ -718,7 +745,7 @@ impl Position {
     }
 }
 
-/// An operation that changes Module data.
+/// An operation that changes `Module` data. Used for undo/redo.
 #[derive(Clone)]
 pub enum Edit {
     InsertTrack(usize, Track),
@@ -742,6 +769,7 @@ pub enum Edit {
     ReplaceEvents(Vec<LocatedEvent>),
 }
 
+/// Position of a channel.
 #[derive(Clone)]
 pub struct ChannelCoords {
     track: u8,

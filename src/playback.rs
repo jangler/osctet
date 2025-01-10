@@ -5,6 +5,8 @@ use fundsp::hacker32::*;
 use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, MOD_COLUMN, NOTE_COLUMN, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}, timespan::Timespan};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
+
+/// For rendering.
 const LOOP_FADEOUT_TIME: f64 = 10.0;
 
 /// Handles module playback. In methods that take a `track` argument, 0 can
@@ -36,6 +38,7 @@ impl Player {
         }
     }
 
+    /// Reinitialize state.
     pub fn reinit(&mut self, num_tracks: usize) {
         for synth in &mut self.synths {
             synth.clear_all_notes(&mut self.seq);
@@ -47,6 +50,7 @@ impl Player {
         self.looped = false;
     }
 
+    /// Return the closest `Timespan` to the playhead.
     pub fn get_tick(&self) -> Timespan {
         Timespan::approximate(self.beat)
     }
@@ -72,11 +76,13 @@ impl Player {
         self.play();
     }
 
+    /// Start playing at `tick` in record mode.
     pub fn record_from(&mut self, tick: Timespan, module: &Module) {
         self.metronome = true;
         self.play_from(tick, module);
     }
 
+    /// Update synths for track edits.
     pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
         for edit in edits {
             match edit {
@@ -110,6 +116,7 @@ impl Player {
         }
     }
 
+    /// Handle a modulation event.
     pub fn modulate(&mut self, track: usize, channel: u8, depth: f32) {
         if let Some(synth) = self.synths.get_mut(track) {
             synth.modulate(channel, depth);
@@ -136,6 +143,7 @@ impl Player {
         }
     }
 
+    /// Release all notes from a given source.
     pub fn clear_notes_with_origin(&mut self, origin: KeyOrigin) {
         for synth in self.synths.iter_mut() {
             synth.clear_notes_with_origin(&mut self.seq, origin);
@@ -150,6 +158,7 @@ impl Player {
         }
     }
 
+    /// Handle a frame of length `dt`.
     pub fn frame(&mut self, module: &Module, dt: f64) {
         if !self.playing {
             return
@@ -259,6 +268,7 @@ impl Player {
         }
     }
 
+    /// Update one track's state as if the module had been played up to `tick`.
     fn simulate_track_events(&mut self, tick: Timespan, module: &Module, track_i: usize) {
         self.synths[track_i].reset_memory();
 
@@ -322,12 +332,14 @@ impl Player {
         }
     }
 
+    /// Reinitialize vel/mod memory (for looping).
     fn reinit_memory(&mut self, tick: Timespan, module: &Module) {
         for track in 0..module.tracks.len() {
             self.reinit_track_memory(tick, module, track);
         }
     }
 
+    /// Reinitialize a track's vel/mod memory.
     fn reinit_track_memory(&mut self, tick: Timespan, module: &Module, track_i: usize) {
         self.synths[track_i].reset_memory();
 
@@ -354,6 +366,7 @@ impl Player {
         }
     }
 
+    /// Mute/unmute a track.
     pub fn toggle_mute(&mut self, module: &Module, track_i: usize) {
         if track_i == 0 {
             return // never mute keyjazz track
@@ -369,6 +382,7 @@ impl Player {
         }
     }
 
+    /// Solo/unsolo a track.
     pub fn toggle_solo(&mut self, module: &Module, track_i: usize) {
         let soloed = self.synths.iter().enumerate()
             .all(|(i, x)| i == 0 || x.muted == (i != track_i));
@@ -384,6 +398,7 @@ impl Player {
         }
     }
 
+    /// Unmute all tracks.
     pub fn unmute_all(&mut self, module: &Module) {
         let toggle_indices: Vec<_> = self.synths.iter().enumerate()
             .filter(|(_, x)| x.muted)
@@ -395,10 +410,12 @@ impl Player {
         }
     }
 
+    /// Check whether a track is muted.
     pub fn track_muted(&self, i: usize) -> bool {
         self.synths[i].muted
     }
 
+    /// Process a pattern event.
     fn handle_event(&mut self, event: &Event, module: &Module,
         track: usize, channel: usize
     ) {
@@ -413,6 +430,9 @@ impl Player {
                 if let Some((patch, note)) = module.map_note(note, track) {
                     let pitch = module.tuning.midi_pitch(&note);
                     let channel = &module.tracks[track].channels[channel];
+                    // TODO: a potential optimization would be to pass
+                    //       interpolation status as a flag, since the caller
+                    //       already checks interpolation
                     if channel.is_interpolated(NOTE_COLUMN, event.tick) {
                         self.bend_to(track, key, pitch);
                     } else {
@@ -452,14 +472,17 @@ impl Player {
     }
 }
 
+/// Convert a time interval to beat-space.
 fn interval_ticks(dt: f64, tempo: f32) -> f64 {
     dt * tempo as f64 / 60.0
 }
 
+/// Convert a `Timespan` to a wall clock interval.
 pub fn tick_interval(dtick: Timespan, tempo: f32) -> f64 {
     dtick.as_f64() / tempo as f64 * 60.0
 }
 
+/// Used to communicate between the render thread and main thread.
 pub enum RenderUpdate {
     Progress(f64),
     Done(Wave, PathBuf),
@@ -558,6 +581,7 @@ pub fn render_tracks(module: Arc<Module>, path: PathBuf) -> Receiver<RenderUpdat
     rx
 }
 
+/// Calculates interpolated event data.
 fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
     start: Timespan, time: f32, module: &Module
 ) -> Option<EventData> {

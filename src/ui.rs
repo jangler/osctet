@@ -140,6 +140,7 @@ impl Graphic {
         this_rect.overlaps(rect)
     }
 
+    /// Align the graphic to a right edge. Breaks mouse hit detection.
     fn align_right(&mut self, right_edge: f32, char_width: f32) {
         match self {
             Self::Rect(rect, _, _) => {
@@ -285,7 +286,7 @@ impl Ui {
         self.tabs.get(key).copied()
     }
 
-    /// Returns any action returned by a dialog.
+    /// Start a new frame. Returns any action returned by a dialog.
     pub fn start_frame(&mut self, conf: &Config) -> Option<Action> {
         self.bounds = Rect {
             x: 0.0,

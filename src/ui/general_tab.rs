@@ -209,6 +209,7 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
     ui.end_group();
 }
 
+/// Construct an interval table (as column-major strings) from a tuning.
 fn make_table(t: &Tuning) -> Vec<Vec<String>> {
     let data = t.interval_table(&Note::new(0, crate::pitch::Nominal::C, 0, 4));
     let mut columns = Vec::new();
@@ -224,6 +225,7 @@ fn make_table(t: &Tuning) -> Vec<Vec<String>> {
     columns
 }
 
+/// Draw a table of strings, stored in column-major order.
 fn draw_table(ui: &mut Ui, labels: &[&str], table: &Vec<Vec<String>>) {
     for (label, column) in labels.iter().zip(table) {
         ui.start_group();

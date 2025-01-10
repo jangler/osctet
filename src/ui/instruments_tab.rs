@@ -141,6 +141,7 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     }
 }
 
+/// Correct the patch index if it's out of bounds.
 pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
     if len == 0 {
         *index = None;
@@ -422,6 +423,7 @@ fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
     }
 }
 
+/// Browse for and load an audio file into `data`. Returns true if successful.
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
     player: &mut Player
 ) -> bool {
@@ -443,6 +445,8 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
     false
 }
 
+/// Load the previous/next audio file from `data`'s directory. Returns true if
+/// successful.
 fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut Ui) -> bool {
     if let Some(path) = &data.path {
         match PcmData::load_offset(path, offset) {
@@ -694,6 +698,7 @@ fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
     }
 }
 
+/// Draw a column of indices.
 fn index_group(ui: &mut Ui, len: usize) {
     ui.start_group();
     ui.label("#", Info::None);
@@ -703,6 +708,7 @@ fn index_group(ui: &mut Ui, len: usize) {
     ui.end_group();
 }
 
+/// Wrap a block of UI code in a labeled column.
 fn labeled_group(ui: &mut Ui, label: &str, info: Info, f: impl FnOnce(&mut Ui) -> ()) {
     ui.start_group();
     ui.label(label, info);
@@ -710,9 +716,10 @@ fn labeled_group(ui: &mut Ui, label: &str, info: Info, f: impl FnOnce(&mut Ui) -
     ui.end_group();
 }
 
-// TODO: this would ideally be a recursive lookup with loop detection in the
-//       case of ModDepth
+/// Look up the display function for a modulation target.
 fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
+    // TODO: this would ideally be a recursive lookup with loop detection in the
+    //       case of ModDepth
     match target {
         ModTarget::EnvScale(_) =>
             Box::new(|d| format!("x{:.2}", MAX_ENV_SCALE.powf(d))),
@@ -732,6 +739,7 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
     }
 }
 
+/// Look up the conversion function for a modulation target.
 fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
     match target {
         ModTarget::EnvScale(_) =>
@@ -752,6 +760,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
     }
 }
 
+/// Shift the patch index while keeping it in bounds.
 fn shift_patch_index(offset: isize, patch_index: &mut Option<usize>, n: usize) {
     if let Some(index) = patch_index {
         if let Some(i) = index.checked_add_signed(offset) {

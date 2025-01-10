@@ -201,12 +201,15 @@ fn note_key_controls(ui: &mut Ui, cfg: &mut Config, hotkey_input_id: usize) {
     }
 }
 
+/// Return the number of entries to use in each column, given the maximum width
+/// of a column in characters.
 fn entries_per_col(ui: &Ui, max_chars: usize, len: usize) -> usize {
     let char_width = ui.style.atlas.char_width();
     let cols = (ui.bounds.w / (max_chars as f32 * char_width)) as usize;
     (len as f32 / cols as f32).ceil() as usize
 }
 
+/// Change the current font size.
 fn set_font(cfg: &mut Config, ui: &mut Ui, size: usize) {
     if let Some(bytes) = text::FONT_BYTES.get(size) {
         let atlas = GlyphAtlas::from_bdf_bytes(bytes).unwrap();
@@ -219,6 +222,7 @@ fn set_font(cfg: &mut Config, ui: &mut Ui, size: usize) {
 const THEME_FILTER_NAME: &str = "Osctet theme";
 const THEME_FILTER_EXT: &str = "oscthm";
 
+/// Browse and save a theme to disk.
 fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     if let Some(mut path) = super::new_file_dialog(player)
         .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
@@ -232,6 +236,7 @@ fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     }
 }
 
+/// Browse and load a theme from disk.
 fn load_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     if let Some(path) = super::new_file_dialog(player)
         .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
@@ -248,6 +253,7 @@ fn load_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     }
 }
 
+/// Return the names of MIDI input options.
 fn input_names(input: &midir::MidiInput) -> Vec<String> {
     let mut v = vec![String::from("(none)")];
     v.extend(input.ports().into_iter()

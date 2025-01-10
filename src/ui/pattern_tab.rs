@@ -6,8 +6,10 @@ use crate::{config::Config, input::{self, Action}, module::*, playback::Player, 
 
 use super::*;
 
+/// Narrower margin used in the pattern grid.
 const PATTERN_MARGIN: f32 = 2.0;
 
+/// Returns true if either Ctrl key is down.
 fn is_ctrl_down() -> bool {
     is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
 }
@@ -20,7 +22,7 @@ pub struct PatternEditor {
     beat_scroll: Timespan,
     h_scroll: f32,
     tap_tempo_intervals: Vec<f32>,
-    pending_interval: Option<f32>,
+    pending_interval: Option<f32>, // for tap tempo
     clipboard: Option<PatternClip>,
     pub follow: bool,
     record: bool,
@@ -28,12 +30,14 @@ pub struct PatternEditor {
     screen_tick_max: Timespan,
 }
 
+/// Pattern data clipboard.
 struct PatternClip {
     start: Position,
     end: Position,
     events: Vec<ClipEvent>,
 }
 
+/// Event in the pattern data clipboard.
 #[derive(Debug)]
 struct ClipEvent {
     channel_offset: usize,
@@ -64,10 +68,12 @@ impl PatternEditor {
         }
     }
 
+    /// Increment division.
     pub fn inc_division(&mut self) {
         self.set_division(self.beat_division + 1);
     }
 
+    /// Decrement division.
     pub fn dec_division(&mut self) {
         self.set_division(self.beat_division - 1);
     }
@@ -80,6 +86,7 @@ impl PatternEditor {
         self.set_division(self.beat_division / 2);
     }
 
+    /// Set division, adjusting other parameters as necessary.
     pub fn set_division(&mut self, division: u8) {
         let division = division.max(1);
         self.screen_tick_max = self.screen_tick
@@ -90,24 +97,29 @@ impl PatternEditor {
         self.scroll_to(self.cursor_tick());
     }
 
+    /// Returns the track the cursor is in.
     pub fn cursor_track(&self) -> usize {
         self.edit_start.track
     }
 
+    /// Returns the tick the cursor is on.
     pub fn cursor_tick(&self) -> Timespan {
         self.edit_start.tick
     }
 
+    /// Check whether the cursor is in the digit column.
     pub fn in_digit_column(&self, ui: &Ui) -> bool {
         ui.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
             && self.edit_start.column != NOTE_COLUMN
     }
 
+    /// Check whether the cursor is in the global track.
     pub fn in_global_track(&self, ui: &Ui) -> bool {
         ui.tabs.get(MAIN_TAB_ID) == Some(&TAB_PATTERN)
             && self.edit_start.track == 0
     }
 
+    /// Return the current height of a beat, in pixels.
     fn beat_height(&self, ui: &Ui) -> f32 {
         line_height(&ui.style.atlas) * self.beat_division as f32
     }
@@ -146,6 +158,7 @@ impl PatternEditor {
         pos
     }
 
+    /// Returns the beat position of a vertical screen position.
     fn y_tick(&self, y: f32, ui: &Ui) -> Timespan {
         let beat_height = self.beat_height(ui);
         let f = (y - ui.cursor_y - line_height(&ui.style.atlas) * 0.5) / beat_height;
@@ -157,6 +170,7 @@ impl PatternEditor {
         Timespan::new(self.screen_tick.as_f64().ceil() as i32, 1)
     }
 
+    /// Cache viewport data from this frame.
     fn set_metrics(&mut self, viewport: Rect, ui: &Ui) {
         self.screen_tick = self.y_tick(viewport.y, ui);
         self.screen_tick_max = self.y_tick(viewport.y + viewport.h, ui);
@@ -184,6 +198,7 @@ impl PatternEditor {
         (tl, br)
     }
 
+    /// Draws the cursor/selection.
     fn draw_cursor(&self, ui: &mut Ui, track_xs: &[f32]) {
         let (tl, br) = self.selection_corners();
         let beat_height = self.beat_height(ui);
@@ -200,6 +215,7 @@ impl PatternEditor {
         ui.push_rect(selection_rect, color, None);
     }
 
+    /// Handles a pattern-editor-specific action.
     pub fn action(&mut self, action: Action, module: &mut Module, cfg: &Config,
         player: &mut Player
     ) {
@@ -302,6 +318,7 @@ impl PatternEditor {
         }
     }
 
+    /// Handle the interpolate key command.
     fn interpolate(&self, module: &mut Module) {
         let (start, mut end) = self.selection_corners();
 
@@ -358,6 +375,7 @@ impl PatternEditor {
         module.push_edit(edit);
     }
 
+    /// Delete in each channel of the current track.
     fn multi_channel_delete(&self, module: &mut Module) {
         let (mut start, mut end) = self.selection_corners();
         let n = module.tracks[self.edit_start.track].channels.len();
@@ -377,6 +395,7 @@ impl PatternEditor {
         });
     }
 
+    /// Handle the "increment/decrement values" key commands.
     fn shift_values(&self, offset: i8, module: &mut Module) {
         let (start, end) = self.selection_corners();
 
@@ -413,6 +432,7 @@ impl PatternEditor {
         module.push_edit(Edit::ReplaceEvents(replacements));
     }
 
+    /// Handle the "cycle notation" key command.
     fn cycle_notation(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
 
@@ -432,16 +452,19 @@ impl PatternEditor {
         module.push_edit(Edit::ReplaceEvents(replacements));
     }
 
+    /// Handle the "next event" key command.
     fn next_event(&mut self, module: &Module) {
         let tick = self.edit_start.tick;
         self.snap_to_event(module, |t| *t > tick);
     }
 
+    /// Handle the "previous event" key command.
     fn prev_event(&mut self, module: &Module) {
         let tick = self.edit_start.tick;
         self.snap_to_event(module, |t| *t < tick);
     }
 
+    /// Snap cursor to the closest channel event whose position matches `filter_fn`.
     fn snap_to_event(&mut self, module: &Module, filter_fn: impl Fn(&Timespan) -> bool) {
         let cursor = &mut self.edit_start;
         let tick = module.tracks[cursor.track].channels[cursor.channel].events.iter()
@@ -509,10 +532,12 @@ impl PatternEditor {
         self.edit_end.tick = module.last_event_tick().unwrap_or_default();
     }
 
+    /// Return the current timespan of a single row.
     fn row_timespan(&self) -> Timespan {
         Timespan::new(1, self.beat_division)
     }
 
+    /// Handle the "place events evenly" key command.
     fn place_events_evenly(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
         let tick_delta = end.tick - start.tick + self.row_timespan();
@@ -539,8 +564,9 @@ impl PatternEditor {
         })
     }
 
+    /// Handle raw keys for digit input.
     fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
-        if !is_ctrl_down() {
+        if !(is_ctrl_down() || is_alt_down()) {
             match key {
                 KeyCode::Key0 => input_digit(module, &self.edit_start, 0),
                 KeyCode::Key1 => input_digit(module, &self.edit_start, 1),
@@ -563,6 +589,7 @@ impl PatternEditor {
         }
     }
 
+    /// Handle a tempo tap.
     fn tap_tempo(&mut self, module: &mut Module) {
         if let Some(interval) = self.pending_interval {
             self.tap_tempo_intervals.push(interval);
@@ -574,6 +601,7 @@ impl PatternEditor {
         self.pending_interval = Some(0.0);
     }
 
+    /// Insert a rational tempo based on the current selection.
     fn rational_tempo(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
         let n = ((end.beat() - start.beat()) * self.beat_division as f32).round() as u8;
@@ -585,12 +613,14 @@ impl PatternEditor {
         }
     }
 
+    /// Cut selection to the clipboard.
     fn cut(&mut self, module: &mut Module) {
         self.copy(module);
         let (start, end) = self.selection_corners();
         module.delete_events(start, end);
     }
 
+    /// Copy selection to the clipboard.
     fn copy(&mut self, module: &Module) {
         let (start, end) = self.selection_corners();
         let events = module.scan_events(start, end).iter().map(|x| ClipEvent {
@@ -604,6 +634,7 @@ impl PatternEditor {
         });
     }
 
+    /// Paste from the clipboard.
     fn paste(&self, module: &mut Module, mix: bool) {
         if let Some(clip) = &self.clipboard {
             let tick_offset = self.edit_start.tick - clip.start.tick;
@@ -670,6 +701,7 @@ impl PatternEditor {
         }
     }
 
+    /// Draw a vertical line to separate channels.
     fn draw_channel_line(&self, ui: &mut Ui, track_boundary: bool) {
         let scroll = self.scroll(ui);
         ui.cursor_z -= 1;
@@ -684,6 +716,7 @@ impl PatternEditor {
         ui.cursor_z += 1;
     }
 
+    /// Draw all interpolation lines for a channel.
     fn draw_interpolation(&self, ui: &mut Ui, channel: &Channel) {
         ui.cursor_z -= 1;
         let beat_height = self.beat_height(ui);
@@ -760,6 +793,7 @@ impl PatternEditor {
         self.beat_scroll.as_f32() * self.beat_height(ui)
     }
 
+    /// Set scroll in pixels instead of in beats.
     fn set_scroll(&mut self, scroll: f32, ui: &Ui) {
         self.beat_scroll = Timespan::approximate((scroll / self.beat_height(ui)).into());
     }
@@ -785,6 +819,7 @@ impl PatternEditor {
         module.shift_channel_events(start, end, ticks);
     }
 
+    /// Handle the "note off" key command.
     fn input_note_off(&self, module: &mut Module, all_channels: bool) {
         let (start, end) = self.selection_corners();
 
@@ -817,6 +852,7 @@ impl PatternEditor {
         }
     }
 
+    /// Handle event input in record mode.
     fn record_event(&mut self, _key: Key, data: EventData, module: &mut Module) {
         let cursor = self.edit_start;
         if data.is_ctrl() != (cursor.track == 0) {
@@ -840,6 +876,7 @@ impl PatternEditor {
         });
     }
 
+    /// Move the cursor by `offset`.
     fn translate_cursor(&mut self, offset: Timespan) {
         if -offset > self.edit_end.tick {
             self.edit_end.tick = Timespan::ZERO;
@@ -862,10 +899,12 @@ impl PatternEditor {
         }
     }
 
+    /// Returns true if the current viewport contains `tick`.
     fn tick_visible(&self, tick: Timespan) -> bool {
         tick >= self.screen_tick && tick <= self.screen_tick_max
     }
 
+    /// Draw a single pattern event.
     fn draw_event(&self, ui: &mut Ui, evt: &Event, beat_height: f32, muted: bool) {
         let y = ui.cursor_y + evt.tick.as_f32() * beat_height;
         if y < 0.0 || y > ui.bounds.y + ui.bounds.h {
@@ -918,6 +957,7 @@ impl PatternEditor {
         ui.push_text(x, y, text, color);
     }
 
+    /// Handle the "use last note" key command.
     fn use_last_note(&self, module: &mut Module) {
         let cursor = self.edit_start;
 
@@ -940,19 +980,23 @@ impl PatternEditor {
 pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut PatternEditor,
     conf: &Config
 ) {
+    // update tap tempo timekeeping
     if let Some(interval) = pe.pending_interval.as_mut() {
         *interval += get_frame_time();
     }
+
     if pe.record && !player.is_playing() {
         pe.record = false;
     }
 
+    // raw key input
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
             pe.handle_key(key, module);
         }
     }
 
+    // note input
     let cursor = pe.edit_start;
     if pe.record {
         while let Some((key, data)) = ui.note_queue.pop() {
@@ -969,6 +1013,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
         }
     }
 
+    // draw track headers
     ui.start_group();
     ui.cursor_x -= pe.h_scroll;
     let left_x = ui.cursor_x;
@@ -980,6 +1025,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
     ui.cursor_z -= 1;
     ui.push_rect(rect, ui.style.theme.panel_bg(), None);
 
+    // set up pattern viewport
     let beat_height = pe.beat_height(ui);
     let end_y = ui.bounds.h - ui.cursor_y
         + (module.last_event_tick().unwrap_or_default()
@@ -1023,6 +1069,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
 
     pe.set_metrics(viewport, ui);
 
+    // handle mouse input
     if ui.mouse_hits(viewport, "pattern") {
         let pos = pe.position_from_mouse(ui, &track_xs, &module.tracks);
         if is_mouse_button_pressed(MouseButton::Left) {
@@ -1047,6 +1094,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
         }
     }
 
+    // draw background visuals
     ui.cursor_z -= 1;
     ui.push_rect(viewport, ui.style.theme.content_bg(), None);
     draw_beats(ui, left_x, beat_height);
@@ -1168,6 +1216,7 @@ fn draw_track_headers(ui: &mut Ui, module: &mut Module, player: &mut Player,
     xs
 }
 
+/// Handle numeric pattern input.
 fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
     match cursor.column {
         VEL_COLUMN => insert_event_at_cursor(
@@ -1178,6 +1227,7 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
     }
 }
 
+/// Adjust selected notes for transposition commands.
 fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Config) {
     let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
         if let EventData::Pitch(note) = evt.event.data {
@@ -1227,6 +1277,7 @@ fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventDat
     }
 }
 
+/// Returns the UI display string for a track.
 fn track_name(target: TrackTarget, patches: &[Patch]) -> &str {
     match target {
         TrackTarget::None => "(none)",
@@ -1238,6 +1289,7 @@ fn track_name(target: TrackTarget, patches: &[Patch]) -> &str {
     }
 }
 
+/// Returns UI display strings for each patch.
 fn track_targets(patches: &[Patch]) -> Vec<String> {
     let mut v = vec![track_name(TrackTarget::None, patches).to_owned()];
     v.extend(patches.iter().map(|x| x.name.to_owned()));
@@ -1255,6 +1307,7 @@ fn draw_playhead(ui: &mut Ui, tick: Timespan, x: f32, beat_height: f32) {
     ui.push_rect(rect, color, None);
 }
 
+/// Handle the "previous column" key command.
 fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
     let column = pe.edit_end.column as i8 - 1;
     if column >= 0 {
@@ -1280,6 +1333,7 @@ fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
     }
 }
 
+/// Handle the "next column" key command.
 fn shift_column_right(pe: &mut PatternEditor, tracks: &[Track]) {
     let column = pe.edit_end.column + 1;
     let n_columns = if pe.edit_end.track == 0 { 1 } else { 3 };
@@ -1302,6 +1356,7 @@ fn shift_column_right(pe: &mut PatternEditor, tracks: &[Track]) {
     }
 }
 
+/// Handle the "previous channel" key command.
 fn shift_channel_left(pe: &mut PatternEditor) {
     let channel = pe.edit_end.channel as isize - 1;
     if channel >= 0 {
@@ -1316,6 +1371,7 @@ fn shift_channel_left(pe: &mut PatternEditor) {
     pe.edit_start.channel = pe.edit_end.channel;
 }
 
+/// Handle the "next channel" key command.
 fn shift_channel_right(pe: &mut PatternEditor, tracks: &[Track]) {
     let channel = pe.edit_end.channel + 1;
     if channel < tracks[pe.edit_end.track].channels.len() {
@@ -1362,6 +1418,7 @@ fn position_coords(pos: Position, style: &Style, track_xs: &[f32],
     Vec2 { x, y }
 }
 
+/// Returns the minimum visual width of a channel.
 fn channel_width(track_index: usize, style: &Style) -> f32 {
     if track_index == 0 {
         column_x(1, style) + style.margin
@@ -1370,6 +1427,7 @@ fn channel_width(track_index: usize, style: &Style) -> f32 {
     }
 }
 
+/// Returns the x offset for a pattern column.
 fn column_x(column: u8, style: &Style) -> f32 {
     let char_width = style.atlas.char_width();
     let margin = style.margin;
@@ -1391,6 +1449,7 @@ fn with_alpha(a: f32, color: Color) -> Color {
     }
 }
 
+/// Return the line height used in the pattern grid.
 fn line_height(atlas: &GlyphAtlas) -> f32 {
     atlas.cap_height() + PATTERN_MARGIN * 2.0
 }
