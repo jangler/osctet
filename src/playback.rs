@@ -2,7 +2,7 @@ use std::{path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, Mutex}, thread};
 
 use fundsp::hacker32::*;
 
-use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, MOD_COLUMN, NOTE_COLUMN, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}, timespan::Timespan};
+use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, GLOBAL_COLUMN, MOD_COLUMN, NOTE_COLUMN, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}, timespan::Timespan};
 
 pub const DEFAULT_TEMPO: f32 = 120.0;
 
@@ -452,7 +452,12 @@ impl Player {
                 self.note_off(track, key);
             }
             EventData::Tempo(t) => self.tempo = t,
-            EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
+            EventData::RationalTempo(n, d) => {
+                let channel = &module.tracks[track].channels[channel];
+                if !channel.is_interpolated(GLOBAL_COLUMN, event.tick) {
+                    self.tempo *= n as f32 / d as f32;
+                }
+            }
             EventData::End => if let Some(tick) = module.find_loop_start(self.beat) {
                 self.beat = tick.as_f64();
                 self.reinit_memory(tick, module);
@@ -604,6 +609,15 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
                     Some(EventData::RationalTempo(..)) => module.tempo_at(start),
                     _ => DEFAULT_TEMPO,
                 };
+                Some(EventData::Tempo(lerp(a, b, t)))
+            }
+            EventData::RationalTempo(n, d) => {
+                let a = match prev {
+                    Some(EventData::Tempo(a)) => *a,
+                    Some(EventData::RationalTempo(..)) => module.tempo_at(start),
+                    _ => DEFAULT_TEMPO,
+                };
+                let b = a * n as f32 / d as f32;
                 Some(EventData::Tempo(lerp(a, b, t)))
             }
             EventData::Pressure(b) => {

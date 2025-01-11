@@ -465,7 +465,7 @@ impl Module {
     /// Return the tempo at a given tick.
     pub fn tempo_at(&self, tick: Timespan) -> f32 {
         let mut events: Vec<_> = self.tracks[0].channels.iter()
-            .flat_map(|c| c.events.iter().filter(|e| e.tick < tick))
+            .flat_map(|c| c.events.iter().filter(|e| e.tick <= tick))
             .collect();
         events.sort_by_key(|e| e.tick);
 
