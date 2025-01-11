@@ -322,8 +322,11 @@ impl PatternEditor {
     fn interpolate(&self, module: &mut Module) {
         let (start, mut end) = self.selection_corners();
 
-        if start.tick == end.tick &&
-            (start.column > 0 || module.event_at(self.edit_start).is_none()) {
+        if start.tick == end.tick && (
+            start.column > 0
+            || start.track == 0
+            || module.event_at(self.edit_start).is_none()
+        ) {
             // interpolate to next event in column
             let evt = module.tracks[self.edit_start.track]
                 .channels[self.edit_start.channel]
