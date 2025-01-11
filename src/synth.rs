@@ -191,10 +191,26 @@ impl Waveform {
             >> shape_fn(|x| clamp01(x));
 
         let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(base >> saw().phase(0.0)),
-            Self::Pulse => Box::new((base | tone) >> pulse().phase(0.0)),
-            Self::Triangle => Box::new(base >> triangle().phase(0.0)),
-            Self::Sine => Box::new(base >> sine().phase(0.0)),
+            Self::Sawtooth => if osc.oversample {
+                Box::new(base >> oversample(saw().phase(0.0)))
+            } else {
+                Box::new(base >> saw().phase(0.0))
+            },
+            Self::Pulse => if osc.oversample {
+                Box::new((base | tone) >> oversample(pulse().phase(0.0)))
+            } else {
+                Box::new((base | tone) >> pulse().phase(0.0))
+            },
+            Self::Triangle => if osc.oversample {
+                Box::new(base >> oversample(triangle().phase(0.0)))
+            } else {
+                Box::new(base >> triangle().phase(0.0))
+            },
+            Self::Sine => if osc.oversample {
+                Box::new(base >> oversample(sine().phase(0.0)))
+            } else {
+                Box::new(base >> sine().phase(0.0))
+            },
             Self::Hold => Box::new((noise().seed(random()) | base) >> hold(0.0)),
             Self::Noise => Box::new((noise().seed(random()) | tone)
                 >> (pinkpass() * (1.0 - pass()) & pass() * pass())),
@@ -210,7 +226,9 @@ impl Waveform {
     }
 
     /// Make an LFO DSP net.
-    fn make_lfo_net(&self, settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]) -> Net {
+    fn make_lfo_net(&self,
+        settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]
+    ) -> Net {
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
@@ -224,7 +242,8 @@ impl Waveform {
             Self::Pulse => Box::new(f >> square().phase(p) * d >> follow(0.01)),
             Self::Triangle => Box::new(f >> triangle().phase(p) * d),
             Self::Sine => Box::new(f >> sine().phase(p) * d),
-            Self::Hold => Box::new((noise().seed((p * u64::MAX as f32) as u64) | f) >> hold(0.0) * d >> follow(0.01)),
+            Self::Hold => Box::new((noise().seed((p * u64::MAX as f32) as u64) | f)
+                >> hold(0.0) * d >> follow(0.01)),
             Self::Noise => Box::new(brown().seed((p * u64::MAX as f32) as u64) * d),
             Self::Pcm(data) => if let Some(data) = data {
                 Box::new(wavech(&data.wave, 0, data.loop_point))
@@ -240,6 +259,14 @@ impl Waveform {
         match *self {
             Waveform::Pulse | Waveform::Noise => true,
             _ => false,
+        }
+    }
+
+    /// Check whether this waveform can use oversampling in generators.
+    pub fn uses_oversampling(&self) -> bool {
+        match *self {
+            Waveform::Hold | Waveform::Noise | Waveform::Pcm(_) => false,
+            _ => true,
         }
     }
 }
@@ -967,6 +994,8 @@ pub struct Oscillator {
     pub fine_pitch: Parameter,
     pub waveform: Waveform,
     pub output: OscOutput,
+    #[serde(default)]
+    pub oversample: bool,
 }
 
 impl Oscillator {
@@ -978,6 +1007,7 @@ impl Oscillator {
             fine_pitch: Parameter(shared(0.0)),
             waveform: Waveform::Sine,
             output: OscOutput::Mix(0),
+            oversample: false,
         }
     }
 }

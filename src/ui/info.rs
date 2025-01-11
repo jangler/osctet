@@ -84,6 +84,7 @@ pub enum Info {
     LoadTheme,
     InstrumentList,
     Font,
+    Oversample,
 }
 
 impl Default for Info {
@@ -115,6 +116,10 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::Oversample => text =
+"Run the generator at twice the normal sample rate.
+Mainly useful for avoiding inharmonic artifacts in
+high-pitched modulators.".to_string(),
         Info::Font =>
             text = "Font is a modified version of Dina by Joergen Ibsen.".to_string(),
         Info::InstrumentList => text =

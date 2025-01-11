@@ -399,6 +399,17 @@ fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
         }
     });
 
+    labeled_group(ui, "2X", Info::Oversample, |ui| {
+        for osc in patch.oscs.iter_mut() {
+            ui.checkbox("", &mut osc.oversample,
+                osc.waveform.uses_oversampling(), Info::Oversample);
+
+            if let Waveform::Pcm(_) = osc.waveform {
+                ui.offset_label("", Info::None);
+            }
+        }
+    });
+
     labeled_group(ui, "", Info::None, |ui| {
         for (i, osc) in patch.oscs.iter().enumerate() {
             if patch.oscs.len() < 2 {
