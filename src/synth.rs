@@ -9,7 +9,7 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{dsp::{adsr_scalable, pow_shape}, smpl::SmplData};
+use crate::{dsp::{adsr_scalable, pow_shape}, smpl::SmplData, ui::MAX_PATCH_NAME_CHARS};
 
 pub const REF_PITCH: f64 = 60.0; // C4
 pub const REF_FREQ: f32 = 261.6256; // C4
@@ -729,7 +729,10 @@ impl Patch {
         // of Shared instances
         let data = rmp_serde::to_vec(self)?;
         let mut patch = rmp_serde::from_slice::<Self>(&data)?;
-        patch.name = format!("Copy of {}", patch.name);
+        if !patch.name.starts_with("Copy of") {
+            patch.name = format!("Copy of {}", patch.name);
+            patch.name.truncate(MAX_PATCH_NAME_CHARS);
+        }
         patch.init_pcm();
 
         // copy over sample paths

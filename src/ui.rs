@@ -34,6 +34,8 @@ const TOOLTIP_Z_OFFSET: i8 = 30;
 /// Seconds before info popup.
 const INFO_DELAY: f32 = 0.1;
 
+pub const MAX_PATCH_NAME_CHARS: usize = 20;
+
 /// Return a new file dialog. Use this instead of using `rfd` directly.
 pub fn new_file_dialog(player: &mut Player) -> FileDialog {
     // macroquad currently doesn't handle focus lost events, which means that
@@ -1349,7 +1351,7 @@ impl Ui {
                     w: hit_rect.w - char_width,
                     ..hit_rect
                 };
-                if self.editable_text(rect, 20) {
+                if self.editable_text(rect, MAX_PATCH_NAME_CHARS) {
                     if let Focus::Text(state) = &mut self.focus {
                         return_val = Some(state.text.clone());
                         self.focus = Focus::None;
