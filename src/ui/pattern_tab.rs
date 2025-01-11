@@ -1,7 +1,5 @@
 use std::{collections::HashSet, u8};
 
-use gcd::Gcd;
-
 use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch, timespan::Timespan};
 
 use super::*;
@@ -607,12 +605,13 @@ impl PatternEditor {
     /// Insert a rational tempo based on the current selection.
     fn rational_tempo(&self, module: &mut Module) {
         let (start, end) = self.selection_corners();
-        let n = ((end.beat() - start.beat()) * self.beat_division as f32).round() as u8;
-        let d = self.beat_division;
-        if n > 0 && n != d {
-            let gcd = n.gcd(d);
-            insert_event_at_cursor(module, &self.edit_start,
-                EventData::RationalTempo(n / gcd, d / gcd), false);
+        let span = end.tick - start.tick + self.row_timespan();
+        if span != Timespan::new(1, 1) {
+            let (n, d) = (span.num(), span.den());
+            if let Ok(n) = n.try_into() {
+                insert_event_at_cursor(module, &self.edit_start,
+                    EventData::RationalTempo(n, d), false);
+            }
         }
     }
 
