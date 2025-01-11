@@ -730,6 +730,17 @@ impl Patch {
         let data = rmp_serde::to_vec(self)?;
         let mut patch = rmp_serde::from_slice::<Self>(&data)?;
         patch.name = format!("Copy of {}", patch.name);
+        patch.init_pcm();
+
+        // copy over sample paths
+        for (i, osc) in patch.oscs.iter_mut().enumerate() {
+            if let Waveform::Pcm(Some(new_data)) = &mut osc.waveform {
+                if let Waveform::Pcm(Some(old_data)) = &self.oscs[i].waveform {
+                    new_data.path = old_data.path.clone();
+                }
+            }
+        }
+
         Ok(patch)
     }
 
