@@ -401,31 +401,29 @@ impl PatternEditor {
         let (start, end) = self.selection_corners();
 
         let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
-            match evt.event.data {
-                EventData::Pitch(note) => Some(LocatedEvent {
-                    event: Event {
-                        data: EventData::Pitch(
-                            note.step_shift(offset as isize, &module.tuning)),
-                        ..evt.event
-                    },
-                    ..evt.clone()
-                }),
-                EventData::Pressure(v) => Some(LocatedEvent {
-                    event: Event {
-                        data: EventData::Pressure(
-                            v.saturating_add_signed(offset).min(EventData::DIGIT_MAX)),
-                        ..evt.event
-                    },
-                    ..evt.clone()
-                }),
-                EventData::Modulation(v) => Some(LocatedEvent {
-                    event: Event {
-                        data: EventData::Modulation(
-                            v.saturating_add_signed(offset).min(EventData::DIGIT_MAX)),
-                        ..evt.event
-                    },
-                    ..evt.clone()
-                }),
+            let mut evt = evt.clone();
+
+            match &mut evt.event.data {
+                EventData::Pitch(note) => {
+                    *note = note.step_shift(offset as isize, &module.tuning);
+                    Some(evt)
+                }
+                EventData::Pressure(v) => {
+                    *v = v.saturating_add_signed(offset).min(EventData::DIGIT_MAX);
+                    Some(evt)
+                }
+                EventData::Modulation(v) => {
+                    *v = v.saturating_add_signed(offset).min(EventData::DIGIT_MAX);
+                    Some(evt)
+                }
+                EventData::Tempo(t) => {
+                    *t = (*t + offset as f32).max(1.0);
+                    Some(evt)
+                }
+                EventData::RationalTempo(n, _) => {
+                    *n = n.saturating_add_signed(offset).max(1);
+                    Some(evt)
+                }
                 _ => None,
             }
         }).collect();
