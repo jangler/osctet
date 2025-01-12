@@ -168,7 +168,10 @@ impl Waveform {
 
     /// Returns true if this waveform makes uses of frequency controls.
     pub fn uses_freq(&self) -> bool {
-        true
+        match self {
+            Self::Noise => false,
+            _ => true
+        }
     }
 
     /// Make a generator DSP net.
@@ -798,8 +801,10 @@ impl Patch {
         for i in 0..self.envs.len() {
             v.push(ModTarget::EnvScale(i));
         }
-        for i in 0..self.lfos.len() {
-            v.push(ModTarget::LFORate(i));
+        for (i, lfo) in self.lfos.iter().enumerate() {
+            if lfo.waveform.uses_freq() {
+                v.push(ModTarget::LFORate(i));
+            }
         }
         for i in 0..self.mod_matrix.len() {
             v.push(ModTarget::ModDepth(i));
