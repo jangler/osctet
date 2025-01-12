@@ -741,7 +741,7 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|d| format!("{:+.1} cents", d * 50.0)),
         ModTarget::Gain | ModTarget::Level(_) =>
-            Box::new(|d| format!("{:.2}", d * d)),
+            Box::new(|d| format!("{:.2}", d * d * d.signum())),
         ModTarget::LFORate(_) =>
             Box::new(|d| format!("x{:.2}", (MAX_LFO_RATE/MIN_LFO_RATE).powf(d))),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
@@ -762,7 +762,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|f| f / 50.0),
         ModTarget::Gain | ModTarget::Level(_) =>
-            Box::new(|f| f.sqrt()),
+            Box::new(|f| signed_sqrt(f)),
         ModTarget::LFORate(_) =>
             Box::new(|f| f.log(MAX_LFO_RATE/MIN_LFO_RATE)),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
@@ -781,5 +781,22 @@ fn shift_patch_index(offset: isize, patch_index: &mut Option<usize>, n: usize) {
         }
     } else if offset > 0 && n > 0 {
         *patch_index = Some((offset as usize - 1).min(n - 1));
+    }
+}
+
+fn signed_sqrt(f: f32) -> f32 {
+    f.abs().sqrt() * f.signum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::signed_sqrt;
+
+    #[test]
+    fn test_signed_sqrt() {
+        assert_eq!(signed_sqrt(0.0), 0.0);
+        assert_eq!(signed_sqrt(1.0), 1.0);
+        assert_eq!(signed_sqrt(-1.0), -1.0);
+        assert_eq!(signed_sqrt(-4.0), -2.0);
     }
 }
