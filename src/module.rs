@@ -161,7 +161,7 @@ impl Module {
     }
 
     /// Returns the pattern event at `pos`.
-    pub fn event_at(&mut self, pos: Position) -> Option<&mut Event> {
+    pub fn event_at(&mut self, pos: &Position) -> Option<&mut Event> {
         if let Some(track) = self.tracks.get_mut(pos.track) {
             if let Some(channel) = track.channels.get_mut(pos.channel) {
                 return channel.events.iter_mut().find(|evt|
@@ -363,7 +363,7 @@ impl Module {
 
     /// Replace an event in-place, returning the old value.
     pub fn replace_event(&mut self, new_evt: LocatedEvent) -> LocatedEvent {
-        if let Some(old_evt) = self.event_at(new_evt.position()) {
+        if let Some(old_evt) = self.event_at(&new_evt.position()) {
             let ret = LocatedEvent {
                 event: old_evt.clone(),
                 ..new_evt

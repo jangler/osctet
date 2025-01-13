@@ -495,6 +495,7 @@ Shift+0..F - Track enter digit".to_string(),
 0..F - Enter digit
 Shift+0..F - Track enter digit".to_string(),
         Info::ControlColumn => {
+            // TODO: document textual tempo entry somehow
             text = "Control column.".to_string();
             actions =
                 vec![Action::TapTempo, Action::RationalTempo, Action::Loop, Action::End];

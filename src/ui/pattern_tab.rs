@@ -323,7 +323,7 @@ impl PatternEditor {
         if start.tick == end.tick && (
             start.column > 0
             || start.track == 0
-            || module.event_at(self.edit_start).is_none()
+            || module.event_at(&self.edit_start).is_none()
         ) {
             // interpolate to next event in column
             let evt = module.tracks[self.edit_start.track]
@@ -339,11 +339,11 @@ impl PatternEditor {
             }
         }
 
-        let interp_event_at_start = module.event_at(Position {
+        let interp_event_at_start = module.event_at(&Position {
             column: start.column | EventData::INTERP_COL_FLAG,
             ..start
         }).map(|e| e.data.clone());
-        let interp_event_at_end = module.event_at(Position {
+        let interp_event_at_end = module.event_at(&Position {
             column: end.column | EventData::INTERP_COL_FLAG,
             ..end
         }).map(|e| e.data.clone());
@@ -866,7 +866,7 @@ impl PatternEditor {
             channel: cursor.channel,
             column: data.logical_column(),
         };
-        if module.event_at(pos).is_some_and(|e| e.data != EventData::NoteOff) {
+        if module.event_at(&pos).is_some_and(|e| e.data != EventData::NoteOff) {
             pos.tick += self.row_timespan();
         }
 
@@ -1223,8 +1223,24 @@ fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
             module, cursor, EventData::Pressure(value), is_shift_down()),
         MOD_COLUMN => insert_event_at_cursor(
             module, cursor, EventData::Modulation(value), is_shift_down()),
+        GLOBAL_COLUMN => if cursor.track == 0 && value < 10 {
+            let mut data = EventData::Tempo(value as f32);
+            if let Some(evt) = module.event_at(cursor) {
+                if let EventData::Tempo(t) = evt.data {
+                    if t < 100.0 {
+                        data = EventData::Tempo(append_digit(t, value));
+                    }
+                }
+            }
+            insert_event_at_cursor(module, cursor, data, false);
+        },
         _ => (),
     }
+}
+
+/// Append a digit to a float value.
+fn append_digit(t: f32, digit: u8) -> f32 {
+    t * 10.0 + digit as f32
 }
 
 /// Adjust selected notes for transposition commands.
