@@ -44,6 +44,11 @@ fn undecad(c: &mut Criterion) {
     render_module(c, "undecad.osctet");
 }
 
+fn song(c: &mut Criterion) {
+    render_module(c, "song.osctet");
+}
+
 criterion_group!(benches,
-    scale_dry, scale_reverb, scale_delay, interpolation, lfo, noise, lfo_noise, undecad);
+    scale_dry, scale_reverb, scale_delay, interpolation, lfo, noise, lfo_noise, undecad,
+    song);
 criterion_main!(benches);
