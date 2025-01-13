@@ -9,7 +9,7 @@ use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{dsp::{adsr_scalable, pow_shape}, smpl::SmplData, ui::MAX_PATCH_NAME_CHARS};
+use crate::{dsp::*, smpl::SmplData, ui::MAX_PATCH_NAME_CHARS};
 
 pub const REF_PITCH: f64 = 60.0; // C4
 pub const REF_FREQ: f32 = 261.6256; // C4
@@ -232,6 +232,8 @@ impl Waveform {
     fn make_lfo_net(&self,
         settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]
     ) -> Net {
+        const FOLLOW_TIME: f32 = 0.005;
+
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
@@ -240,21 +242,20 @@ impl Waveform {
         let dt = lfo.delay;
         let d = envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)));
         let p = vars.lfo_phases[index];
-        let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => Box::new(f >> saw().phase(p) * d >> follow(0.01)),
-            Self::Pulse => Box::new(f >> square().phase(p) * d >> follow(0.01)),
-            Self::Triangle => Box::new(f >> triangle().phase(p) * d),
-            Self::Sine => Box::new(f >> sine().phase(p) * d),
-            Self::Hold => Box::new((noise().seed((p * u64::MAX as f32) as u64) | f)
-                >> hold(0.0) * d >> follow(0.01)),
+
+        Net::wrap(match self {
+            Self::Sawtooth => Box::new(f >> saw_lfo(p) * d >> follow(FOLLOW_TIME)),
+            Self::Pulse => Box::new(f >> sqr_lfo(p) * d >> follow(FOLLOW_TIME)),
+            Self::Triangle => Box::new(f >> tri_lfo(p) * d),
+            Self::Sine => Box::new(f >> sin_lfo(p) * d),
+            Self::Hold => Box::new(f >> hold_lfo(p) * d >> follow(FOLLOW_TIME)),
             Self::Noise => Box::new(brown().seed((p * u64::MAX as f32) as u64) * d),
             Self::Pcm(data) => if let Some(data) = data {
                 Box::new(wavech(&data.wave, 0, data.loop_point))
             } else {
                 Box::new(zero())
             },
-        };
-        Net::wrap(au)
+        })
     }
 
     /// Check whether this waveform is affected by the "tone" control.

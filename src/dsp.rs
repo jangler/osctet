@@ -1,8 +1,9 @@
 //! Custom FunDSP audio nodes.
 
-use std::marker::PhantomData;
+use std::{f32::consts::PI, marker::PhantomData};
 
 use fundsp::prelude::*;
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 
 /// Slightly different implementation of adsr_live. Inputs are 1) gate and 2) scale.
 pub fn adsr_scalable(
@@ -200,4 +201,85 @@ impl AudioNode for PowShaper {
         output.set(0, input.at(0).distort(0.0));
         output
     }
+}
+
+// not sure how to de-duplicate these
+
+pub fn saw_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
+    let phase = var(&shared(phase));
+    let prev_time = var(&shared(0.0));
+    lfo_in(move |t, i| {
+        let dt = t - prev_time.value();
+        prev_time.set_value(t);
+        let p = (phase.value() + dt * i[0]) % 1.0;
+        phase.set_value(p);
+        p * 2.0 - 1.0
+    })
+}
+
+pub fn sqr_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
+    let phase = var(&shared(phase));
+    let prev_time = var(&shared(0.0));
+    lfo_in(move |t, i| {
+        let dt = t - prev_time.value();
+        prev_time.set_value(t);
+        let p = (phase.value() + dt * i[0]) % 1.0;
+        phase.set_value(p);
+        if p < 0.5 {
+            1.0
+        } else {
+            -1.0
+        }
+    })
+}
+
+pub fn tri_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
+    let phase = var(&shared(phase));
+    let prev_time = var(&shared(0.0));
+    lfo_in(move |t, i| {
+        let dt = t - prev_time.value();
+        prev_time.set_value(t);
+        let p = (phase.value() + dt * i[0]) % 1.0;
+        phase.set_value(p);
+        if p < 0.25 {
+            p * 4.0
+        } else if p < 0.75 {
+            1.0 - (p - 0.25) * 4.0
+        } else {
+            (p - 0.75) * 4.0 - 1.0
+        }
+    })
+}
+
+pub fn sin_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
+    let phase = var(&shared(phase));
+    let prev_time = var(&shared(0.0));
+    lfo_in(move |t, i| {
+        let dt = t - prev_time.value();
+        prev_time.set_value(t);
+        let p = (phase.value() + dt * i[0]) % 1.0;
+        phase.set_value(p);
+        (p * PI * 2.0).sin()
+    })
+}
+
+pub fn hold_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
+    let mut source = StdRng::seed_from_u64((phase as f64 * u64::MAX as f64) as u64);
+    let phase = var(&shared(phase));
+    let prev_time = var(&shared(0.0));
+    let state = var(&shared(
+        ((source.next_u32() as f64 / u32::MAX as f64) * 2.0 - 1.0) as f32
+    ));
+    lfo_in(move |t, i| {
+        let dt = t - prev_time.value();
+        prev_time.set_value(t);
+        let p = (phase.value() + dt * i[0]) % 1.0;
+        if p < phase.value() {
+            state.set_value(
+                ((source.next_u32() as f64 / u32::MAX as f64) * 2.0 - 1.0) as f32
+            );
+        }
+        phase.set_value(p);
+        state.value()
+    })
 }
