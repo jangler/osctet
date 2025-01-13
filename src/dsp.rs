@@ -203,8 +203,9 @@ impl AudioNode for PowShaper {
     }
 }
 
-// not sure how to de-duplicate these
+// not sure how to de-duplicate these, since closures aren't Clone
 
+/// Ramp LFO in -1..1. Takes frequency as an input.
 pub fn saw_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
     let phase = var(&shared(phase));
     let prev_time = var(&shared(0.0));
@@ -217,6 +218,7 @@ pub fn saw_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>
     })
 }
 
+/// Square LFO in -1..1. Takes frequency as an input.
 pub fn sqr_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
     let phase = var(&shared(phase));
     let prev_time = var(&shared(0.0));
@@ -233,6 +235,7 @@ pub fn sqr_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>
     })
 }
 
+/// Triangle LFO in -1..1. Takes frequency as an input.
 pub fn tri_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
     let phase = var(&shared(phase));
     let prev_time = var(&shared(0.0));
@@ -251,6 +254,7 @@ pub fn tri_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>
     })
 }
 
+/// Sine LFO in -1..1. Takes frequency as an input.
 pub fn sin_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
     let phase = var(&shared(phase));
     let prev_time = var(&shared(0.0));
@@ -263,6 +267,7 @@ pub fn sin_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>
     })
 }
 
+/// Sample & hold LFO in -1..1. Takes frequency as an input.
 pub fn hold_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1>) -> f32 + Clone, U1, f32>> {
     let mut source = StdRng::seed_from_u64((phase as f64 * u64::MAX as f64) as u64);
     let phase = var(&shared(phase));
