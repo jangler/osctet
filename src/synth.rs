@@ -189,7 +189,7 @@ impl Waveform {
                 + settings.dsp_component(vars, ModTarget::FinePitch, &[]))
                 * 0.5 + var(&osc.fine_pitch.0) >> pow_shape(SEMITONE_RATIO))
             * (1.0 + fm_oscs * FM_DEPTH_MULTIPLIER);
-        let tone = var(&osc.tone.0) >> follow(SMOOTH_TIME)
+        let tone = var(&osc.tone.0) >> smooth()
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(|x| clamp01(x));
 
@@ -232,8 +232,6 @@ impl Waveform {
     fn make_lfo_net(&self,
         settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]
     ) -> Net {
-        const FOLLOW_TIME: f32 = 0.005;
-
         let lfo = &settings.lfos[index];
         let f = var(&lfo.freq.0)
             * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
@@ -244,11 +242,11 @@ impl Waveform {
         let p = vars.lfo_phases[index];
 
         Net::wrap(match self {
-            Self::Sawtooth => Box::new(f >> saw_lfo(p) * d >> follow(FOLLOW_TIME)),
-            Self::Pulse => Box::new(f >> sqr_lfo(p) * d >> follow(FOLLOW_TIME)),
+            Self::Sawtooth => Box::new(f >> saw_lfo(p) * d >> smooth()),
+            Self::Pulse => Box::new(f >> sqr_lfo(p) * d >> smooth()),
             Self::Triangle => Box::new(f >> tri_lfo(p) * d),
             Self::Sine => Box::new(f >> sin_lfo(p) * d),
-            Self::Hold => Box::new(f >> hold_lfo(p) * d >> follow(FOLLOW_TIME)),
+            Self::Hold => Box::new(f >> hold_lfo(p) * d >> smooth()),
             Self::Noise => Box::new(brown().seed((p * u64::MAX as f32) as u64) * d),
             Self::Pcm(data) => if let Some(data) = data {
                 Box::new(wavech(&data.wave, 0, data.loop_point))
@@ -947,7 +945,7 @@ impl Patch {
             }
         }
 
-        let level = (var(&self.oscs[i].level.0) >> follow(0.01))
+        let level = (var(&self.oscs[i].level.0) >> smooth())
             * self.dsp_component(&vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x);
 
         (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
@@ -1212,8 +1210,8 @@ impl Modulation {
 
         let net = match self.source {
             ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(PITCH_FLOOR, PITCH_CEILING, f)))),
-            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> follow(SMOOTH_TIME))),
-            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> follow(SMOOTH_TIME))),
+            ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> smooth())),
+            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> smooth())),
             ModSource::Random => Net::wrap(Box::new(constant(vars.random_values[index]))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
                 Some(env) => Net::wrap(Box::new(env.make_node(
@@ -1225,7 +1223,7 @@ impl Modulation {
                 None => Net::wrap(Box::new(zero())),
             }
         };
-        let depth = var(&self.depth.0) >> follow(SMOOTH_TIME)
+        let depth = var(&self.depth.0) >> smooth()
             + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
 
         if self.target.is_additive() {
@@ -1367,7 +1365,7 @@ impl Voice {
             prev_freq,
             rate,
         };
-        let gain = (var(&settings.gain.0) >> follow(SMOOTH_TIME))
+        let gain = (var(&settings.gain.0) >> smooth())
             * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x));
         let filter_net = settings.make_filter_net(&vars);
 
@@ -1383,7 +1381,7 @@ impl Voice {
         });
 
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
-            | (var(&settings.pan.0) >> follow(SMOOTH_TIME)
+            | (var(&settings.pan.0) >> smooth()
                 + settings.dsp_component(&vars, ModTarget::Pan, &[]) * 2.0)
                 * var(pan_polarity) >> shape_fn(|x| clamp11(x)))
             >> panner() >> multisplit::<U2, U2>()

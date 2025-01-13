@@ -288,3 +288,70 @@ pub fn hold_lfo(phase: f32) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U1
         state.value()
     })
 }
+
+/// Parameter smoother. Cheaper than `follow()`.
+pub fn smooth() -> An<Smooth> {
+    An(Smooth::new())
+}
+
+#[derive(Clone)]
+pub struct Smooth {
+    value: Option<f32>,
+    prev_coeff: f32,
+    next_coeff: f32,
+}
+
+impl Smooth {
+    /// Halfway response time in seconds.
+    const RESPONSE_TIME: f32 = 0.005;
+
+    fn new() -> Self {
+        let mut node = Self {
+            value: None,
+            prev_coeff: 0.0,
+            next_coeff: 0.0,
+        };
+        node.reset();
+        node.set_sample_rate(DEFAULT_SR);
+        node
+    }
+}
+
+impl AudioNode for Smooth {
+    const ID: u64 = 201;
+    type Inputs = U1;
+    type Outputs = U1;
+
+    fn reset(&mut self) {
+        self.value = None;
+    }
+
+    fn set_sample_rate(&mut self, sample_rate: f64) {
+        let response_samples = Self::RESPONSE_TIME * sample_rate as f32;
+        self.next_coeff = 0.6912 / response_samples;
+        self.prev_coeff = 1.0 - self.next_coeff;
+    }
+
+    #[inline]
+    fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
+        let v = match &mut self.value {
+            Some(v) => {
+                *v = *v * self.prev_coeff + input[0] * self.next_coeff;
+                *v
+            }
+            None => {
+                self.value = Some(input[0]);
+                input[0]
+            }
+        };
+
+        [v].into()
+    }
+
+    fn route(&mut self, input: &SignalFrame, _frequency: f64) -> SignalFrame {
+        // pretend this doesn't affect response
+        let mut output = SignalFrame::new(self.outputs());
+        output.set(0, input.at(0));
+        output
+    }
+}
