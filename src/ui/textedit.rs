@@ -48,7 +48,7 @@ impl TextEditState {
                     }
                     KeyCode::C => *clipboard = Some(self.selected_text().to_owned()),
                     KeyCode::V => if let Some(s) = clipboard {
-                        self.insert(&s, max_width)
+                        self.insert(s, max_width)
                     }
                     _ => (),
                 }

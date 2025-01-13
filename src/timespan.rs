@@ -14,7 +14,7 @@ impl Timespan {
     pub const ZERO: Timespan = Timespan { n: 0, d: 1 };
 
     pub fn new(n: i32, d: u8) -> Self {
-        let gcd = (n.abs() as u32).gcd(d as u32);
+        let gcd = n.unsigned_abs().gcd(d as u32);
         Self {
             n: n / gcd as i32,
             d: d / gcd as u8,
@@ -60,7 +60,7 @@ impl Default for Timespan {
 
 impl PartialOrd for Timespan {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.as_f64().partial_cmp(&other.as_f64())
+        Some(self.cmp(other))
     }
 }
 
@@ -117,7 +117,7 @@ impl ops::Mul<Self> for Timespan {
     fn mul(self, rhs: Self) -> Self::Output {
         let n = self.n as i64 * rhs.n as i64;
         let d = self.d as u16 * rhs.d as u16;
-        let gcd = (n.abs() as u64).gcd(d as u64);
+        let gcd = n.unsigned_abs().gcd(d as u64);
         let d = d / gcd as u16;
 
         if d <= u8::MAX as u16 {
@@ -129,15 +129,15 @@ impl ops::Mul<Self> for Timespan {
     }
 }
 
-impl Into::<f64> for Timespan {
-    fn into(self) -> f64 {
-        self.n as f64 / self.d as f64
+impl From::<Timespan> for f64 {
+    fn from(value: Timespan) -> Self {
+        value.n as f64 / value.d as f64
     }
 }
 
-impl Into::<f32> for Timespan {
-    fn into(self) -> f32 {
-        self.n as f32 / self.d as f32
+impl From::<Timespan> for f32 {
+    fn from(value: Timespan) -> Self {
+        value.n as f32 / value.d as f32
     }
 }
 
@@ -166,7 +166,7 @@ impl<'de> Visitor<'de> for TimespanVisitor {
     where
         E: serde::de::Error
     {
-        let gcd = v.gcd(LEGACY_DENOM as u64);
+        let gcd = v.gcd(LEGACY_DENOM);
         let d = LEGACY_DENOM / gcd;
         Ok(if d <= u8::MAX as u64 {
             Timespan::new((v / gcd) as i32, d as u8)

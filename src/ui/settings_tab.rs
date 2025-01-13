@@ -41,7 +41,7 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
         ui.start_group();
 
         let s = if let Some(name) = &midi.port_name {
-            &name
+            name
         } else {
             "(none)"
         };

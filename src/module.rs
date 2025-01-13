@@ -194,13 +194,13 @@ impl Module {
 
     /// Maps a note based on track index.
     pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
-        self.tracks.get(track).map(|track| {
+        self.tracks.get(track).and_then(|track| {
             match track.target {
                 TrackTarget::None | TrackTarget::Global => None,
                 TrackTarget::Kit => self.get_kit_patch(note),
                 TrackTarget::Patch(i) => self.patches.get(i).map(|x| (x, note)),
             }
-        }).flatten()
+        })
     }
 
     /// Push an edit appending a new track.
@@ -534,7 +534,7 @@ impl Track {
     pub fn new(target: TrackTarget) -> Self {
         Self {
             target,
-            channels: vec![Channel::new()],
+            channels: vec![Channel::default()],
         }
     }
 }
@@ -549,18 +549,12 @@ pub enum TrackTarget {
 }
 
 /// Contains an event sequence. Is a struct for legacy reasons.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Channel {
     pub events: Vec<Event>,
 }
 
 impl Channel {
-    pub fn new() -> Self {
-        Self {
-            events: Vec::new(),
-        }
-    }
-
     /// Shifts events after `start` by `distance` ticks, returning deleted events.
     pub fn shift_events(&mut self, start: Timespan, distance: Timespan) -> Vec<Event> {
         let mut deleted = Vec::new();
@@ -592,12 +586,10 @@ impl Channel {
 
     /// Return interpolation events in a (spatial) column.
     pub fn interp_by_col(&self, col: u8) -> impl Iterator<Item = &Event> + use<'_> {
-        self.events.iter().filter_map(move |e| match e.data {
+        self.events.iter().filter(move |e| matches!(e.data, 
             EventData::StartGlide(i)
-                | EventData::EndGlide(i)
-                | EventData::TickGlide(i) if i == col => Some(e),
-            _ => None,
-        })
+            | EventData::EndGlide(i)
+            | EventData::TickGlide(i) if i == col))
     }
 
     /// Returns true if the (spatial) column is interpolated at `tick`.
@@ -690,11 +682,8 @@ impl EventData {
 
     /// Returns true if the data goes in the control/global track.
     pub fn is_ctrl(&self) -> bool {
-        match *self {
-            Self::Tempo(_) | Self::RationalTempo(_, _)
-                | Self::End | Self::Loop | Self::Section => true,
-            _ => false,
-        }
+        matches!(*self, Self::Tempo(_) | Self::RationalTempo(_, _)
+            | Self::End | Self::Loop | Self::Section)
     }
 }
 
@@ -724,7 +713,7 @@ impl Position {
 
     /// Recalculate the position for an offset in channels.
     /// Returns None if the position is out of range.
-    pub fn add_channels(&self, channels: usize, tracks: &Vec<Track>) -> Option<Self> {
+    pub fn add_channels(&self, channels: usize, tracks: &[Track]) -> Option<Self> {
         let mut track = self.track;
         let mut channel = self.channel;
         for _ in 0..channels {

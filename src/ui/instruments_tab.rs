@@ -108,8 +108,8 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
             .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
             .pick_files() {
             for (i, path) in paths.iter().enumerate() {
-                cfg.patch_folder = config::dir_as_string(&path);
-                match Patch::load(&path) {
+                cfg.patch_folder = config::dir_as_string(path);
+                match Patch::load(path) {
                     Ok(mut p) => {
                         if let Some(s) = path.file_stem() {
                             if let Some(s) = s.to_str() {
@@ -128,7 +128,7 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
 
     if ui.button("Duplicate", patch_index.is_some(), Info::DuplicatePatch) {
         if let Some(index) = patch_index {
-            if let Some(p) = patches.get(*index).map(|p| p.duplicate().ok()).flatten() {
+            if let Some(p) = patches.get(*index).and_then(|p| p.duplicate().ok()) {
                 edits.push(Edit::InsertPatch(patches.len(), p));
                 *patch_index = Some(patches.len());
             }
@@ -430,7 +430,7 @@ fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
     ui.end_group();
 
     if ui.button("+", true, Info::Add("a generator")) {
-        patch.oscs.push(Oscillator::new());
+        patch.oscs.push(Oscillator::default());
     }
 }
 
@@ -463,10 +463,11 @@ fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut Ui) -> bool {
         match PcmData::load_offset(path, offset) {
             Ok(result) => {
                 *data = result;
-                data.path.as_ref()
-                    .map(|p| p.file_name()).flatten()
-                    .map(|s| s.to_str()).flatten()
-                    .map(|s| ui.notify(format!("Loaded {}", s)));
+                if let Some(s) = data.path.as_ref()
+                    .and_then(|p| p.file_name())
+                    .and_then(|s| s.to_str()) {
+                    ui.notify(format!("Loaded {}", s))
+                }
                 return true
             }
             Err(e) => ui.report(format!("Error loading audio: {e}")),
@@ -536,7 +537,7 @@ fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
     }
 
     if ui.button("+", true, Info::Add("a filter")) {
-        patch.filters.push(Filter::new());
+        patch.filters.push(Filter::default());
     }
 }
 
@@ -592,7 +593,7 @@ fn envelope_controls(ui: &mut Ui, patch: &mut Patch) {
     }
 
     if ui.button("+", true, Info::Add("an envelope")) {
-        patch.envs.push(ADSR::new());
+        patch.envs.push(ADSR::default());
     }
 }
 
@@ -645,7 +646,7 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
     }
 
     if ui.button("+", true, Info::Add("an LFO")) {
-        patch.lfos.push(LFO::new());
+        patch.lfos.push(LFO::default());
     }
 }
 
@@ -720,7 +721,7 @@ fn index_group(ui: &mut Ui, len: usize) {
 }
 
 /// Wrap a block of UI code in a labeled column.
-fn labeled_group(ui: &mut Ui, label: &str, info: Info, f: impl FnOnce(&mut Ui) -> ()) {
+fn labeled_group(ui: &mut Ui, label: &str, info: Info, f: impl FnOnce(&mut Ui)) {
     ui.start_group();
     ui.label(label, info);
     f(ui);
@@ -762,7 +763,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|f| f / 50.0),
         ModTarget::Gain | ModTarget::Level(_) =>
-            Box::new(|f| signed_sqrt(f)),
+            Box::new(signed_sqrt),
         ModTarget::LFORate(_) =>
             Box::new(|f| f.log(MAX_LFO_RATE/MIN_LFO_RATE)),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>

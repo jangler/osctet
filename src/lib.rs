@@ -136,7 +136,7 @@ impl App {
             config,
             fx: global_fx,
             patch_index: Some(0),
-            pattern_editor: PatternEditor::new(),
+            pattern_editor: PatternEditor::default(),
             general_scroll: 0.0,
             instruments_scroll: 0.0,
             settings_scroll: 0.0,
@@ -179,8 +179,8 @@ impl App {
         // translate released keys into note-offs
         for key in released {
             let hk = Hotkey::new(mods, key);
-            if let Some(_) = input::note_from_key(
-                hk, &module.tuning, self.octave, &self.config) {
+            let note = input::note_from_key(hk, &module.tuning, self.octave, &self.config);
+            if note.is_some() {
                 let key = Key {
                     origin: KeyOrigin::Keyboard,
                     channel: 0,
@@ -206,18 +206,18 @@ impl App {
                     Action::PlayFromStart => if player.is_playing() {
                         player.stop()
                     } else {
-                        player.play_from(Timespan::ZERO, &module)
+                        player.play_from(Timespan::ZERO, module)
                     }
                     Action::PlayFromScreen => if player.is_playing() {
                         player.stop()
                     } else {
                         let tick = self.pattern_editor.screen_beat_tick();
-                        player.play_from(tick, &module)
+                        player.play_from(tick, module)
                     }
                     Action::PlayFromCursor => if player.is_playing() {
                         player.stop()
                     } else {
-                        player.play_from(self.pattern_editor.cursor_tick(), &module)
+                        player.play_from(self.pattern_editor.cursor_tick(), module)
                     }
                     Action::StopPlayback => player.stop(),
                     Action::NewSong => if module.has_unsaved_changes {
@@ -232,8 +232,8 @@ impl App {
                     },
                     Action::SaveSong => self.save_module(module, player),
                     Action::SaveSongAs => self.save_module_as(module, player),
-                    Action::RenderSong => self.render_and_save(&module, player, false),
-                    Action::RenderTracks => self.render_and_save(&module, player, true),
+                    Action::RenderSong => self.render_and_save(module, player, false),
+                    Action::RenderTracks => self.render_and_save(module, player, true),
                     Action::Undo => if module.undo() {
                         player.update_synths(module.drain_track_history());
                         fix_patch_index(&mut self.patch_index, module.patches.len());
@@ -281,7 +281,7 @@ impl App {
                     && !self.pattern_editor.in_digit_column(&self.ui)
                     && !self.pattern_editor.in_global_track(&self.ui) {
                     if let Some((patch, note)) =
-                        module.map_input(self.keyjazz_patch_index(&module), note) {
+                        module.map_input(self.keyjazz_patch_index(module), note) {
                         let pitch = module.tuning.midi_pitch(&note);
                         player.note_on(self.keyjazz_track(), key, pitch, None, patch);
                     }
@@ -574,7 +574,7 @@ impl App {
         }
 
         self.ui.shared_slider("stereo_width", "Stereo width",
-            &mut player.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
+            &player.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
 
         self.ui.end_bottom_panel();
     }
@@ -664,7 +664,7 @@ impl App {
         old_module: &mut Module, module: Module, player: &mut Player) {
         *old_module = module;
         let follow = self.pattern_editor.follow;
-        self.pattern_editor = PatternEditor::new();
+        self.pattern_editor = PatternEditor::default();
         self.pattern_editor.beat_division = old_module.division;
         self.pattern_editor.follow = follow;
         self.patch_index = None;

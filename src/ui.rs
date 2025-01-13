@@ -172,16 +172,13 @@ enum Focus {
 
 impl Focus {
     fn is_slider(&self) -> bool {
-        match self {
-            Self::Slider(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Slider(_))
     }
 
     fn id(&self) -> Option<&str> {
         match self {
             Self::ComboBox(state) => Some(&state.id),
-            Self::Slider(s) | Self::Note(s) => Some(&s),
+            Self::Slider(s) | Self::Note(s) => Some(s),
             Self::Text(state) => Some(&state.id),
             _ => None,
         }
@@ -400,7 +397,7 @@ impl Ui {
         self.draw_queue.clear();
 
         // drain input queues
-        while let Some(_) = get_char_pressed() {}
+        while get_char_pressed().is_some() {}
         self.note_queue.clear();
 
         self.bottom_right_corner = Vec2 {
@@ -430,7 +427,7 @@ impl Ui {
                 .rem_euclid(self.tab_nav_list.len() as isize);
             self.pending_focus = Some(self.tab_nav_list[index as usize].clone());
         } else {
-            self.pending_focus = self.tab_nav_list.get(0).cloned();
+            self.pending_focus = self.tab_nav_list.first().cloned();
         }
     }
 
@@ -583,7 +580,7 @@ impl Ui {
         if is_mouse_button_down(MouseButton::Left) && (self.v_scrollbar_grabbed || hit) {
             let (_, y) = mouse_position();
             let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
-                .min(1.0).max(0.0);
+                .clamp(0.0, 1.0);
             *current_y = ((max_y - viewport_h) * offset).round();
         } else {
             self.v_scrollbar_grabbed = false;
@@ -638,7 +635,7 @@ impl Ui {
         if is_mouse_button_down(MouseButton::Left) && (self.h_scrollbar_grabbed || hit) {
             let (x, _) = mouse_position();
             let offset = ((x - trough.x - handle.w / 2.0) / (trough.w - handle.w))
-                .min(1.0).max(0.0);
+                .clamp(0.0, 1.0);
             *current_x = ((max_x - viewport_w) * offset).round();
         } else {
             self.h_scrollbar_grabbed = false;
@@ -795,7 +792,7 @@ impl Ui {
         let margin = self.style.margin;
 
         // draw button and label
-        let (button_rect, event) = self.text_rect(&button_text, true,
+        let (button_rect, event) = self.text_rect(button_text, true,
             self.cursor_x + margin, self.cursor_y + margin,
             &self.style.theme.control_bg(),
             &self.style.theme.control_bg_hover(),
@@ -910,7 +907,7 @@ impl Ui {
                 x: self.bounds.x,
                 y: self.cursor_y,
                 w: self.bounds.w,
-                h: h
+                h,
             }, self.style.theme.panel_bg_hover(), None),
             Graphic::Line(self.bounds.x, self.cursor_y + h + LINE_THICKNESS * 0.5,
                 self.bounds.w, self.cursor_y + h + LINE_THICKNESS * 0.5,
@@ -1130,7 +1127,7 @@ impl Ui {
     fn slider_text_entry(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>, convert: impl FnOnce(f32) -> f32,
     ) -> bool {
-        let mut text = if let Focus::Text(state) = &mut self.focus {
+        let text = if let Focus::Text(state) = &mut self.focus {
             state.text.clone()
         } else {
             panic!("no focused text")
@@ -1138,7 +1135,7 @@ impl Ui {
 
         let mut changed = false;
         let w = SLIDER_WIDTH + self.style.margin * 2.0;
-        if self.text_box(id, label, w, &mut text, 10, Info::None) {
+        if self.text_box(id, label, w, &text, 10, Info::None) {
             match text.parse::<f32>() {
                 Ok(f) => {
                     *val = convert(f).max(*range.start()).min(*range.end());
@@ -1468,17 +1465,11 @@ impl Ui {
     }
 
     pub fn accepting_keyboard_input(&self) -> bool {
-        match self.focus {
-            Focus::Text(_) | Focus::Hotkey(_) => true,
-            _ => false,
-        }
+        matches!(self.focus, Focus::Text(_) | Focus::Hotkey(_))
     }
 
     pub fn accepting_note_input(&self) -> bool {
-        match self.focus {
-            Focus::Note(_) => true,
-            _ => false,
-        }
+        matches!(self.focus, Focus::Note(_))
     }
 
     pub fn tooltip(&mut self, text: &str, x: f32, y: f32) {
@@ -1571,7 +1562,7 @@ impl Ui {
 
         let mut changed = false;
         if focused {
-            let key = get_keys_pressed().into_iter().filter(|x| !is_mod(*x)).next();
+            let key = get_keys_pressed().into_iter().find(|x| !is_mod(*x));
             if let Some(key) = key {
                 *hotkey = Hotkey::new(Modifiers::current(), key);
                 self.focus = Focus::None;
@@ -1666,12 +1657,12 @@ impl Ui {
             note.accidental_char(), note.equave);
 
         if (3..).contains(&note.arrows.abs()) {
-            let s = text::digit_superscript(note.arrows.abs() as u8).to_string();
+            let s = text::digit_superscript(note.arrows.unsigned_abs()).to_string();
             self.push_text(x, y, s, color);
         }
 
         if (3..).contains(&note.sharps.abs()) {
-            let s = text::digit_superscript(note.sharps.abs() as u8).to_string();
+            let s = text::digit_superscript(note.sharps.unsigned_abs()).to_string();
             self.push_text(x + self.style.atlas.char_width() * 2.0, y, s, color);
         }
 
@@ -1702,14 +1693,11 @@ impl Ui {
                 }
                 Dialog::OkCancel(s, a) => {
                     let a = *a;
-                    match self.ok_cancel_dialog(s.to_owned()) {
-                        Some(v) => {
-                            close = true;
-                            if v {
-                                action = Some(a);
-                            }
+                    if let Some(v) = self.ok_cancel_dialog(s.to_owned()) {
+                        close = true;
+                        if v {
+                            action = Some(a);
                         }
-                        None => (),
                     }
                 }
             };
@@ -1822,13 +1810,10 @@ struct Notification {
 }
 
 fn is_mod(key: KeyCode) -> bool {
-    match key {
-        KeyCode::LeftAlt | KeyCode::RightAlt
-            | KeyCode::LeftControl | KeyCode::RightControl
-            | KeyCode::LeftShift | KeyCode::RightShift
-            | KeyCode::LeftSuper | KeyCode::RightSuper => true,
-        _ => false,
-    }
+    matches!(key, KeyCode::LeftAlt | KeyCode::RightAlt
+        | KeyCode::LeftControl | KeyCode::RightControl
+        | KeyCode::LeftShift | KeyCode::RightShift
+        | KeyCode::LeftSuper | KeyCode::RightSuper)
 }
 
 fn display_unit(unit: Option<&'static str>) -> Box<dyn Fn(f32) -> String> {

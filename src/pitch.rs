@@ -271,7 +271,7 @@ impl Tuning {
 
         for i in 0..=self.scale.len() {
             let notes = root.step_shift_all(i as isize, self);
-            let cents = if let Some(note) = notes.get(0) {
+            let cents = if let Some(note) = notes.first() {
                 (self.midi_pitch(note) - base) * 100.0
             } else {
                 // TODO: not necessarily true for unequal scales
@@ -346,11 +346,11 @@ impl Note {
     pub fn step_shift(&self, steps: isize, tuning: &Tuning) -> Note {
         let notes = self.step_shift_all(steps, tuning);
 
-        if let Some(note) = notes.iter().filter(|n| n.nominal == self.nominal).next() {
+        if let Some(note) = notes.iter().find(|n| n.nominal == self.nominal) {
             return *note
         }
 
-        *notes.get(0).unwrap_or(self)
+        *notes.first().unwrap_or(self)
     }
 
     /// Returns all notation for the next/previous note of the tuning.
@@ -380,7 +380,7 @@ impl Note {
         if let Some(i) = options.iter().position(|x| x == self) {
             options[(i + 1) % options.len()]
         } else {
-            *options.get(0).unwrap_or(self)
+            *options.first().unwrap_or(self)
         }
     }
 }

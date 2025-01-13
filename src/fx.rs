@@ -7,19 +7,10 @@ use serde::{Deserialize, Serialize};
 use crate::dsp::compressor;
 
 // Serializable FX settings, to be stored in save files.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct FXSettings {
     pub spatial: SpatialFx,
     pub comp: Compression,
-}
-
-impl Default for FXSettings {
-    fn default() -> Self {
-        Self {
-            comp: Default::default(),
-            spatial: Default::default(),
-        }
-    }
 }
 
 /// Handles updates of global FX.

@@ -204,11 +204,9 @@ impl Player {
                         }
 
                         start_tick[event.data.spatial_column() as usize] = event.tick;
-                    } else {
-                        if let Some(v) = next_event.get_mut(col as usize) {
-                            if v.is_none() {
-                                *v = Some(event);
-                            }
+                    } else if let Some(v) = next_event.get_mut(col as usize) {
+                        if v.is_none() {
+                            *v = Some(event);
                         }
                     }
                 }
@@ -217,7 +215,7 @@ impl Player {
                     if glide[i] {
                         if let Some(data) = interpolate_events(
                             prev_data[i], next_event[i], start_tick[i],
-                            self.beat as f32, &module
+                            self.beat as f32, module
                         ) {
                             events.push(LocatedEvent {
                                 track: track_i,
@@ -314,8 +312,7 @@ impl Player {
             }
 
             if channel.events.iter()
-                .find(|e| e.tick == tick && e.data == EventData::NoteOff)
-                .is_some() {
+                .any(|e| e.tick == tick && e.data == EventData::NoteOff) {
                 active_note = None;
             }
 
@@ -518,7 +515,7 @@ pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
         let mut playtime = 0.0;
         let mut time_since_loop = 0.0;
         let render_time = if module.loops() {
-            module.playtime() + LOOP_FADEOUT_TIME as f64
+            module.playtime() + LOOP_FADEOUT_TIME
         } else {
             module.playtime()
         };

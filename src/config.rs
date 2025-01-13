@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, env, error::Error, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, env, error::Error, path::{Path, PathBuf}};
 
 use macroquad::input::KeyCode;
 use serde::{Deserialize, Serialize};
@@ -140,8 +140,8 @@ impl Default for Config {
 }
 
 /// Returns the directory of a path as a string.
-pub fn dir_as_string(p: &PathBuf) -> Option<String> {
-    p.parent().map(|p| p.to_str().map(|s| s.to_owned())).flatten()
+pub fn dir_as_string(p: &Path) -> Option<String> {
+    p.parent().and_then(|p| p.to_str().map(|s| s.to_owned()))
 }
 
 /// Returns the default hotkey-action mapping.

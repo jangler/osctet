@@ -1,4 +1,4 @@
-use std::{collections::HashSet, u8};
+use std::collections::HashSet;
 
 use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch, timespan::Timespan};
 
@@ -42,8 +42,8 @@ struct ClipEvent {
     event: Event,
 }
 
-impl PatternEditor {
-    pub fn new() -> Self {
+impl Default for PatternEditor {
+    fn default() -> Self {
         let edit_cursor = Position {
             tick: Timespan::ZERO,
             track: 0,
@@ -65,7 +65,9 @@ impl PatternEditor {
             screen_tick_max: Timespan::ZERO,
         }
     }
+}
 
+impl PatternEditor {
     /// Increment division.
     pub fn inc_division(&mut self) {
         self.set_division(self.beat_division + 1);
@@ -223,7 +225,7 @@ impl PatternEditor {
             Action::Paste => self.paste(module, false),
             Action::MixPaste => self.paste(module, true),
             Action::InsertPaste => {
-                self.selection_to_clip(&module);
+                self.selection_to_clip(module);
                 self.push_rows(module);
                 self.paste(module, false);
             },
@@ -655,7 +657,7 @@ impl PatternEditor {
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
                 self.edit_start.add_channels(x.channel_offset, &module.tracks)
-                    .map(|pos| {
+                    .and_then(|pos| {
                         if x.event.data.is_ctrl() == (pos.track == 0)
                             && (!mix || !event_positions.contains(&Position {
                                 tick: x.event.tick + tick_offset,
@@ -672,7 +674,7 @@ impl PatternEditor {
                         } else {
                             None
                         }
-                    }).flatten()
+                    })
             }).collect();
 
             let remove = if mix {
@@ -1002,13 +1004,11 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
         while let Some((key, data)) = ui.note_queue.pop() {
             pe.record_event(key, data, module);
         }
-    } else {
-        if !ui.accepting_note_input() && cursor.column == NOTE_COLUMN {
-            while let Some((_, data)) = ui.note_queue.pop() {
-                match data {
-                    EventData::NoteOff => (),
-                    _ => insert_event_at_cursor(module, &cursor, data, false),
-                }
+    } else if !ui.accepting_note_input() && cursor.column == NOTE_COLUMN {
+        while let Some((_, data)) = ui.note_queue.pop() {
+            match data {
+                EventData::NoteOff => (),
+                _ => insert_event_at_cursor(module, &cursor, data, false),
             }
         }
     }
@@ -1178,7 +1178,7 @@ fn draw_track_headers(ui: &mut Ui, module: &mut Module, player: &mut Player,
             edit = Some(Edit::RemoveChannel(i));
         }
         if ui.button("+", true, Info::Add("a new channel")) {
-            edit = Some(Edit::AddChannel(i, Channel::new()));
+            edit = Some(Edit::AddChannel(i, Channel::default()));
         }
         ui.end_group();
 
@@ -1353,18 +1353,18 @@ fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
 fn shift_column_right(pe: &mut PatternEditor, tracks: &[Track]) {
     let column = pe.edit_end.column + 1;
     let n_columns = if pe.edit_end.track == 0 { 1 } else { 3 };
+
     if column < n_columns {
         pe.edit_end.column = column;
-    } else {
-        if pe.edit_end.channel + 1 < tracks[pe.edit_end.track].channels.len() {
-            pe.edit_end.channel += 1;
-            pe.edit_end.column = 0;
-        } else if pe.edit_end.track + 1 < tracks.len() {
-            pe.edit_end.track += 1;
-            pe.edit_end.channel = 0;
-            pe.edit_end.column = 0;
-        }
+    } else if pe.edit_end.channel + 1 < tracks[pe.edit_end.track].channels.len() {
+        pe.edit_end.channel += 1;
+        pe.edit_end.column = 0;
+    } else if pe.edit_end.track + 1 < tracks.len() {
+        pe.edit_end.track += 1;
+        pe.edit_end.channel = 0;
+        pe.edit_end.column = 0;
     }
+
     if !is_shift_down() {
         pe.edit_start.track = pe.edit_end.track;
         pe.edit_start.channel = pe.edit_end.channel;

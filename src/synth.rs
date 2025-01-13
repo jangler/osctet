@@ -1,7 +1,7 @@
 //! Subtractive/FM synth engine.
 
 use core::f64;
-use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::{Path, PathBuf}, sync::Arc, u64};
+use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::{Path, PathBuf}, sync::Arc};
 
 use ordered_float::OrderedFloat;
 use pitch_detector::pitch::{HannedFftDetector, PitchDetector};
@@ -62,9 +62,9 @@ impl From<f32> for Parameter {
     }
 }
 
-impl Into<f32> for Parameter {
-    fn into(self) -> f32 {
-        self.0.value()
+impl From<Parameter> for f32 {
+    fn from(value: Parameter) -> Self {
+        value.0.value()
     }
 }
 
@@ -160,18 +160,12 @@ impl Waveform {
 
     /// Returns true if this waveform makes use of the `tone` control.
     pub fn uses_tone(&self) -> bool {
-        match self {
-            Self::Pulse | Self::Noise => true,
-            _ => false,
-        }
+        matches!(self, Self::Pulse | Self::Noise)
     }
 
     /// Returns true if this waveform makes uses of frequency controls.
     pub fn uses_freq(&self) -> bool {
-        match self {
-            Self::Noise => false,
-            _ => true
-        }
+        !matches!(self, Self::Noise)
     }
 
     /// Make a generator DSP net.
@@ -182,16 +176,16 @@ impl Waveform {
         let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
         let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
             * var(&osc.freq_ratio.0)
-            * ((settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
+            * (settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::Pitch, &[])
-                >> pow_shape(PITCH_MOD_BASE)))
+                >> pow_shape(PITCH_MOD_BASE))
             * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
                 + settings.dsp_component(vars, ModTarget::FinePitch, &[]))
                 * 0.5 + var(&osc.fine_pitch.0) >> pow_shape(SEMITONE_RATIO))
             * (1.0 + fm_oscs * FM_DEPTH_MULTIPLIER);
         let tone = var(&osc.tone.0) >> smooth()
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
-            >> shape_fn(|x| clamp01(x));
+            >> shape_fn(clamp01);
 
         let au: Box<dyn AudioUnit> = match self {
             Self::Sawtooth => if osc.oversample {
@@ -258,18 +252,12 @@ impl Waveform {
 
     /// Check whether this waveform is affected by the "tone" control.
     fn has_tone_control(&self) -> bool {
-        match *self {
-            Waveform::Pulse | Waveform::Noise => true,
-            _ => false,
-        }
+        matches!(*self, Waveform::Pulse | Waveform::Noise)
     }
 
     /// Check whether this waveform can use oversampling in generators.
     pub fn uses_oversampling(&self) -> bool {
-        match *self {
-            Waveform::Hold | Waveform::Noise | Waveform::Pcm(_) => false,
-            _ => true,
-        }
+        !matches!(*self, Waveform::Hold | Waveform::Noise | Waveform::Pcm(_))
     }
 }
 
@@ -306,7 +294,7 @@ impl PcmData {
 
         let smpl = SmplData::from_wave(&data);
         let loop_point = smpl.as_ref().and_then(|smpl|
-            smpl.sample_loops.get(0).map(|lp|
+            smpl.sample_loops.first().map(|lp|
                 min(*lp.start(), wave.len().saturating_sub(1))));
         let midi_pitch = smpl.as_ref().map(|smpl| smpl.midi_pitch);
 
@@ -322,12 +310,12 @@ impl PcmData {
     /// Loads the audio file with position offset by `offset` in the file's
     /// directory.
     pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
-        let path = path.parent().map(|p| {
-            fs::read_dir(p).map(|entries| {
+        let path = path.parent().and_then(|p| {
+            fs::read_dir(p).ok().and_then(|entries| {
                 // TODO: files ending in ex. .WAV instead of .wav won't match
                 let entries: Vec<_> = entries.flatten()
                     .filter(|e| Self::FILE_EXTENSIONS.contains(
-                        && e.path().extension().unwrap_or_default()
+                        &e.path().extension().unwrap_or_default()
                             .to_str().unwrap_or_default()))
                     .collect();
                 entries.iter().position(|e| e.path() == *path).map(|i| {
@@ -335,8 +323,8 @@ impl PcmData {
                         .rem_euclid(entries.len() as isize) as usize;
                     entries[i].path()
                 })
-            }).ok()
-        }).flatten().flatten().unwrap_or(path.to_owned());
+            })
+        }).unwrap_or(path.to_owned());
 
         Self::load(path)
     }
@@ -546,7 +534,7 @@ impl Synth {
                 self.pressure_memory[channel]
             };
             self.active_voices.insert(key, Voice::new(pitch, bend, pressure,
-                self.mod_memory[channel], self.prev_freq, &patch, seq, self.sample_rate,
+                self.mod_memory[channel], self.prev_freq, patch, seq, self.sample_rate,
                 pan_polarity));
             self.check_truncate_voices(channel, seq);
             self.prev_freq = Some(midi_hz(pitch));
@@ -679,8 +667,8 @@ impl Patch {
             gain: Parameter(shared(0.5)),
             fx_send: Parameter(shared(1.0)),
             distortion: Parameter(shared(0.0)),
-            oscs: vec![Oscillator::new()],
-            envs: vec![ADSR::new()],
+            oscs: vec![Oscillator::default()],
+            envs: vec![ADSR::default()],
             filters: Vec::new(),
             lfos: Vec::new(),
             play_mode: PlayMode::Poly,
@@ -701,11 +689,9 @@ impl Patch {
     /// Initialize all PCM generators.
     pub fn init_pcm(&mut self) {
         for osc in self.oscs.iter_mut() {
-            if let Waveform::Pcm(data) = &mut osc.waveform {
-                if let Some(data) = data {
-                    if let Err(e) = data.init() {
-                        eprintln!("{}", e);
-                    }
+            if let Waveform::Pcm(Some(data)) = &mut osc.waveform {
+                if let Err(e) = data.init() {
+                    eprintln!("{}", e);
                 }
             }
         }
@@ -755,9 +741,9 @@ impl Patch {
         for (i, m) in self.mod_matrix.iter().enumerate() {
             if m.target == target && !path.contains(&m.source) {
                 if target.is_additive() {
-                    net = net + m.dsp_component(&self, &vars, i, path);
+                    net = net + m.dsp_component(self, vars, i, path);
                 } else {
-                    net = net * m.dsp_component(&self, &vars, i, path);
+                    net = net * m.dsp_component(self, vars, i, path);
                 }
             }
         }
@@ -946,9 +932,9 @@ impl Patch {
         }
 
         let level = (var(&self.oscs[i].level.0) >> smooth())
-            * self.dsp_component(&vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x);
+            * self.dsp_component(vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x);
 
-        (self.oscs[i].waveform.make_osc_net(self, &vars, &self.oscs[i], i, fm_oscs))
+        (self.oscs[i].waveform.make_osc_net(self, vars, &self.oscs[i], i, fm_oscs))
             * level
             * am_oscs
             + mixed_oscs
@@ -1018,8 +1004,8 @@ pub struct Oscillator {
     pub oversample: bool,
 }
 
-impl Oscillator {
-    pub fn new() -> Self {
+impl Default for Oscillator {
+    fn default() -> Self {
         Self {
             level: Parameter(shared(1.0)),
             tone: Parameter(shared(0.5)),
@@ -1100,15 +1086,6 @@ pub struct Filter {
 }
 
 impl Filter {
-    pub fn new() -> Self {
-        Self {
-            cutoff: Parameter(shared(MAX_FILTER_CUTOFF)),
-            resonance: Parameter(shared(MIN_FILTER_RESONANCE)),
-            key_tracking: KeyTracking::None,
-            filter_type: FilterType::Ladder,
-        }
-    }
-
     /// Create DSP net.
     fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize) -> Net {
         let kt = match self.key_tracking {
@@ -1135,6 +1112,17 @@ impl Filter {
     }
 }
 
+impl Default for Filter {
+    fn default() -> Self {
+        Self {
+            cutoff: Parameter(shared(MAX_FILTER_CUTOFF)),
+            resonance: Parameter(shared(MIN_FILTER_RESONANCE)),
+            key_tracking: KeyTracking::None,
+            filter_type: FilterType::Ladder,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ADSR {
     pub attack: f32,
@@ -1147,16 +1135,6 @@ pub struct ADSR {
 }
 
 impl ADSR {
-    pub fn new() -> Self {
-        Self {
-            attack: 0.0,
-            decay: 1.0,
-            sustain: 1.0,
-            release: 0.01,
-            _power: 0.0,
-        }
-    }
-
     fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize,
         path: &[ModSource], sqrt_attack: bool,
     ) -> Net {
@@ -1169,6 +1147,18 @@ impl ADSR {
     }
 }
 
+impl Default for ADSR {
+    fn default() -> Self {
+        Self {
+            attack: 0.0,
+            decay: 1.0,
+            sustain: 1.0,
+            release: 0.01,
+            _power: 0.0,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LFO {
     pub waveform: Waveform,
@@ -1176,8 +1166,8 @@ pub struct LFO {
     pub delay: f32,
 }
 
-impl LFO {
-    pub fn new() -> Self {
+impl Default for LFO {
+    fn default() -> Self {
         Self {
             waveform: Waveform::Triangle,
             freq: Parameter(shared(1.0)),
@@ -1193,15 +1183,17 @@ pub struct Modulation {
     pub depth: Parameter,
 }
 
-impl Modulation {
-    pub fn default() -> Self {
+impl Default for Modulation {
+    fn default() -> Self {
         Self {
             source: ModSource::Modulation,
             target: ModTarget::Gain,
             depth: Parameter(shared(0.0)),
         }
     }
+}
 
+impl Modulation {
     fn dsp_component(&self, settings: &Patch, vars: &VoiceVars, index: usize,
         path: &[ModSource]
     ) -> Net {
@@ -1232,12 +1224,10 @@ impl Modulation {
         } else if self.source.is_bipolar() {
             // a bipolar source oscillates in [-1, 1] -- map that onto [0, 1]
             1.0 - (depth * (1.0 - 0.5 * (net + 1.0)) >> shape_fn(abs))
+        } else if self.depth.0.value() >= 0.0 {
+            1.0 - depth * (1.0 - net)
         } else {
-            if self.depth.0.value() >= 0.0 {
-                1.0 - depth * (1.0 - net)
-            } else {
-                1.0 + depth * net
-            }
+            1.0 + depth * net
         }
     }
 }
@@ -1268,10 +1258,7 @@ impl Display for ModSource {
 
 impl ModSource {
     fn is_bipolar(&self) -> bool {
-        match *self {
-            ModSource::LFO(_) => true,
-            _ => false,
-        }
+        matches!(*self, ModSource::LFO(_))
     }
 }
 
@@ -1296,10 +1283,7 @@ pub enum ModTarget {
 impl ModTarget {
     /// Returns true if modulations should be summed rather than multiplied.
     pub fn is_additive(&self) -> bool {
-        match *self  {
-            ModTarget::Gain | ModTarget::Level(_) => false,
-            _ => true,
-        }
+        !matches!(*self, ModTarget::Gain | ModTarget::Level(_))
     }
 
     /// Returns the target generator, if any.
@@ -1314,10 +1298,7 @@ impl ModTarget {
     /// Returns true if the attack level should be sqrt'ed. Since gain values
     /// are squared, this compensates and gives a linear attack.
     fn uses_sqrt_attack(&self) -> bool {
-        match *self  {
-            ModTarget::Gain | ModTarget::Level(_) => true,
-            _ => false,
-        }
+        matches!(*self, ModTarget::Gain | ModTarget::Level(_))
     }
 }
 
@@ -1383,7 +1364,7 @@ impl Voice {
         let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
             | (var(&settings.pan.0) >> smooth()
                 + settings.dsp_component(&vars, ModTarget::Pan, &[]) * 2.0)
-                * var(pan_polarity) >> shape_fn(|x| clamp11(x)))
+                * var(pan_polarity) >> shape_fn(clamp11))
             >> panner() >> multisplit::<U2, U2>()
             >> (multipass::<U2>()
                 | multipass::<U2>() * (var(&settings.fx_send.0) >> split::<U2>()));
