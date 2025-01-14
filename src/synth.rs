@@ -286,6 +286,14 @@ impl PcmData {
     pub const FILE_EXTENSIONS: [&str; 11] =
         ["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4", "ogg", "wav", "webm"];
 
+    /// Check whether a path has a loadable file extension.
+    fn can_load_path(path: &Path) -> bool {   
+        let ext = path.extension().unwrap_or_default()
+            .to_str().unwrap_or_default().to_ascii_lowercase();
+        Self::FILE_EXTENSIONS.iter()
+            .any(|x| x.to_ascii_lowercase() == ext)
+    }
+
     /// Load PCM from an audio file.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let data = fs::read(&path)?;
@@ -312,11 +320,8 @@ impl PcmData {
     pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
         let path = path.parent().and_then(|p| {
             fs::read_dir(p).ok().and_then(|entries| {
-                // TODO: files ending in ex. .WAV instead of .wav won't match
                 let entries: Vec<_> = entries.flatten()
-                    .filter(|e| Self::FILE_EXTENSIONS.contains(
-                        &e.path().extension().unwrap_or_default()
-                            .to_str().unwrap_or_default()))
+                    .filter(|e| Self::can_load_path(&e.path()))
                     .collect();
                 entries.iter().position(|e| e.path() == *path).map(|i| {
                     let i = (i as isize + offset)
@@ -1415,12 +1420,23 @@ struct VoiceVars {
 
 #[cfg(test)]
 mod tests {
-    use super::clamp_freq_ratio;
+    use super::*;
 
     #[test]
     fn test_clamp_freq_ratio() {
         assert_eq!(clamp_freq_ratio(20.0), 10.0);
         assert_eq!(clamp_freq_ratio(40.0), 10.0);
         assert_eq!(clamp_freq_ratio(0.1), 0.4);
+    }
+
+    #[test]
+    fn test_can_load_path() {
+        let wav_lower = Path::new("./files/a.wav");
+        let wav_upper = Path::new("./files/B.WAV");
+        let png = Path::new("./files/c.png");
+
+        assert_eq!(PcmData::can_load_path(wav_lower), true);
+        assert_eq!(PcmData::can_load_path(wav_upper), true);
+        assert_eq!(PcmData::can_load_path(png), false);
     }
 }

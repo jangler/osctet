@@ -427,9 +427,6 @@ impl Player {
                 if let Some((patch, note)) = module.map_note(note, track) {
                     let pitch = module.tuning.midi_pitch(&note);
                     let channel = &module.tracks[track].channels[channel];
-                    // TODO: a potential optimization would be to pass
-                    //       interpolation status as a flag, since the caller
-                    //       already checks interpolation
                     if channel.is_interpolated(NOTE_COLUMN, event.tick) {
                         self.bend_to(track, key, pitch);
                     } else {

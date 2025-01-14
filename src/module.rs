@@ -26,8 +26,6 @@ pub struct Module {
     #[serde(default = "default_division")]
     pub division: u8,
 
-    // TODO: cap size of undo stack.
-    //       could use https://crates.io/crates/deepsize?
     #[serde(skip)]
     undo_stack: Vec<Edit>,
     #[serde(skip)]
@@ -746,7 +744,6 @@ pub enum Edit {
         remove: Vec<Position>,
         add: Vec<LocatedEvent>,
     },
-    // TODO: redoing patch removal doesn't revert track/kit mappings
     InsertPatch(usize, Patch),
     RemovePatch(usize),
     ShiftEvents {
