@@ -720,6 +720,8 @@ impl PatternEditor {
 
     /// Draw all interpolation lines for a channel.
     fn draw_interpolation(&self, ui: &mut Ui, channel: &Channel) {
+        const NUM_COLS: usize = 3;
+
         ui.cursor_z -= 1;
         let beat_height = self.beat_height(ui);
         let tpr = self.row_timespan();
@@ -729,12 +731,19 @@ impl PatternEditor {
             with_alpha(0.5, ui.style.theme.accent2_fg()),
         ];
 
-        // TODO: would be better to only collect events once
-        for col in 0..3 {
-            let interp: Vec<_> = channel.interp_by_col(col).collect();
+        let mut interp: Vec<_> = (0..NUM_COLS).map(|_| Vec::new()).collect();
+        for evt in &channel.events {
+            if let EventData::StartGlide(i)
+                | EventData::EndGlide(i)
+                | EventData::TickGlide(i) = evt.data {
+                interp[i as usize].push(evt)
+            }
+        }
+
+        for col in 0..NUM_COLS {
             let mut start_tick = None;
             let x = ui.cursor_x + ui.style.margin - 1.0 - LINE_THICKNESS * 0.5
-                + column_x(col, &ui.style);
+                + column_x(col as u8, &ui.style);
 
             let mut lines = Vec::new();
             let mut marks = Vec::new();
@@ -756,7 +765,7 @@ impl PatternEditor {
                 marks.push(Graphic::Line(x1, y, x2, y, colors[col as usize]));
             };
 
-            for event in interp {
+            for event in &interp[col] {
                 match event.data {
                     EventData::StartGlide(_) => {
                         if start_tick.is_none() {

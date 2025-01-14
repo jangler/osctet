@@ -148,7 +148,7 @@ impl Graphic {
             Self::Rect(rect, _, _) => {
                 rect.x = right_edge - rect.w;
             },
-            Self::Line(_, _, _, _, _) => todo!(),
+            Self::Line(_, _, _, _, _) => unimplemented!(),
             Self::Text(x, _, text, _) => {
                 *x = right_edge - text.chars().count() as f32 * char_width;
             }
@@ -1678,8 +1678,6 @@ impl Ui {
 
         if let Some(dialog) = &self.dialog {
             match dialog {
-                // TODO: characters with descenders give this too large a bottom margin.
-                //       make the rect size independent of the particular characters
                 Dialog::Alert(s) => {
                     let s = s.clone();
                     let mut r = center(fit_strings(&self.style, &[s.clone()]));
