@@ -141,19 +141,6 @@ impl Graphic {
         };
         this_rect.overlaps(rect)
     }
-
-    /// Align the graphic to a right edge. Breaks mouse hit detection.
-    fn align_right(&mut self, right_edge: f32, char_width: f32) {
-        match self {
-            Self::Rect(rect, _, _) => {
-                rect.x = right_edge - rect.w;
-            },
-            Self::Line(_, _, _, _, _) => unimplemented!(),
-            Self::Text(x, _, text, _) => {
-                *x = right_edge - text.chars().count() as f32 * char_width;
-            }
-        }
-    }
 }
 
 struct DrawOp {
@@ -262,18 +249,6 @@ impl Ui {
             pending_focus: None,
             lost_focus: Focus::None,
             tab_nav_list: Vec::new(),
-        }
-    }
-
-    /// Aligns the last `n` graphics elements to the right of the current group.
-    /// Panics if no group.
-    pub fn align_right(&mut self, n: usize) {
-        let start = self.draw_queue.len() - n;
-        let rect = self.group_rects.last().unwrap();
-        let edge = rect.x + rect.w - self.style.margin;
-
-        for op in self.draw_queue[start..].iter_mut() {
-            op.graphic.align_right(edge, self.style.atlas.char_width());
         }
     }
 
@@ -1050,7 +1025,9 @@ impl Ui {
             }
             if is_mouse_button_pressed(MouseButton::Right) {
                 let text = display(*val).trim_start_matches('x')
-                    .split([' ', ':']).next().unwrap().to_owned();
+                    .split([' ', ':']).next()
+                    .expect("at least 1 token should be present")
+                    .to_owned();
                 self.set_focus(Focus::Text(TextEditState::new(id.to_owned(), text)));
             }
         }

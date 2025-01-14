@@ -45,7 +45,8 @@ impl Module {
         Self {
             title: "".to_owned(),
             author: "".to_owned(),
-            tuning: Tuning::divide(2.0, 12, 1).unwrap(),
+            tuning: Tuning::divide(2.0, 12, 1)
+                .expect("12-ET should be a valid tuning"),
             fx,
             kit: Vec::new(),
             patches: vec![Patch::new(String::from("Init"))],
@@ -106,7 +107,7 @@ impl Module {
     fn get_kit_patch(&self, note: Note) -> Option<(&Patch, Note)> {
         self.kit.iter()
             .find(|x| x.input_note == note)
-            .map(|x| (self.patches.get(x.patch_index).unwrap(), x.patch_note))
+            .and_then(|x| self.patches.get(x.patch_index).map(|p| (p, x.patch_note)))
     }
 
     /// Remove the patch at `index`.
@@ -288,7 +289,8 @@ impl Module {
             }
             Edit::RemoveChannel(index) => {
                 let track = &mut self.tracks[index];
-                let channel = track.channels.pop().unwrap();
+                let channel = track.channels.pop()
+                    .expect("removed channel index should be valid");
                 Edit::AddChannel(index, channel)
             }
             Edit::PatternData { remove, add } => {

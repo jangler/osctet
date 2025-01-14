@@ -287,7 +287,7 @@ impl PcmData {
         ["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4", "ogg", "wav", "webm"];
 
     /// Check whether a path has a loadable file extension.
-    fn can_load_path(path: &Path) -> bool {   
+    fn can_load_path(path: &Path) -> bool {
         let ext = path.extension().unwrap_or_default()
             .to_str().unwrap_or_default().to_ascii_lowercase();
         Self::FILE_EXTENSIONS.iter()
@@ -549,7 +549,8 @@ impl Synth {
     /// Cut the oldest released voice if max_voices is exceeded.
     fn check_truncate_voices(&mut self, channel: usize, seq: &mut Sequencer) {
         if self.released_voices[channel].len() >= VOICES_PER_CHANNEL {
-            let voice = self.released_voices[channel].pop_front().unwrap();
+            let voice = self.released_voices[channel].pop_front()
+                .expect("released voice count confirmed to be nonzero");
             voice.cut(seq);
         }
     }
@@ -567,8 +568,10 @@ impl Synth {
             .filter(|k| k.origin == origin)
             .cloned()
             .collect();
+
         for k in remove_keys {
-            let voice = self.active_voices.remove(&k).unwrap();
+            let voice = self.active_voices.remove(&k)
+                .expect("key taken from map should be valid");
             voice.off(seq);
             self.released_voices[k.channel as usize].push_back(voice);
         }

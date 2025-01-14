@@ -746,7 +746,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
 
     // audio callback
     let stream = audio_conf.and_then(|config| {
-        Ok(device.unwrap().build_output_stream(
+        Ok(device.expect("device should be present if config is").build_output_stream(
             &config, move |data: &mut[f32], _: &cpal::OutputCallbackInfo| {
                 // there's probably a better way to do this
                 let mut i = 0;

@@ -4,7 +4,7 @@ use osctet::{module::Module, playback::render};
 
 fn render_module(c: &mut Criterion, filename: &str) {
     let path: PathBuf = ["./testdata", filename].iter().collect();
-    let module = Arc::new(Module::load(&path).unwrap());
+    let module = Arc::new(Module::load(&path).expect("test data should be present"));
     c.bench_function(&format!("render {}", filename),
         |b| b.iter(|| black_box({
             let rx = render(module.clone(), path.clone(), None);

@@ -182,7 +182,7 @@ impl Tuning {
 
     /// Returns the ratio of this scale's period.
     pub fn equave(&self) -> f32 {
-        find_ratio(*self.scale.last().unwrap())
+        find_ratio(*self.scale.last().expect("scale cannot be empty"))
     }
 
     /// Returns the number of steps in the period.
@@ -320,7 +320,7 @@ impl Note {
             1 => text::UP,
             2 => text::DOUBLE_UP,
             3.. => text::SUB_UP,
-        }).unwrap()
+        }).expect("code points constants should be valid")
     }
 
     /// Returns the character code used for this note's sharps/flats.
@@ -333,7 +333,7 @@ impl Note {
             1 => text::SHARP,
             2 => text::DOUBLE_SHARP,
             3.. => text::SUB_SHARP,
-        }).unwrap()
+        }).expect("code points constants should be valid")
     }
 
     /// Returns the simplest notation for the next/previous note of the tuning.

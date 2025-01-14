@@ -48,7 +48,7 @@ pub fn digit_superscript(digit: u8) -> char {
         8 => SUP_8,
         9 => SUP_9,
         _ => SUP_QUESTION,
-    }).unwrap()
+    }).expect("code point constants should be valid")
 }
 
 /// Maps characters to GPU textures.
