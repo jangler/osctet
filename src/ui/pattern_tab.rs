@@ -1275,7 +1275,6 @@ fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Co
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData,
     all_channels: bool
 ) {
-    // TODO: insert events at all valid selected positions
     if data.is_ctrl() != (cursor.track == 0) {
         return
     }

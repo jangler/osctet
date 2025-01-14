@@ -154,34 +154,29 @@ impl Tuning {
 
     /// Translates notation to a concrete pitch.
     pub fn midi_pitch(&self, note: &Note) -> f32 {
-        let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
-        let root_steps = self.nominal_steps(self.root.nominal)
-            + self.sharp_steps() * self.root.sharps as i32
-            + self.arrow_steps as i32 * self.root.arrows as i32;
-        let steps = -root_steps
-            + self.nominal_steps(note.nominal)
-            + self.sharp_steps() * note.sharps as i32
-            + self.arrow_steps as i32 * note.arrows as i32;
-        let len = self.scale.len() as i32;
-        let scale_index = (steps - 1).rem_euclid(len) as usize;
-        let step_equaves = (steps - 1).div_euclid(len);
-        self.root_pitch() +
-            equave * (note.equave as i32 - self.root.equave as i32 + step_equaves) as f32
-            + self.scale[scale_index] / 100.0
+        let root_steps = self.raw_steps(&self.root);
+        let steps = self.raw_steps(note) - root_steps;
+        let root_pitch = self.pitch_from_steps(
+            root_steps, self.root.equave, REFERENCE_MIDI_PITCH, 4);
+        self.pitch_from_steps(steps, note.equave, root_pitch, self.root.equave)
     }
 
-    /// Returns the pitch of the scale root.
-    fn root_pitch(&self) -> f32 {
-        // TODO: fix duplication of code with midi_pitch
-        let equave = self.scale.last().expect("scale cannot be empty") / 100.0;
-        let steps = self.nominal_steps(self.root.nominal)
-            + self.sharp_steps() * self.root.sharps as i32
-            + self.arrow_steps as i32 * self.root.arrows as i32;
+    /// Returns a raw step count for a note.
+    fn raw_steps(&self, note: &Note) -> i32 {
+        self.nominal_steps(note.nominal)
+            + self.sharp_steps() * note.sharps as i32
+            + self.arrow_steps as i32 * note.arrows as i32
+    }
+
+    /// Converts raw step counts into a MIDI pitch.
+    fn pitch_from_steps(&self, steps: i32, equave: i8, ref_pitch: f32, ref_equave: i8
+    ) -> f32 {
+        let equave_interval = self.scale.last().expect("scale cannot be empty") / 100.0;
         let len = self.scale.len() as i32;
         let scale_index = (steps - 1).rem_euclid(len) as usize;
         let step_equaves = (steps - 1).div_euclid(len);
-        REFERENCE_MIDI_PITCH +
-            equave * (self.root.equave as i32 - 4 + step_equaves) as f32
+        ref_pitch +
+            equave_interval * (equave as i32 - ref_equave as i32 + step_equaves) as f32
             + self.scale[scale_index] / 100.0
     }
 

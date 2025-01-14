@@ -26,7 +26,7 @@ pub struct Theme {
     pub fg: Lchuv,
     pub bg: Lchuv,
     pub accent1: Lchuv,
-    pub accent2: Lchuv, // TODO: use this for focused controls?
+    pub accent2: Lchuv,
     pub gamma: f32,
 }
 
