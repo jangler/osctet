@@ -183,7 +183,7 @@ impl Waveform {
                 + settings.dsp_component(vars, ModTarget::FinePitch, &[]))
                 * 0.5 + var(&osc.fine_pitch.0) >> pow_shape(SEMITONE_RATIO))
             * (1.0 + fm_oscs * FM_DEPTH_MULTIPLIER);
-        let tone = var(&osc.tone.0) >> smooth()
+        let tone = var(&osc.tone.0)
             + settings.dsp_component(vars, ModTarget::Tone(index), &[])
             >> shape_fn(clamp01);
 
@@ -658,9 +658,13 @@ pub struct Patch {
     pub mod_matrix: Vec<Modulation>,
     pub fx_send: Parameter,
     pub distortion: Parameter,
+    #[serde(default)]
+    pub version: u8,
 }
 
 impl Patch {
+    const VERSION: u8 = 1;
+
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -683,11 +687,13 @@ impl Patch {
                 target: ModTarget::Gain,
                 depth: Parameter(shared(1.0)),
             }],
+            version: Self::VERSION,
         }
     }
 
-    /// Initialize all PCM generators.
-    pub fn init_pcm(&mut self) {
+    /// Initialize a loaded patch.
+    pub fn init(&mut self) {
+        // initialize PCM generators
         for osc in self.oscs.iter_mut() {
             if let Waveform::Pcm(Some(data)) = &mut osc.waveform {
                 if let Err(e) = data.init() {
@@ -695,13 +701,22 @@ impl Patch {
                 }
             }
         }
+
+        // convert generator levels
+        if self.version < 1 {
+            for osc in self.oscs.iter_mut() {
+                osc.level.0.set(osc.level.0.value().powi(2));
+            }
+        }
+
+        self.version = Self::VERSION;
     }
 
     /// Load a patch from disk.
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         let mut patch = rmp_serde::from_slice::<Self>(&input)?;
-        patch.init_pcm();
+        patch.init();
         Ok(patch)
     }
 
@@ -721,7 +736,7 @@ impl Patch {
             patch.name = format!("Copy of {}", patch.name);
             patch.name.truncate(MAX_PATCH_NAME_CHARS);
         }
-        patch.init_pcm();
+        patch.init();
 
         // copy over sample paths
         for (i, osc) in patch.oscs.iter_mut().enumerate() {
@@ -932,7 +947,7 @@ impl Patch {
         }
 
         let level = (var(&self.oscs[i].level.0) >> smooth())
-            * self.dsp_component(vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x);
+            * (self.dsp_component(vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x));
 
         (self.oscs[i].waveform.make_osc_net(self, vars, &self.oscs[i], i, fm_oscs))
             * level

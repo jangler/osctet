@@ -77,7 +77,7 @@ impl Module {
     /// Initialize sample data.
     fn init_pcm(&mut self) {
         for patch in &mut self.patches {
-            patch.init_pcm();
+            patch.init();
         }
     }
 
