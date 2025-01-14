@@ -408,10 +408,18 @@ impl App {
                                 self.ui.note_queue.push((key, EventData::Pressure(v)));
                             }
                         },
-                        // TODO: send event on note queue
                         MidiEvent::Pitch { channel, bend } => {
                             player.pitch_bend(self.keyjazz_track(),
                                 channel, bend * self.midi.bend_range);
+
+                            let key = Key {
+                                origin: KeyOrigin::Midi,
+                                channel,
+                                key: 0,
+                            };
+                            let data = EventData::Bend(
+                                (bend * self.midi.bend_range * 100.0).round() as i16);
+                            self.ui.note_queue.push((key, data));
                         },
                     }
                 }
