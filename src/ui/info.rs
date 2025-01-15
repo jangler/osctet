@@ -278,11 +278,11 @@ use less space in a save file.".to_string(),
 "Attempt to automatically set the sample pitch to
 match the default oscillator pitch. Works best with
 harmonic spectra and strong fundamentals.".to_string(),
-        Info::Add(s) => text = format!("Add {}.", s),
-        Info::Remove(s) => text = format!("Remove {}.", s),
+        Info::Add(s) => text = format!("Add {s}."),
+        Info::Remove(s) => text = format!("Remove {s}."),
         Info::ResetTheme(variant) => text =
-            format!("Reset colors to the default {} theme.", variant),
-        Info::FontSize(op) => text = format!("{} font size.", op),
+            format!("Reset colors to the default {variant} theme."),
+        Info::FontSize(op) => text = format!("{op} font size."),
         Info::ResetSettings => text = "Reset all settings to defaults.".to_string(),
         Info::Aftertouch => text =
 "If enabled, convert channel pressure and key pressure
@@ -518,24 +518,21 @@ Shift+0..F - Track enter digit".to_string(),
         }
     }
 
-    let mut push_if_nonempty = |s| if !text.is_empty() {
-        text.push_str(s);
+    if !text.is_empty() && !matches!(ctrl, ControlInfo::None) {
+        text.push_str("\n\n");
     };
 
     match ctrl {
         ControlInfo::None => (),
         ControlInfo::Slider => {
-            push_if_nonempty("\n\n");
             text.push_str("Right-click slider to edit value as text.")
         }
         ControlInfo::Note => {
-            push_if_nonempty("\n\n");
             text.push_str(
 "Note input. Click to focus, then enter a note
 using the keyboard.")
         }
         ControlInfo::Hotkey => {
-            push_if_nonempty("\n\n");
             text.push_str(
 "Hotkey input. Click to focus, then press a key
 combination to set value.")
