@@ -207,7 +207,7 @@ pub struct Ui {
     focus: Focus,
     pending_focus: Option<String>,
     lost_focus: Focus,
-    tab_nav_list: Vec<String>,
+    tab_nav_list: Vec<(Vec2, String)>,
 }
 
 impl Ui {
@@ -380,7 +380,7 @@ impl Ui {
             y: self.bounds.y + self.bounds.h,
         };
 
-        if tab_nav && is_key_pressed(KeyCode::Tab) {
+        if tab_nav && is_key_pressed(KeyCode::Tab) && !is_alt_down() && !is_ctrl_down() {
             if is_shift_down() {
                 self.tab_focus(-1);
             } else {
@@ -394,15 +394,18 @@ impl Ui {
             return
         }
 
+        // the "next field" should be determined by position, not order of addition
+        self.tab_nav_list.sort_by_key(|(v, _)| (v.y as i32, v.x as i32));
+
         let index = self.focus.id()
-            .and_then(|id| self.tab_nav_list.iter().position(|s| s == id));
+            .and_then(|id| self.tab_nav_list.iter().position(|(_, s)| s == id));
 
         if let Some(index) = index {
             let index = (index as isize + offset)
                 .rem_euclid(self.tab_nav_list.len() as isize);
-            self.pending_focus = Some(self.tab_nav_list[index as usize].clone());
+            self.pending_focus = Some(self.tab_nav_list[index as usize].1.clone());
         } else {
-            self.pending_focus = self.tab_nav_list.first().cloned();
+            self.pending_focus = self.tab_nav_list.first().cloned().map(|x| x.1);
         }
     }
 
@@ -1151,11 +1154,15 @@ impl Ui {
         self.end_widget("color_table", Info::None, ControlInfo::None);
     }
 
+    fn cursor_vec(&self) -> Vec2 {
+        Vec2::new(self.cursor_x, self.cursor_y)
+    }
+
     /// Widget for editing a value as text.
     pub fn edit_box(&mut self, label: &str, chars_wide: usize,
         mut text: String, info: Info
     ) -> Option<String> {
-        self.tab_nav_list.push(label.to_string());
+        self.tab_nav_list.push((self.cursor_vec(), label.to_string()));
 
         let w = chars_wide as f32 * self.style.atlas.char_width()
             + self.style.margin * 2.0;
@@ -1800,10 +1807,17 @@ fn display_unit(unit: Option<&'static str>) -> Box<dyn Fn(f32) -> String> {
     }
 }
 
+/// Returns true if either Shift key is down.
 fn is_shift_down() -> bool {
     is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift)
 }
 
+/// Returns true if either Alt key is down.
 fn is_alt_down() -> bool {
     is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt)
+}
+
+/// Returns true if either Ctrl key is down.
+fn is_ctrl_down() -> bool {
+    is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
 }

@@ -7,11 +7,6 @@ use super::*;
 /// Narrower margin used in the pattern grid.
 const PATTERN_MARGIN: f32 = 2.0;
 
-/// Returns true if either Ctrl key is down.
-fn is_ctrl_down() -> bool {
-    is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
-}
-
 /// Tracks state specific to the pattern editor.
 pub struct PatternEditor {
     edit_start: Position,
