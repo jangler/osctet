@@ -1,12 +1,14 @@
 use macroquad::input::*;
 
-/// UI state of a text field. The `id` field allows determining which control
-/// the state belongs to.
+/// UI state of a text field.
 pub struct TextEditState {
+    /// Allows determining which control this state belongs to.
     pub id: String,
     pub text: String,
-    pub anchor: usize, // beginning of selection
-    pub cursor: usize, // end of selection
+    /// The end of the selection that stays put when shift-selecting.
+    pub anchor: usize,
+    /// The end of the selection that moves when shift-selecting.
+    pub cursor: usize,
 }
 
 impl TextEditState {
@@ -14,7 +16,7 @@ impl TextEditState {
         Self {
             id,
             anchor: 0,
-            cursor: text.chars().count(),
+            cursor: text.chars().count(), // start with entire text selected
             text,
         }
     }
@@ -25,10 +27,11 @@ impl TextEditState {
         max_width: usize
     ) {
         if let Some(i) = mouse_i {
-            let i = i.min(self.text.chars().count());
+            let i = i.min(self.len());
             if is_mouse_button_pressed(MouseButton::Left) {
                 self.set_cursor(i);
             } else if is_mouse_button_down(MouseButton::Left) {
+                // drag-selection, never update anchor
                 self.cursor = i;
             }
         }
@@ -57,13 +60,13 @@ impl TextEditState {
                     KeyCode::Backspace => self.delete(-1),
                     KeyCode::Delete => self.delete(1),
                     KeyCode::Home => self.set_cursor(0),
-                    KeyCode::End => self.set_cursor(self.text.chars().count()),
+                    KeyCode::End => self.set_cursor(self.len()),
                     KeyCode::Left => if self.cursor > 0 {
                         self.set_cursor(self.cursor - 1);
                     } else {
                         self.set_cursor(0);
                     }
-                    KeyCode::Right => if self.cursor < self.text.chars().count() {
+                    KeyCode::Right => if self.cursor < self.len() {
                         self.set_cursor(self.cursor + 1);
                     } else {
                         self.set_cursor(self.cursor);
@@ -73,7 +76,12 @@ impl TextEditState {
             }
         }
 
-        self.anchor = self.anchor.min(self.text.chars().count());
+        self.anchor = self.anchor.min(self.len());
+    }
+
+    /// Returns the number of characters in the text buffer.
+    fn len(&self) -> usize {
+        self.text.chars().count()
     }
 
     /// Sets the mouse cursor to the given position, updating anchor as needed.
@@ -91,7 +99,7 @@ impl TextEditState {
             self.delete(0);
         }
         let s = {
-            let n = self.text.chars().count();
+            let n = self.len();
             if n + s.chars().count() > max_width {
                 &s.chars().take(max_width - n).collect::<String>()
             } else {
@@ -107,12 +115,10 @@ impl TextEditState {
     /// deleted when there is no selection.
     fn delete(&mut self, offset: isize) {
         if self.cursor == self.anchor {
-            self.cursor = ((self.cursor as isize + offset).max(0) as usize)
-                .min(self.text.chars().count());
+            self.cursor = self.cursor.saturating_add_signed(offset).min(self.len());
         }
 
-        let start = self.cursor.min(self.anchor);
-        let end = self.cursor.max(self.anchor);
+        let (start, end) = self.selection_bounds();
 
         self.text = self.text.chars()
             .enumerate()
@@ -130,8 +136,7 @@ impl TextEditState {
 
     /// Returns the selected text.
     fn selected_text(&self) -> &str {
-        let start = self.cursor.min(self.anchor);
-        let end = self.cursor.max(self.anchor);
+        let (start, end) = self.selection_bounds();
 
         if let Some((start, _)) = self.text.char_indices().nth(start) {
             if let Some((end, _)) = self.text.char_indices().nth(end) {
@@ -142,6 +147,11 @@ impl TextEditState {
         } else {
             ""
         }
+    }
+
+    /// Returns the start and end of the selection.
+    fn selection_bounds(&self) -> (usize, usize) {
+        (self.cursor.min(self.anchor), self.cursor.max(self.anchor))
     }
 }
 
