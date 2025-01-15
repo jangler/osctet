@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::ui::text;
 
-const REFERENCE_MIDI_PITCH: f32 = 69.0; // A4
+/// Fixed reference point regardless of tuning.
+const REFERENCE_MIDI_PITCH: f32 = 69.0;
+
+/// Default root note for unequal scales.
 const DEFAULT_ROOT: Note = Note {
     arrows: 0,
     nominal: Nominal::C,
@@ -36,7 +39,7 @@ impl Nominal {
         [Self::A, Self::B, Self::C, Self::D, Self::E, Self::F, Self::G];
 
     /// Returns the (period, generator) mapping of this nominal, relative to
-    /// the reference pitch.
+    /// the reference MIDI pitch.
     fn vector(&self) -> (i32, i32) {
         match self {
             Nominal::A => (0, 0),
@@ -92,6 +95,7 @@ impl Nominal {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Tuning {
     pub root: Note,
+    /// Cents values of scale notes. The last value is also the scale period.
     pub scale: Vec<f32>,
     pub arrow_steps: u8,
 }
@@ -126,7 +130,7 @@ impl Tuning {
         };
 
         let scale: Result<Vec<_>, _> = lines.take(note_count).map(|s| {
-            parse_interval(s).ok_or(format!("invalid interval: {}", s))
+            parse_interval(s).ok_or(format!("invalid interval: {s}"))
         }).collect();
 
         Ok(Tuning {
@@ -134,22 +138,6 @@ impl Tuning {
             scale: scale?,
             arrow_steps: 1,
         })
-    }
-
-    /// Returns the step mapping of the generator ("fifth").
-    fn generator_steps(&self) -> i32 {
-        (self.scale.len() as f32 * 0.585).round() as i32
-    }
-
-    /// Returns the step mapping of a sharp accidental.
-    fn sharp_steps(&self) -> i32 {
-        self.generator_steps() * 7 - self.scale.len() as i32 * 4
-    }
-
-    /// Returns the step mapping of a nominal, relative to the reference pitch.
-    fn nominal_steps(&self, nominal: Nominal) -> i32 {
-        let (octaves, fifths) = nominal.vector();
-        octaves * self.scale.len() as i32 + fifths * self.generator_steps()
     }
 
     /// Translates notation to a concrete pitch.
@@ -163,8 +151,15 @@ impl Tuning {
 
     /// Returns a raw step count for a note.
     fn raw_steps(&self, note: &Note) -> i32 {
-        self.nominal_steps(note.nominal)
-            + self.sharp_steps() * note.sharps as i32
+        let generator_steps = (self.scale.len() as f32 * 0.585).round() as i32;
+        let sharp_steps = generator_steps * 7 - self.scale.len() as i32 * 4;
+        let nominal_steps = {
+            let (octaves, fifths) = note.nominal.vector();
+            octaves * self.scale.len() as i32 + fifths * generator_steps
+        };
+
+        nominal_steps
+            + sharp_steps * note.sharps as i32
             + self.arrow_steps as i32 * note.arrows as i32
     }
 
@@ -192,13 +187,7 @@ impl Tuning {
 
     /// Returns the scale index and equave of a note in this tuning.
     pub fn scale_index(&self, note: &Note) -> (usize, i8) {
-        let root_steps = self.nominal_steps(self.root.nominal)
-            + self.sharp_steps() * self.root.sharps as i32
-            + self.arrow_steps as i32 * self.root.arrows as i32;
-        let steps = -root_steps
-            + self.nominal_steps(note.nominal)
-            + self.sharp_steps() * note.sharps as i32
-            + self.arrow_steps as i32 * note.arrows as i32;
+        let steps = self.raw_steps(note) - self.raw_steps(&self.root);
         let n = self.size() as i32;
 
         (
@@ -436,34 +425,6 @@ mod tests {
     }
 
     #[test]
-    fn test_tuning_steps() {
-        let t = Tuning::divide(2.0, 7, 1).unwrap();
-        assert_eq!(t.generator_steps(), 4);
-        assert_eq!(t.sharp_steps(), 0);
-        let t = Tuning::divide(2.0, 12, 1).unwrap();
-        assert_eq!(t.generator_steps(), 7);
-        assert_eq!(t.sharp_steps(), 1);
-        let t = Tuning::divide(2.0, 17, 1).unwrap();
-        assert_eq!(t.generator_steps(), 10);
-        assert_eq!(t.sharp_steps(), 2);
-        let t = Tuning::divide(3.0, 13, 1).unwrap();
-        assert_eq!(t.generator_steps(), 8);
-        assert_eq!(t.sharp_steps(), 4); // very sharp generator!
-    }
-
-    #[test]
-    fn test_tuning_nominal_steps() {
-        let t = Tuning::divide(2.0, 12, 1).unwrap();
-        assert_eq!(t.nominal_steps(Nominal::A), 0);
-        assert_eq!(t.nominal_steps(Nominal::B), 2);
-        assert_eq!(t.nominal_steps(Nominal::C), -9);
-        assert_eq!(t.nominal_steps(Nominal::D), -7);
-        assert_eq!(t.nominal_steps(Nominal::E), -5);
-        assert_eq!(t.nominal_steps(Nominal::F), -4);
-        assert_eq!(t.nominal_steps(Nominal::G), -2);
-    }
-
-    #[test]
     fn test_tuning_midi_pitch() {
         let mut t = Tuning::divide(2.0, 12, 1).unwrap();
         assert_eq!(t.midi_pitch(&A4), 69.0);
@@ -509,7 +470,7 @@ mod tests {
             Note::new(0, Nominal::C, -1, 5),
             Note::new(-1, Nominal::B, 0, 4),
         ]);
-        
+
         let t = Tuning::divide(2.0, 15, 0).unwrap();
         assert_eq!(t.notation(1, 4), Vec::new()); // no notation for desired note
     }
