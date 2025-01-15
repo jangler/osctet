@@ -33,6 +33,7 @@ struct PatternClip {
     start: Position,
     end: Position,
     events: Vec<ClipEvent>,
+    channels: usize,
 }
 
 /// Event in the pattern data clipboard.
@@ -633,6 +634,7 @@ impl PatternEditor {
             start,
             end,
             events,
+            channels: module.channels_between(start, end),
         });
     }
 
@@ -640,11 +642,10 @@ impl PatternEditor {
     fn paste(&self, module: &mut Module, mix: bool) {
         if let Some(clip) = &self.clipboard {
             let tick_offset = self.edit_start.tick - clip.start.tick;
-            let channel_offset = module.channels_between(clip.start, clip.end);
             let end = Position {
                 tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
                 column: clip.end.column,
-                ..self.edit_start.add_channels(channel_offset, &module.tracks)
+                ..self.edit_start.add_channels(clip.channels, &module.tracks)
                     .unwrap_or(Position {
                         track: module.tracks.len(),
                         channel: module.tracks.last().unwrap().channels.len() - 1,
