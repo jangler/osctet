@@ -13,45 +13,37 @@ pub fn adsr_scalable(
     release: f32,
     sqrt_attack: bool,
 ) -> An<EnvelopeIn<f32, impl FnMut(f32, &Frame<f32, U2>) -> f32 + Clone, U2, f32>> {
-    let neg1 = -1.0;
-    let zero = 0.0;
-    let a = shared(zero);
-    let b = shared(neg1);
-    let c = shared(zero);
-    let d = shared(zero);
-    let attack_start = var(&a);
-    let release_start = var(&b);
-    let prev_time = var(&c);
-    let scaled_time = var(&d);
+    let attack_start = var(&shared(0.0));
+    let release_start = var(&shared(-1.0));
+    let prev_time = var(&shared(0.0));
+    let scaled_time = var(&shared(0.0));
+
     envelope3(move |time, control, speed| {
         scaled_time.set_value(scaled_time.value() + speed * (time - prev_time.value()));
         prev_time.set_value(time);
         let time = scaled_time.value();
 
-        if release_start.value() >= zero && control > zero {
+        if release_start.value() >= 0.0 && control > 0.0 {
             attack_start.set_value(time);
-            release_start.set_value(neg1);
-        } else if release_start.value() < zero && control <= zero {
+            release_start.set_value(-1.0);
+        } else if release_start.value() < 0.0 && control <= 0.0 {
             release_start.set_value(time);
         }
+
         let ads_value =
             ads(attack, decay, sustain, time - attack_start.value(), sqrt_attack);
-        if release_start.value() < zero {
+        if release_start.value() < 0.0 {
             ads_value
         } else {
-            ads_value
-                * clamp01(delerp(
-                    release_start.value() + release,
-                    release_start.value(),
-                    time,
-                ))
+            ads_value * clamp01(delerp(release, 0.0, time - release_start.value()))
         }
     })
 }
 
-fn ads<F: Real>(attack: F, decay: F, sustain: F, time: F, sqrt_attack: bool) -> F {
+/// ADS envelope. Helper for ADSR.
+fn ads(attack: f32, decay: f32, sustain: f32, time: f32, sqrt_attack: bool) -> f32 {
     if time < attack {
-        let level = lerp(F::from_f64(0.0), F::from_f64(1.0), time / attack);
+        let level = lerp(0.0, 1.0, time / attack);
         if sqrt_attack {
             level.sqrt()
         } else {
@@ -60,7 +52,7 @@ fn ads<F: Real>(attack: F, decay: F, sustain: F, time: F, sqrt_attack: bool) -> 
     } else {
         let decay_time = time - attack;
         if decay_time < decay {
-            lerp(F::from_f64(1.0), sustain, decay_time / decay)
+            lerp(1.0, sustain, decay_time / decay)
         } else {
             sustain
         }
@@ -96,6 +88,7 @@ where
         let mut follower = AFollow::new(attack * 0.4, release * 0.4);
         follower.set_sample_rate(sample_rate);
         follower.set_value(0.0);
+
         Self {
             _marker: PhantomData,
             sample_rate,
@@ -185,15 +178,6 @@ impl AudioNode for PowShaper {
     #[inline]
     fn tick(&mut self, input: &Frame<f32, Self::Inputs>) -> Frame<f32, Self::Outputs> {
         Frame::from([self.shape(input[0])])
-    }
-
-    fn process(&mut self, size: usize, input: &BufferRef, output: &mut BufferMut) {
-        for i in 0..full_simd_items(size) {
-            output.set(0, i, F32x::new(core::array::from_fn(|i| {
-                self.shape(input.at(0, i).as_array_ref()[i])
-            })))
-        }
-        self.process_remainder(size, input, output);
     }
 
     fn route(&mut self, input: &SignalFrame, _frequency: f64) -> SignalFrame {
