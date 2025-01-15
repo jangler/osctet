@@ -155,7 +155,6 @@ fn hotkey_controls(ui: &mut Ui, cfg: &mut Config) -> usize {
     ui.start_group();
 
     let mut id = 0;
-    let mut changed = false;
     let mut keymap: Vec<&mut _> = cfg.iter_keymap().collect();
 
     // column heuristric
@@ -166,18 +165,12 @@ fn hotkey_controls(ui: &mut Ui, cfg: &mut Config) -> usize {
         ui.start_group();
         for (hotkey, action) in chunk.iter_mut() {
             ui.start_group();
-            if ui.hotkey_input(id, hotkey, Info::Action(*action)) {
-                changed = true;
-            }
+            ui.hotkey_input(id, hotkey, Info::Action(*action));
             id += 1;
             ui.offset_label(action.name(), Info::Action(*action));
             ui.end_group();
         }
         ui.end_group();
-    }
-
-    if changed {
-        cfg.update_hotkeys();
     }
 
     ui.end_group();

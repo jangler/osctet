@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, env, error::Error, path::{Path, PathBuf}};
+use std::{collections::HashSet, env, error::Error, path::{Path, PathBuf}};
 
 use macroquad::input::KeyCode;
 use serde::{Deserialize, Serialize};
@@ -31,11 +31,10 @@ pub struct Config {
     pub sample_folder: Option<String>,
     pub theme_folder: Option<String>,
     #[serde(default = "default_keys")]
-    keys: Vec<(Hotkey, Action)>, // for serialization
-    #[serde(skip)]
-    key_map: HashMap<Hotkey, Action>, // for use
+    keys: Vec<(Hotkey, Action)>,
     #[serde(default = "input::default_note_keys")]
     pub note_keys: Vec<(Hotkey, Note)>,
+    /// Index of built-in font data to use.
     #[serde(default = "default_font_size")]
     pub font_size: usize,
     pub smooth_playhead: bool,
@@ -54,7 +53,6 @@ impl Config {
                 c.keys.push((k, a));
             }
         }
-        c.key_map = c.keys.iter().cloned().collect();
         Ok(c)
     }
 
@@ -87,22 +85,14 @@ impl Config {
 
     /// Returns the action associated with the given hotkey.
     pub fn hotkey_action(&self, hotkey: &Hotkey) -> Option<&Action> {
-        self.key_map.get(hotkey)
+        self.keys.iter()
+            .find(|(k, _)| k == hotkey)
+            .map(|(_, a)| a)
     }
 
     /// Returns true if the action's associated hotkey is down.
     pub fn action_is_down(&self, action: Action) -> bool {
-        for (k, a) in &self.keys {
-            if *a == action && k.is_down() {
-                return true
-            }
-        }
-        false
-    }
-
-    /// Call to reinitialize data after hotkeys are edited.
-    pub fn update_hotkeys(&mut self) {
-        self.key_map = self.keys.iter().cloned().collect();
+        self.keys.iter().any(|(k, a)| *a == action && k.is_down())
     }
 
     /// Return a string in the format "(hotkey) - (action)".
@@ -128,7 +118,6 @@ impl Default for Config {
             scale_folder: None,
             sample_folder: None,
             theme_folder: None,
-            key_map: keys.iter().cloned().collect(),
             keys,
             note_keys: input::default_note_keys(),
             font_size: default_font_size(),
