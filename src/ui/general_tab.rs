@@ -129,10 +129,12 @@ fn fx_controls(ui: &mut Ui, settings: &mut FXSettings, fx: &mut GlobalFX) {
 fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
     player: &mut Player, table_cache: &mut Option<TableCache>
 ) {
+    const OCTAVE_CHARS: usize = 7;
+
     ui.space(2.0);
     ui.header("TUNING", Info::Tuning);
-    if let Some(s) = ui.edit_box("Octave ratio", 8, tuning.equave().to_string(),
-        Info::OctaveRatio
+    if let Some(s) = ui.edit_box("Octave ratio", OCTAVE_CHARS,
+        tuning.equave().to_string().chars().take(OCTAVE_CHARS).collect(), Info::OctaveRatio
     ) {
         match s.parse() {
             Ok(ratio) => match Tuning::divide(ratio, tuning.size(), tuning.arrow_steps) {
