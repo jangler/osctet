@@ -1,6 +1,6 @@
 //! Code for drawing text using bitmap fonts.
 
-use std::{collections::HashMap, error::Error, fs::File, io::BufReader, path::Path};
+use std::{collections::HashMap, io::BufReader};
 
 use bdf_reader::{Bitmap, Font};
 use macroquad::{color::Color, math::Rect, texture::{build_textures_atlas, draw_texture, Texture2D}};
@@ -69,14 +69,6 @@ impl GlyphAtlas {
         Ok(Self::from_bdf(font))
     }
 
-    /// Creates a new atlas from a BDF font file.
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let font = Font::read(reader)?;
-        Ok(Self::from_bdf(font))
-    }
-
     /// Creates a new atlas from a BDF font.
     fn from_bdf(font: Font) -> Self {
         let mut map = HashMap::new();
@@ -108,8 +100,10 @@ impl GlyphAtlas {
 
     /// Draws `text` horizontally without wrapping. Returns the drawn area.
     pub fn draw_text(&self, x: f32, y: f32, text: &str, color: Color) -> Rect {
+        // round coordinates; bitmap fonts should be pixel-aligned
         let initial_x = x.round();
         let y = y.round() + self.offset_y;
+
         let mut x = initial_x;
 
         for char in text.chars() {
