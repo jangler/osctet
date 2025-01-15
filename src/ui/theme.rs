@@ -10,6 +10,8 @@ const DEFAULT_ACCENT1_HUE: f32 = 180.0;
 const DEFAULT_ACCENT2_HUE: f32 = -90.0;
 const DEFAULT_ACCENT_CHROMA: f32 = 45.0;
 
+// lightness offsets for various scenarios
+
 const PANEL_L_OFFSET: f32 = 2.0;
 const CONTROL_L_OFFSET: f32 = PANEL_L_OFFSET * 2.0;
 const HOVER_L_OFFSET: f32 = 4.0;
@@ -19,8 +21,9 @@ const ACCENT_L_OFFSET: f32 = 15.0;
 const ACCENT_BG_CHROMA_MULTIPLIER: f32 = 1.0/3.0;
 
 /// Color theme using four seed colors. Seed colors use the CIE L*C*uv h°uv
-/// color space, which is cylindrical and perceptually uniform. (Although in
-/// practice, we gamma correct.)
+/// color space, which is a cylindrical version of the "perceptually uniform"
+/// CIE L*u*v* color space. Lightness values for `accent1` and `accent2` are
+/// unused, as those colors may be used as either foreground or background.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Theme {
     pub fg: Lchuv,
@@ -65,6 +68,7 @@ impl Theme {
         Ok(std::fs::write(path, s)?)
     }
 
+    /// Check whether this is a light-background theme.
     fn is_light(&self) -> bool {
         self.bg.l >= 50.0
     }
@@ -101,6 +105,7 @@ impl Theme {
         self.color_from_lchuv(c)
     }
 
+    /// Returns background color plus a lightness offset (magnitude only).
     fn bg_plus(&self, offset: f32) -> Color {
         let sign = if self.is_light() { -1.0 } else { 1.0 };
         let bg = Lchuv::new(self.bg.l + sign * offset, self.bg.chroma, self.bg.hue);
@@ -134,7 +139,7 @@ impl Theme {
     pub fn control_bg(&self) -> Color {
         self.bg_plus(CONTROL_L_OFFSET)
     }
-    
+
     pub fn control_bg_hover(&self) -> Color {
         self.bg_plus(CONTROL_L_OFFSET + HOVER_L_OFFSET)
     }
@@ -144,6 +149,7 @@ impl Theme {
     }
 
     pub fn border_unfocused(&self) -> Color {
+        // take average of foreground and background
         let c = Lchuv::new(
             (self.bg.l + self.fg.l) * 0.5,
             (self.bg.chroma + self.fg.chroma) * 0.5,
@@ -159,6 +165,7 @@ impl Theme {
         self.control_bg_click()
     }
 
+    /// Convert LCH to RGB.
     fn color_from_lchuv(&self, lchuv: Lchuv) -> Color {
         let lchuv = Lchuv {
             l: (lchuv.l * 0.01).powf(1.0/self.gamma) * 100.0,
@@ -168,10 +175,8 @@ impl Theme {
         Color::new(rgb.red, rgb.green, rgb.blue, 1.0)
     }
 
-    pub fn gamma_table(&self) -> impl Iterator<Item = Color> + use<'_> {
-        (0..=10).map(|i| self.color_from_lchuv(Lchuv::new(i as f32 * 10.0, 0.0, 0.0)))
-    }
-
+    /// Return a table representing the colors of the theme. Does not contain
+    /// all shades of all colors.
     pub fn color_table(&self) -> Vec<Color> {
         vec![
             self.fg(),
