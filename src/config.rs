@@ -178,7 +178,6 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::Space), Action::UseLastNote),
         (Hotkey::new(Modifiers::None, KeyCode::Key1), Action::NoteOff),
         (Hotkey::new(Modifiers::None, KeyCode::T), Action::TapTempo),
-        (Hotkey::new(Modifiers::None, KeyCode::R), Action::RationalTempo),
         (Hotkey::new(Modifiers::None, KeyCode::L), Action::Loop),
         (Hotkey::new(Modifiers::None, KeyCode::E), Action::End),
         (Hotkey::new(Modifiers::None, KeyCode::GraveAccent), Action::Interpolate),
