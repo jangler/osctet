@@ -121,7 +121,8 @@ impl Tuning {
         let s = fs::read_to_string(path)?;
         let mut lines = s.lines()
             .filter(|s| !s.starts_with("!")) // ignore comments
-            .skip(1); // skip description
+            .skip(1) // skip description
+            .map(|s| s.trim());
 
         let note_count: usize = if let Some(s) = lines.next() {
             s.parse()?
@@ -270,19 +271,19 @@ impl Tuning {
 
 /// Parses a Scala file interval into cents.
 fn parse_interval(s: &str) -> Option<f32> {
-    let s = s.trim();
-
-    if let Ok(n) = s.parse::<u32>() {
-        Some(cents(n as f32))
-    } else if let Ok(n) = s.parse::<f32>() {
-        Some(n)
-    } else if let Some((n, d)) = s.split_once("/") {
-        let n = n.parse::<u32>().ok()?;
-        let d = d.parse::<u32>().ok()?;
-        Some(cents(n as f32 / d as f32))
-    } else {
-        None
-    }
+    s.trim().split_ascii_whitespace().next().and_then(|s| {
+        if let Ok(n) = s.parse::<u32>() {
+            Some(cents(n as f32))
+        } else if let Ok(n) = s.parse::<f32>() {
+            Some(n)
+        } else if let Some((n, d)) = s.split_once("/") {
+            let n = n.parse::<u32>().ok()?;
+            let d = d.parse::<u32>().ok()?;
+            Some(cents(n as f32 / d as f32))
+        } else {
+            None
+        }
+    })
 }
 
 /// Abstract notational representation of pitch.
@@ -442,6 +443,9 @@ mod tests {
         assert_eq!(parse_interval("2"), Some(1200.0));
         assert_eq!(parse_interval("4/1"), Some(2400.0));
         assert_eq!(parse_interval("386.6"), Some(386.6));
+        assert_eq!(parse_interval("386."), Some(386.0));
+        assert_eq!(parse_interval("100.0 cents"), Some(100.0));
+        assert_eq!(parse_interval(" 2/1 C"), Some(1200.0));
         assert_eq!(parse_interval("4/"), None);
     }
 
