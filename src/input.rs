@@ -103,29 +103,28 @@ pub fn default_note_keys() -> Vec<(Hotkey, Note)> {
 
 /// Translates a MIDI key number into a note.
 pub fn note_from_midi(n: u8, t: &Tuning, cfg: &Config) -> Note {
-    let f = |nominal, accidentals| {
-        adjust_note_for_modifier_keys(Note {
-            arrows: if use_sharps(t) { 0 } else { accidentals },
-            nominal,
-            sharps: if use_sharps(t) { accidentals } else { 0 },
-            equave: (n as i8) / 12 - 1,
-        }, cfg, t)
+    let (nominal, accidentals) = match n % 12 {
+        0 => (Nominal::C, 0),
+        1 => (Nominal::C, 1),
+        2 => (Nominal::D, 0),
+        3 => (Nominal::D, 1),
+        4 => (Nominal::E, 0),
+        5 => (Nominal::F, 0),
+        6 => (Nominal::F, 1),
+        7 => (Nominal::G, 0),
+        8 => (Nominal::G, 1),
+        9 => (Nominal::A, 0),
+        10 => (Nominal::A, 1),
+        11 => (Nominal::B, 0),
+        _ => unreachable!(),
     };
-    match n % 12 {
-        0 => f(Nominal::C, 0),
-        1 => f(Nominal::C, 1),
-        2 => f(Nominal::D, 0),
-        3 => f(Nominal::D, 1),
-        4 => f(Nominal::E, 0),
-        5 => f(Nominal::F, 0),
-        6 => f(Nominal::F, 1),
-        7 => f(Nominal::G, 0),
-        8 => f(Nominal::G, 1),
-        9 => f(Nominal::A, 0),
-        10 => f(Nominal::A, 1),
-        11 => f(Nominal::B, 0),
-        _ => panic!("unreachable"),
-    }
+
+    adjust_note_for_modifier_keys(Note {
+        arrows: if use_sharps(t) { 0 } else { accidentals },
+        nominal,
+        sharps: if use_sharps(t) { accidentals } else { 0 },
+        equave: (n as i8) / 12 - 1,
+    }, cfg, t)
 }
 
 /// Adjust a note based on transposition/alternation actions that are currently
@@ -223,6 +222,7 @@ pub enum MidiEvent {
     },
     Pitch {
         channel: u8,
+        /// Pitch bend in the range -1..1.
         bend: f32,
     },
 }
@@ -241,10 +241,13 @@ impl MidiEvent {
         match data[0] & 0xf0 {
             0x80 => Some(Self::NoteOff { channel, key: data[1] }),
             0x90 => Some(Self::NoteOn { channel, key: data[1], velocity: *data.get(2)? }),
-            0xa0 => Some(Self::PolyPressure { channel, key: data[1], pressure: *data.get(2)? }),
-            0xb0 => Some(Self::Controller { channel, controller: data[1], value: *data.get(2)? }),
+            0xa0 => Some(Self::PolyPressure {
+                channel, key: data[1], pressure: *data.get(2)? }),
+            0xb0 => Some(Self::Controller {
+                channel, controller: data[1], value: *data.get(2)? }),
             0xd0 => Some(Self::ChannelPressure { channel, pressure: data[1] }),
             0xe0 => Some(Self::Pitch { channel, bend: {
+                // weird 14-bit integer format
                 let raw_pitch = ((*data.get(2)? as i16) << 7) + data[1] as i16;
                 (raw_pitch - Self::PITCH_CENTER) as f32 / Self::PITCH_CENTER as f32
             }}),
