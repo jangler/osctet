@@ -42,6 +42,22 @@ const MODULE_FILETYPE_NAME: &str = "Osctet module";
 const MODULE_EXT: &str = "osctet";
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Returns a path in the same directory as the executable. If no executable
+/// path is available, returns the plain filename as a path.
+pub fn exe_relative_path(filename: &str) -> PathBuf {
+    match env::current_exe() {
+        Ok(mut path) => {
+            path.pop();
+            path.push(filename);
+            path
+        }
+        Err(e) => {
+            eprintln!("Error finding executable path: {e}");
+            filename.into()
+        }
+    }
+}
+
 /// Handles MIDI connection and state.
 pub struct Midi {
     // Keep one input around for listing ports. If we need to connect, we'll

@@ -1,22 +1,18 @@
-use std::{collections::HashSet, env, error::Error, path::{Path, PathBuf}};
+use std::{collections::HashSet, error::Error, path::{Path, PathBuf}};
 
 use macroquad::input::KeyCode;
 use serde::{Deserialize, Serialize};
 
-use crate::{input::{self, Action, Hotkey, Modifiers}, pitch::Note, ui::theme::Theme};
+use crate::{exe_relative_path, input::{self, Action, Hotkey, Modifiers}, pitch::Note, ui::theme::Theme};
 
 const CONFIG_FILENAME: &str = "config.toml";
 
+fn config_path() -> PathBuf {
+    exe_relative_path(CONFIG_FILENAME)
+}
+
 // this is a function instead of a constant to make serde happy
 fn default_font_size() -> usize { 1 }
-
-/// Determines the config file path based on the executable directory.
-fn config_path() -> Result<PathBuf, std::io::Error> {
-    let mut path = env::current_exe()?;
-    path.pop();
-    path.push(CONFIG_FILENAME);
-    Ok(path)
-}
 
 /// Stores local configuration.
 #[derive(Serialize, Deserialize)]
@@ -45,7 +41,7 @@ pub struct Config {
 impl Config {
     /// Load config from disk and initialize.
     pub fn load() -> Result<Self, Box<dyn Error>> {
-        let s = std::fs::read_to_string(config_path()?)?;
+        let s = std::fs::read_to_string(config_path())?;
         let mut c: Self = toml::from_str(&s)?;
         let actions: HashSet<Action> = c.keys.iter().map(|x| x.1).collect();
         for (k, a) in default_keys() {
@@ -74,7 +70,7 @@ impl Config {
     pub fn save(&mut self, theme: Theme) -> Result<(), Box<dyn Error>> {
         self.theme = Some(theme);
         let s = toml::to_string_pretty(self)?;
-        std::fs::write(config_path()?, s)?;
+        std::fs::write(config_path(), s)?;
         Ok(())
     }
 
