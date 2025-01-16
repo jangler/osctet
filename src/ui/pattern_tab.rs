@@ -1040,7 +1040,9 @@ fn parse_ctrl_text(s: &str) -> Option<EventData> {
     } else if let Some((n, d)) = s.split_once(['/', ':']) {
         let n = n.parse::<u8>().ok()?;
         let d = d.parse::<u8>().ok()?;
-        return Some(EventData::RationalTempo(n, d))
+        if n > 0 && d > 0 {
+            return Some(EventData::RationalTempo(n, d))
+        }
     }
 
     None
@@ -1540,6 +1542,7 @@ mod tests {
         assert_eq!(parse_ctrl_text(""), None);
         assert_eq!(parse_ctrl_text("-100"), None);
         assert_eq!(parse_ctrl_text("1237:1273"), None);
+        assert_eq!(parse_ctrl_text("1:0"), None);
         assert_eq!(parse_ctrl_text("100"), Some(EventData::Tempo(100.0)));
         assert_eq!(parse_ctrl_text("60.5"), Some(EventData::Tempo(60.5)));
         assert_eq!(parse_ctrl_text("1/2"), Some(EventData::RationalTempo(1, 2)));
