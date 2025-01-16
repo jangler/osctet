@@ -17,12 +17,12 @@ use playback::{Player, RenderUpdate};
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
 
-pub mod pitch;
+mod pitch;
 mod input;
 mod config;
-pub mod synth;
-pub mod fx;
-pub mod ui;
+mod synth;
+mod fx;
+mod ui;
 pub mod module;
 pub mod playback;
 mod dsp;

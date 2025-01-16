@@ -953,10 +953,6 @@ impl Ui {
         self.instrument_edit_index = None;
     }
 
-    pub fn set_tab(&mut self, id: &str, index: usize) {
-        self.tabs.insert(id.to_owned(), index);
-    }
-
     pub fn next_tab(&mut self, id: &str, n: usize) {
         if let Some(i) = self.tabs.get_mut(id) {
             *i = (*i + 1) % n;
@@ -967,21 +963,6 @@ impl Ui {
         if let Some(i) = self.tabs.get_mut(id) {
             *i = (*i as isize - 1).rem_euclid(n as isize) as usize;
         }
-    }
-
-    pub fn column(&mut self, n: u8, d: u8) {
-        let w = self.bounds.w * n as f32 / d as f32;
-        self.cursor_x += w;
-        self.cursor_y = self.bounds.y;
-        let rect = Rect {
-            x: self.cursor_x,
-            w,
-            ..self.bounds
-        };
-        self.push_rect(rect, self.style.theme.panel_bg(), None);
-        let line_x = rect.x - LINE_THICKNESS * 0.5;
-        self.push_line(line_x, rect.y, line_x, rect.y + rect.h,
-            self.style.theme.border_unfocused());
     }
 
     /// Draws a slider and returns true if the value was changed.

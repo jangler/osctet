@@ -21,31 +21,28 @@ pub struct GlobalFX {
 }
 
 impl GlobalFX {
+    const FADE_TIME: f32 = 0.1;
+
     pub fn new(backend: SequencerBackend, settings: &FXSettings) -> Self {
         let (spatial, spatial_id) = Net::wrap_id(settings.spatial.make_node());
         let (comp, comp_id) = Net::wrap_id(settings.comp.make_node());
 
         Self {
             net: Net::wrap(Box::new(backend))
+                >> (dcblock() | dcblock())
                 >> (multipass::<U2>()
                     + (multipass::<U2>() >> spatial))
-                >> (dcblock() | dcblock())
                 >> comp,
             spatial_id,
             comp_id,
         }
     }
 
-    /// Constructs a new instance with a dummy sequencer backend.
-    pub fn new_dummy(settings: &FXSettings) -> Self {
-        Self::new(Sequencer::new(false, 4).backend(), settings)
-    }
-
     /// Reinitialize all FX.
     pub fn reinit(&mut self, settings: &FXSettings) {
-        self.net.crossfade(self.spatial_id, Fade::Smooth, 0.1,
+        self.net.crossfade(self.spatial_id, Fade::Smooth, Self::FADE_TIME,
             settings.spatial.make_node());
-        self.net.crossfade(self.comp_id, Fade::Smooth, 0.1,
+        self.net.crossfade(self.comp_id, Fade::Smooth, Self::FADE_TIME,
             settings.comp.make_node());
         self.net.commit();
     }
@@ -61,7 +58,7 @@ impl GlobalFX {
     }
 
     fn crossfade(&mut self, id: NodeId, unit: Box<dyn AudioUnit>) {
-        self.net.crossfade(id, Fade::Smooth, 0.1, unit);
+        self.net.crossfade(id, Fade::Smooth, Self::FADE_TIME, unit);
         self.net.commit();
     }
 }
@@ -79,8 +76,8 @@ pub struct Compression {
 impl Compression {
     fn make_node(&self) -> Box<dyn AudioUnit> {
         if self.threshold < 1.0 && self.slope > 0.0 {
-            Box::new((mul(self.gain) | mul(self.gain))
-                >> compressor(self.threshold, self.slope, self.attack, self.release))
+            let comp = compressor(self.threshold, self.slope, self.attack, self.release);
+            Box::new((mul(self.gain) | mul(self.gain)) >> comp)
         } else {
             Box::new(pass() | pass())
         }
@@ -126,13 +123,13 @@ impl SpatialFx {
         match self {
             Self::None => Box::new(mul(0.0) | mul(0.0)),
             Self::Reverb { level, room_size, decay_time } => {
-                Box::new((pass() | pass())
-                    >> *level * reverb2_stereo(*room_size, *decay_time, 0.5, 0.5,
-                        lowpole_hz(5000.0) >> highpole_hz(80.0)))
+                let filter = lowpole_hz(5000.0) >> highpole_hz(80.0);
+                let reverb = reverb2_stereo(*room_size, *decay_time, 0.5, 0.5, filter);
+                Box::new((pass() | pass()) >> *level * reverb)
             }
             Self::Delay { level, time, feedback } => {
-                Box::new(*level * hacker32::feedback(
-                    (delay(*time) | delay(*time)) * *feedback))
+                let echo = (delay(*time) | delay(*time)) * *feedback;
+                Box::new(*level * hacker32::feedback(echo))
             }
         }
     }
