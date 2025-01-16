@@ -29,9 +29,9 @@ impl GlobalFX {
 
         Self {
             net: Net::wrap(Box::new(backend))
-                >> (dcblock() | dcblock())
                 >> (multipass::<U2>()
                     + (multipass::<U2>() >> spatial))
+                >> (dcblock() | dcblock())
                 >> comp,
             spatial_id,
             comp_id,
