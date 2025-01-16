@@ -1201,7 +1201,7 @@ impl Ui {
             let f = Focus::Text(TextEditState::new(id.to_owned(), text.to_owned()));
             self.set_focus(f);
             self.mouse_consumed = Some(id.to_string());
-        } else if is_key_pressed(KeyCode::Escape) {
+        } else if focused && is_key_pressed(KeyCode::Escape) {
             self.focus = Focus::None;
         }
 
@@ -1217,7 +1217,7 @@ impl Ui {
 
         // draw text
         let submit = if focused {
-            self.editable_text(box_rect, max_width)
+            self.editable_text(box_rect, max_width, max_width)
         } else {
             self.push_text(box_rect.x, box_rect.y, text.to_string(),
                 self.style.theme.fg());
@@ -1313,7 +1313,7 @@ impl Ui {
                     w: hit_rect.w - char_width,
                     ..hit_rect
                 };
-                if self.editable_text(rect, MAX_PATCH_NAME_CHARS) {
+                if self.editable_text(rect, MAX_PATCH_NAME_CHARS, MAX_PATCH_NAME_CHARS) {
                     if let Focus::Text(state) = &mut self.focus {
                         return_val = Some(state.text.clone());
                         self.focus = Focus::None;
@@ -1339,8 +1339,44 @@ impl Ui {
         return_val
     }
 
+    /// Focus a new text field.
+    fn focus_text(&mut self, id: String, text: String) {
+        self.set_focus(Focus::Text(TextEditState::new(id, text)));
+    }
+
+    /// Transient text edit for use in pattern grid.
+    fn pattern_edit_box(&mut self, id: &str, rect: Rect, max_width: usize, margin: f32,
+        force_submit: bool,
+    ) -> Option<String> {
+        if is_key_pressed(KeyCode::Escape) {
+            self.focus = Focus::None;
+            return Some("".into())
+        } else if self.focus.id() != Some(id) {
+            return Some("".into())
+        }
+
+        self.push_rect(rect, self.style.theme.control_bg(), None);
+
+        let rect = Rect {
+            x: rect.x - self.style.margin,
+            y: rect.y + margin - self.style.margin,
+            ..rect
+        };
+
+        if self.editable_text(rect, max_width * 2, max_width) || force_submit {
+            if let Focus::Text(te) = &self.focus {
+                let s = te.text.clone();
+                self.focus = Focus::None;
+                return Some(s)
+            }
+        }
+
+        None
+    }
+
     /// Primitive that draws the currently focused text and handles edit input.
-    fn editable_text(&mut self, rect: Rect, max_width: usize) -> bool {
+    fn editable_text(&mut self, rect: Rect, max_width: usize, display_width: usize
+    ) -> bool {
         const ID: &str = "editable_text";
 
         let hit = self.mouse_hits(rect, ID);
@@ -1357,11 +1393,13 @@ impl Ui {
             state.handle_input(mouse_i, &mut self.text_clipboard, max_width);
 
             let text_h = self.style.atlas.cap_height();
-            let f = |i| rect.x + char_w * i as f32 + margin + LINE_THICKNESS * 0.5;
+            let f = |i: usize| rect.x + char_w * i.min(display_width) as f32
+                + margin + LINE_THICKNESS * 0.5;
             let cursor_x = f(state.cursor);
             let y1 = rect.y + margin - 1.0;
             let y2 = rect.y + margin + text_h + 1.0;
             let text = state.text.clone();
+            let len = state.len();
 
             if state.cursor != state.anchor {
                 let anchor_x = f(state.anchor);
@@ -1381,6 +1419,11 @@ impl Ui {
             }
 
             self.push_line(cursor_x, y1, cursor_x, y2, self.style.theme.fg());
+            let text = if len <= display_width {
+                text
+            } else {
+                text.chars().skip(len - display_width).collect()
+            };
             self.push_text(rect.x, rect.y, text, self.style.theme.fg());
         }
 

@@ -80,7 +80,7 @@ impl TextEditState {
     }
 
     /// Returns the number of characters in the text buffer.
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.text.chars().count()
     }
 

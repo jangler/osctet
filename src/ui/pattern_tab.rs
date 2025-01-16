@@ -7,6 +7,24 @@ use super::*;
 /// Narrower margin used in the pattern grid.
 const PATTERN_MARGIN: f32 = 2.0;
 
+const CTRL_COLUMN_TEXT_ID: &str = "ctrl_column";
+
+/// These actions are valid ways to exit pattern text entry.
+/// Defining what's on this list is a little hairy since there are pattern
+/// navigation actions that are bound to useful text editing keys by default,
+/// but they don't *have* to be. And any of these actions could be rebound to
+/// conflict with text edit keys.
+const TEXT_EXIT_ACTIONS: [Action; 8] = [
+    Action::PrevRow,
+    Action::NextRow,
+    Action::PrevChannel,
+    Action::NextChannel,
+    Action::PrevBeat,
+    Action::NextBeat,
+    Action::PrevEvent,
+    Action::NextEvent,
+];
+
 /// Tracks state specific to the pattern editor.
 pub struct PatternEditor {
     edit_start: Position,
@@ -21,6 +39,7 @@ pub struct PatternEditor {
     record: bool,
     screen_tick: Timespan,
     screen_tick_max: Timespan,
+    text_position: Option<Position>,
 }
 
 /// Pattern data clipboard.
@@ -59,6 +78,7 @@ impl Default for PatternEditor {
             record: false,
             screen_tick: Timespan::ZERO,
             screen_tick_max: Timespan::ZERO,
+            text_position: None,
         }
     }
 }
@@ -562,25 +582,37 @@ impl PatternEditor {
     }
 
     /// Handle raw keys for digit input.
-    fn handle_key(&mut self, key: KeyCode, module: &mut Module) {
+    fn handle_key(&mut self, key: KeyCode, module: &mut Module, ui: &mut Ui) {
         if !(is_ctrl_down() || is_alt_down()) {
-            match key {
-                KeyCode::Key0 => input_digit(module, &self.edit_start, 0),
-                KeyCode::Key1 => input_digit(module, &self.edit_start, 1),
-                KeyCode::Key2 => input_digit(module, &self.edit_start, 2),
-                KeyCode::Key3 => input_digit(module, &self.edit_start, 3),
-                KeyCode::Key4 => input_digit(module, &self.edit_start, 4),
-                KeyCode::Key5 => input_digit(module, &self.edit_start, 5),
-                KeyCode::Key6 => input_digit(module, &self.edit_start, 6),
-                KeyCode::Key7 => input_digit(module, &self.edit_start, 7),
-                KeyCode::Key8 => input_digit(module, &self.edit_start, 8),
-                KeyCode::Key9 => input_digit(module, &self.edit_start, 9),
-                KeyCode::A => input_digit(module, &self.edit_start, 0xa),
-                KeyCode::B => input_digit(module, &self.edit_start, 0xb),
-                KeyCode::C => input_digit(module, &self.edit_start, 0xc),
-                KeyCode::D => input_digit(module, &self.edit_start, 0xd),
-                KeyCode::E => input_digit(module, &self.edit_start, 0xe),
-                KeyCode::F => input_digit(module, &self.edit_start, 0xf),
+            let value = match key {
+                KeyCode::Key0 => 0,
+                KeyCode::Key1 => 1,
+                KeyCode::Key2 => 2,
+                KeyCode::Key3 => 3,
+                KeyCode::Key4 => 4,
+                KeyCode::Key5 => 5,
+                KeyCode::Key6 => 6,
+                KeyCode::Key7 => 7,
+                KeyCode::Key8 => 8,
+                KeyCode::Key9 => 9,
+                KeyCode::A => 0xa,
+                KeyCode::B => 0xb,
+                KeyCode::C => 0xc,
+                KeyCode::D => 0xd,
+                KeyCode::E => 0xe,
+                KeyCode::F => 0xf,
+                _ => return,
+            };
+
+            match self.edit_start.column {
+                VEL_COLUMN => insert_event_at_cursor(module, &self.edit_start,
+                    EventData::Pressure(value), is_shift_down()),
+                MOD_COLUMN => insert_event_at_cursor(module, &self.edit_start,
+                    EventData::Modulation(value), is_shift_down()),
+                GLOBAL_COLUMN => if self.edit_start.track == 0 && value < 10 {
+                    self.text_position = Some(self.edit_start);
+                    ui.focus_text(CTRL_COLUMN_TEXT_ID.into(), value.to_string());
+                },
                 _ => (),
             }
         }
@@ -982,6 +1014,36 @@ impl PatternEditor {
             });
         }
     }
+
+    /// Handle entered control text.
+    fn enter_ctrl_text(&mut self, s: String, module: &mut Module, ui: &mut Ui) {
+        if let Some(pos) = self.text_position.take() {
+            if !s.is_empty() {
+                match parse_ctrl_text(&s) {
+                    Some(data) => {
+                        let event = Event { tick: pos.tick, data };
+                        module.insert_event(pos.track, pos.channel, event);
+                    },
+                    None => ui.report("Could not parse control text"),
+                }
+            }
+        }
+    }
+}
+
+/// Parse control column text into an event.
+fn parse_ctrl_text(s: &str) -> Option<EventData> {
+    if let Ok(f) = s.parse::<f32>() {
+        if f > 0.0 {
+            return Some(EventData::Tempo(f))
+        }
+    } else if let Some((n, d)) = s.split_once(['/', ':']) {
+        let n = n.parse::<u8>().ok()?;
+        let d = d.parse::<u8>().ok()?;
+        return Some(EventData::RationalTempo(n, d))
+    }
+
+    None
 }
 
 pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut PatternEditor,
@@ -999,7 +1061,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
     // raw key input
     if !ui.accepting_keyboard_input() {
         for key in get_keys_pressed() {
-            pe.handle_key(key, module);
+            pe.handle_key(key, module, ui);
         }
     }
 
@@ -1117,6 +1179,28 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
             pe.draw_channel(ui, channel, player.track_muted(track_i), channel_i);
         }
     }
+
+    // handle text entry
+    if let Some(pos) = pe.text_position {
+        let max_width = 4;
+        let coords = position_coords(pos, &ui.style, &track_xs, false, beat_height);
+        let rect = Rect {
+            x: coords.x + ui.style.margin,
+            y: coords.y + ui.cursor_y,
+            w: ui.style.atlas.char_width() * max_width as f32,
+            h: line_height(&ui.style.atlas),
+        };
+        let action = TEXT_EXIT_ACTIONS.iter().find(|a| conf.action_is_down(**a));
+        if let Some(s) = ui.pattern_edit_box(
+            CTRL_COLUMN_TEXT_ID, rect, max_width, PATTERN_MARGIN, action.is_some()
+        ) {
+            pe.enter_ctrl_text(s, module, ui);
+        }
+        if let Some(action) = action {
+            pe.action(*action, module, conf, player);
+        }
+    }
+
     ui.cursor_x += channel_width(1, &ui.style);
     pe.draw_channel_line(ui, true);
 }
@@ -1219,33 +1303,6 @@ fn draw_track_headers(ui: &mut Ui, module: &mut Module, player: &mut Player,
     }
 
     xs
-}
-
-/// Handle numeric pattern input.
-fn input_digit(module: &mut Module, cursor: &Position, value: u8) {
-    match cursor.column {
-        VEL_COLUMN => insert_event_at_cursor(
-            module, cursor, EventData::Pressure(value), is_shift_down()),
-        MOD_COLUMN => insert_event_at_cursor(
-            module, cursor, EventData::Modulation(value), is_shift_down()),
-        GLOBAL_COLUMN => if cursor.track == 0 && value < 10 {
-            let mut data = EventData::Tempo(value as f32);
-            if let Some(evt) = module.event_at(cursor) {
-                if let EventData::Tempo(t) = evt.data {
-                    if t < 100.0 {
-                        data = EventData::Tempo(append_digit(t, value));
-                    }
-                }
-            }
-            insert_event_at_cursor(module, cursor, data, false);
-        },
-        _ => (),
-    }
-}
-
-/// Append a digit to a float value.
-fn append_digit(t: f32, digit: u8) -> f32 {
-    t * 10.0 + digit as f32
 }
 
 /// Adjust selected notes for transposition commands.
@@ -1472,4 +1529,20 @@ fn with_alpha(a: f32, color: Color) -> Color {
 /// Return the line height used in the pattern grid.
 fn line_height(atlas: &GlyphAtlas) -> f32 {
     atlas.cap_height() + PATTERN_MARGIN * 2.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_ctrl_text() {
+        assert_eq!(parse_ctrl_text(""), None);
+        assert_eq!(parse_ctrl_text("-100"), None);
+        assert_eq!(parse_ctrl_text("1237:1273"), None);
+        assert_eq!(parse_ctrl_text("100"), Some(EventData::Tempo(100.0)));
+        assert_eq!(parse_ctrl_text("60.5"), Some(EventData::Tempo(60.5)));
+        assert_eq!(parse_ctrl_text("1/2"), Some(EventData::RationalTempo(1, 2)));
+        assert_eq!(parse_ctrl_text("4:3"), Some(EventData::RationalTempo(4, 3)));
+    }
 }

@@ -495,8 +495,9 @@ Shift+0..F - Track enter digit".to_string(),
 0..F - Enter digit
 Shift+0..F - Track enter digit".to_string(),
         Info::ControlColumn => {
-            // TODO: document textual tempo entry somehow
-            text = "Control column.".to_string();
+            text =
+"Control column. Type to enter BPM values (ex. 120)
+or tempo ratios (ex. 3:2 or 3/2).".to_string();
             actions =
                 vec![Action::TapTempo, Action::RationalTempo, Action::Loop, Action::End];
         },
