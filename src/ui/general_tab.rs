@@ -1,7 +1,7 @@
 use fundsp::math::{amp_db, db_amp};
 use info::Info;
 
-use crate::{config::{self, Config}, fx::{FXSettings, GlobalFX, SpatialFx}, module::Module, pitch::Tuning};
+use crate::{config::{self, Config}, fx::{Compression, GlobalFX, SpatialFx}, module::Module, pitch::Tuning};
 
 use super::*;
 
@@ -20,14 +20,9 @@ pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.cursor_z -= 1;
     ui.start_group();
 
-    ui.header("METADATA", Info::None);
-    if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::None) {
-        module.title = s;
-    }
-    if let Some(s) = ui.edit_box("Author", 40, module.author.clone(), Info::None) {
-        module.author = s;
-    }
-    fx_controls(ui, &mut module.fx, fx);
+    metadata_controls(ui, module);
+    spatial_fx_controls(ui, &mut module.fx.spatial, fx);
+    compression_controls(ui, &mut module.fx.comp, fx);
     tuning_controls(ui, &mut module.tuning, cfg, player, table_cache);
 
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
@@ -36,19 +31,29 @@ pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
-fn fx_controls(ui: &mut Ui, settings: &mut FXSettings, fx: &mut GlobalFX) {
+fn metadata_controls(ui: &mut Ui, module: &mut Module) {
+    ui.header("METADATA", Info::None);
+    if let Some(s) = ui.edit_box("Title", 40, module.title.clone(), Info::None) {
+        module.title = s;
+    }
+    if let Some(s) = ui.edit_box("Author", 40, module.author.clone(), Info::None) {
+        module.author = s;
+    }
+}
+
+fn spatial_fx_controls(ui: &mut Ui, spatial: &mut SpatialFx, fx: &mut GlobalFX) {
     ui.space(2.0);
     ui.header("SPATIAL FX", Info::None);
     let mut commit = false;
 
-    if let Some(i) = ui.combo_box("spatial_type", "Type", settings.spatial.variant_name(),
+    if let Some(i) = ui.combo_box("spatial_type", "Type", spatial.variant_name(),
         Info::SpatialFxType,
         || SpatialFx::DEFAULT_VARIANTS.map(|v| v.variant_name().to_owned()).to_vec()) {
-        settings.spatial = SpatialFx::DEFAULT_VARIANTS[i].clone();
+        *spatial = SpatialFx::DEFAULT_VARIANTS[i].clone();
         commit = true;
     }
 
-    match &mut settings.spatial {
+    match spatial {
         SpatialFx::None => (),
         SpatialFx::Reverb { level, room_size, decay_time } => {
             if ui.slider("reverb_level", "Level", level,
@@ -81,13 +86,14 @@ fn fx_controls(ui: &mut Ui, settings: &mut FXSettings, fx: &mut GlobalFX) {
     }
 
     if commit {
-        fx.commit_spatial(&settings.spatial);
+        fx.commit_spatial(&spatial);
     }
+}
 
+fn compression_controls(ui: &mut Ui, comp: &mut Compression, fx: &mut GlobalFX) {
     ui.space(2.0);
     ui.header("COMPRESSION", Info::Compression);
 
-    let comp = &mut settings.comp;
     let mut commit = false;
 
     if ui.formatted_slider("gain", "Gain", &mut comp.gain,
@@ -133,6 +139,7 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
 
     ui.space(2.0);
     ui.header("TUNING", Info::Tuning);
+
     if let Some(s) = ui.edit_box("Octave ratio", OCTAVE_CHARS,
         tuning.equave().to_string().chars().take(OCTAVE_CHARS).collect(), Info::OctaveRatio
     ) {
@@ -147,6 +154,7 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
             Err(e) => ui.report(e),
         }
     }
+
     if let Some(s) = ui.edit_box("Steps to octave", 3, tuning.scale.len().to_string(),
         Info::OctaveSteps
     ) {
@@ -161,6 +169,7 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
             Err(e) => ui.report(e),
         }
     }
+
     if let Some(s) = ui.edit_box("Steps to arrow", 3, tuning.arrow_steps.to_string(),
         Info::ArrowSteps
     ) {
@@ -173,6 +182,7 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
         }
     }
 
+    // unequal scale controls
     ui.start_group();
     if ui.button("Load scale", true, Info::LoadScale) {
         if let Some(path) = super::new_file_dialog(player)
@@ -197,7 +207,6 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
 
     ui.space(2.0);
     ui.header("INVERVAL TABLE", Info::None);
-
     ui.start_group();
     if table_cache.as_ref().is_none_or(|tc| tc.tuning != *tuning) {
         *table_cache = Some(TableCache {
