@@ -47,7 +47,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let backtrace = Backtrace::force_capture();
             let message = format!("Backtrace:\n\n{}", backtrace);
             let _ = fs::write(exe_relative_path(PANIC_FILE), &message);
-            eprintln!("{message}");
+
+            // no printing works for me here (at least on windows)
+            // but it can't hurt to try
+            eprintln!("panic; backtrace written to {PANIC_FILE}");
         }));
     }
 
