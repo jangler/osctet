@@ -1,9 +1,14 @@
+//! Representation and math of musical time intervals.
+
 use std::{cmp::Ordering, ops};
 
 use gcd::Gcd;
 use serde::{de::{self, Visitor}, Deserialize, Deserializer, Serialize};
 
-/// Represents a time value as a beat fraction.
+/// Represents a time interval as a beat fraction. Often, the interval is
+/// measured from the start of the song. Operations that would overflow the
+/// denominator instead saturate it and adjust the numerator to approximate
+/// the result.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub struct Timespan {
     n: i32,
@@ -74,10 +79,7 @@ impl ops::Neg for Timespan {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        Self {
-            n: -self.n,
-            d: self.d,
-        }
+        Self { n: -self.n, d: self.d }
     }
 }
 
