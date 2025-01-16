@@ -21,18 +21,13 @@ impl SmplData {
 
     /// Read a sample chunk.
     fn from_chunk(data: &[u8]) -> Option<Self> {
-        let unity_note = u32::from_le_bytes(
-            data.get(0x14..0x18)?.try_into().ok()?);
-        let pitch_fraction = u32::from_le_bytes(
-            data.get(0x18..0x1c)?.try_into().ok()?);
+        let unity_note = read_u32(data, 0x14)?;
+        let pitch_fraction = read_u32(data, 0x18)?;
 
-        let num_loops = u32::from_le_bytes(
-            data.get(0x24..0x28)?.try_into().ok()?);
+        let num_loops = read_u32(data, 0x24)?;
         let sample_loops = (0..num_loops as usize).flat_map(|i| {
-            let start = u32::from_le_bytes(
-                data.get((0x34 + i * 4)..(0x38 + i * 4))?.try_into().ok()?);
-            let end = u32::from_le_bytes(
-                data.get((0x38 + i * 4)..(0x3c + i * 4))?.try_into().ok()?);
+            let start = read_u32(data, 0x34 + i * 4)?;
+            let end = read_u32(data, 0x38)?;
             Some((start as usize)..=(end as usize))
         }).collect();
 
@@ -41,4 +36,9 @@ impl SmplData {
             sample_loops,
         })
     }
+}
+
+fn read_u32(data: &[u8], offset: usize) -> Option<u32> {
+    let bytes = data.get(offset..(offset + 4))?;
+    Some(u32::from_le_bytes(bytes.try_into().ok()?))
 }
