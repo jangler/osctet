@@ -14,13 +14,13 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     ui.start_group();
 
     general_controls(ui, cfg);
-    ui.space(2.0);
+    ui.vertical_space();
     io_controls(ui, cfg, sample_rate, midi);
-    ui.space(2.0);
+    ui.vertical_space();
     appearance_controls(ui, cfg, player);
-    ui.space(2.0);
+    ui.vertical_space();
     let id = hotkey_controls(ui, cfg);
-    ui.space(2.0);
+    ui.vertical_space();
     note_key_controls(ui, cfg, id);
 
     // TODO: duplication with instruments tab scroll code

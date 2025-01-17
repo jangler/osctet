@@ -21,9 +21,14 @@ pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.start_group();
 
     metadata_controls(ui, module);
+    ui.vertical_space();
     spatial_fx_controls(ui, &mut module.fx.spatial, fx);
+    ui.vertical_space();
     compression_controls(ui, &mut module.fx.comp, fx);
+    ui.vertical_space();
     tuning_controls(ui, &mut module.tuning, cfg, player, table_cache);
+    ui.vertical_space();
+    interval_table(ui, &mut module.tuning, table_cache);
 
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_z += 1;
@@ -42,8 +47,8 @@ fn metadata_controls(ui: &mut Ui, module: &mut Module) {
 }
 
 fn spatial_fx_controls(ui: &mut Ui, spatial: &mut SpatialFx, fx: &mut GlobalFX) {
-    ui.space(2.0);
     ui.header("SPATIAL FX", Info::None);
+
     let mut commit = false;
 
     if let Some(i) = ui.combo_box("spatial_type", "Type", spatial.variant_name(),
@@ -91,7 +96,6 @@ fn spatial_fx_controls(ui: &mut Ui, spatial: &mut SpatialFx, fx: &mut GlobalFX) 
 }
 
 fn compression_controls(ui: &mut Ui, comp: &mut Compression, fx: &mut GlobalFX) {
-    ui.space(2.0);
     ui.header("COMPRESSION", Info::Compression);
 
     let mut commit = false;
@@ -137,7 +141,6 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
 ) {
     const OCTAVE_CHARS: usize = 7;
 
-    ui.space(2.0);
     ui.header("TUNING", Info::Tuning);
 
     if let Some(s) = ui.edit_box("Octave ratio", OCTAVE_CHARS,
@@ -204,8 +207,9 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
     }
     ui.offset_label("Scale root", Info::TuningRoot);
     ui.end_group();
+}
 
-    ui.space(2.0);
+fn interval_table(ui: &mut Ui, tuning: &mut Tuning, table_cache: &mut Option<TableCache>) {
     ui.header("INVERVAL TABLE", Info::None);
     ui.start_group();
     if table_cache.as_ref().is_none_or(|tc| tc.tuning != *tuning) {

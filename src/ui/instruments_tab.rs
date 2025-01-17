@@ -230,17 +230,17 @@ fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut
     ui.shared_slider("fx_send", "FX send",
         &patch.fx_send.0, 0.0..=1.0, None, 1, true, Info::FxSend);
 
-    ui.space(2.0);
+    ui.vertical_space();
     oscillator_controls(ui, patch, cfg, player);
-    ui.space(2.0);
+    ui.vertical_space();
     filter_controls(ui, patch);
-    ui.space(2.0);
+    ui.vertical_space();
     envelope_controls(ui, patch);
-    ui.space(2.0);
+    ui.vertical_space();
     lfo_controls(ui, patch);
-    ui.space(2.0);
+    ui.vertical_space();
     modulation_controls(ui, patch);
-    ui.space(2.0);
+    ui.vertical_space();
 }
 
 fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,

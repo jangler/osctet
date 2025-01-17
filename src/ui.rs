@@ -409,17 +409,25 @@ impl Ui {
         }
     }
 
-    pub fn space(&mut self, scale: f32) {
+    fn space(&mut self, scale: f32) {
         match self.layout {
             Layout::Horizontal => self.cursor_x += self.style.margin * scale,
             Layout::Vertical => self.cursor_y += self.style.margin * scale,
         }
     }
 
+    pub fn vertical_space(&mut self) {
+        self.space(2.0);
+    }
+
     fn push_graphic(&mut self, graphic: Graphic) {
         let (x, y) = match &graphic {
             Graphic::Line(x1, y1, x2, y2, _) => (x1.max(*x2), y1.max(*y2)),
-            Graphic::Rect(rect, _, _) => (rect.x + rect.w, rect.y + rect.h),
+            Graphic::Rect(rect, _, stroke) => if stroke.is_some() {
+                (rect.x + rect.w, rect.y + rect.h)
+            } else {
+                (rect.x, rect.y)
+            },
             Graphic::Text(x, y, text, _) => (
                 x + self.style.atlas.text_width(text) + self.style.margin * 2.0,
                 y + self.style.line_height()
