@@ -49,7 +49,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let _ = fs::write(exe_relative_path(PANIC_FILE), &message);
 
             // no printing works for me here (at least on windows)
-            // but it can't hurt to try
+            // but it can't hurt to try. it might be because of the
+            // windows_subsystem thing
             eprintln!("panic; backtrace written to {PANIC_FILE}");
         }));
     }

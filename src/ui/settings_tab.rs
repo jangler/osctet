@@ -13,6 +13,24 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     ui.cursor_z -= 1;
     ui.start_group();
 
+    general_controls(ui, cfg);
+    ui.space(2.0);
+    io_controls(ui, cfg, sample_rate, midi);
+    ui.space(2.0);
+    appearance_controls(ui, cfg, player);
+    ui.space(2.0);
+    let id = hotkey_controls(ui, cfg);
+    ui.space(2.0);
+    note_key_controls(ui, cfg, id);
+
+    // TODO: duplication with instruments tab scroll code
+    let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
+    ui.cursor_z += 1;
+    ui.cursor_y = old_y;
+    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
+}
+
+fn general_controls(ui: &mut Ui, cfg: &mut Config) {
     ui.header("GENERAL", Info::None);
 
     if ui.button("Reset to defaults", true, Info::ResetSettings) {
@@ -21,8 +39,9 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     }
     ui.checkbox("Smooth playhead", &mut cfg.smooth_playhead, true, Info::SmoothPlayhead);
     ui.checkbox("Display info text", &mut cfg.display_info, true, Info::DisplayInfo);
+}
 
-    ui.space(2.0);
+fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi) {
     ui.header("I/O", Info::None);
 
     if let Some(s) = ui.edit_box("Desired sample rate", 6,
@@ -40,6 +59,7 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     if midi.input.is_some() {
         ui.start_group();
 
+        // midi input selection
         let s = if let Some(name) = &midi.port_name {
             name
         } else {
@@ -64,8 +84,9 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     } else {
         ui.label("No MIDI device", Info::None);
     }
+}
 
-    ui.space(2.0);
+fn appearance_controls(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
     ui.header("APPEARANCE", Info::None);
 
     ui.start_group();
@@ -109,42 +130,30 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
         set_font(cfg, ui, cfg.font_size + 1);
     }
     ui.end_group();
-
-    ui.space(2.0);
-    let id = hotkey_controls(ui, cfg);
-
-    ui.space(2.0);
-    note_key_controls(ui, cfg, id);
-
-    // TODO: duplication with instruments tab scroll code
-    let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
-    ui.cursor_z += 1;
-    ui.cursor_y = old_y;
-    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn color_controls(ui: &mut Ui, label: &str, accent: bool,
-    f: impl Fn(&mut Theme) -> &mut Lchuv) {
+    get_lchuv: impl Fn(&mut Theme) -> &mut Lchuv) {
     ui.start_group();
     ui.label(label, Info::None);
 
-    let lchuv = f(&mut ui.style.theme);
+    let lchuv = get_lchuv(&mut ui.style.theme);
     let (mut l, mut chroma, _) = lchuv.into_components();
     let mut hue = lchuv.hue.into_degrees();
 
     if !accent {
         if ui.formatted_slider(&format!("{}_l", label), "Lightness", &mut l,
             0.0..=100.0, 1, true, Info::None, |f| format!("{f:.1}"), |f| f) {
-            f(&mut ui.style.theme).l = l;
+            get_lchuv(&mut ui.style.theme).l = l;
         }
     }
     if ui.formatted_slider(&format!("{}_chroma", label), "Chroma",
         &mut chroma, 0.0..=180.0, 1, true, Info::Chroma, |f| format!("{f:.1}"), |f| f) {
-        f(&mut ui.style.theme).chroma = chroma;
+        get_lchuv(&mut ui.style.theme).chroma = chroma;
     }
     if ui.formatted_slider(&format!("{}_hue", label), "Hue", &mut hue,
         -180.0..=180.0, 1, true, Info::None, |f| format!("{f:.1} degrees"), |f| f) {
-        f(&mut ui.style.theme).hue = hue.into();
+        get_lchuv(&mut ui.style.theme).hue = hue.into();
     }
 
     ui.end_group();
@@ -198,8 +207,8 @@ fn note_key_controls(ui: &mut Ui, cfg: &mut Config, hotkey_input_id: usize) {
 /// of a column in characters.
 fn entries_per_col(ui: &Ui, max_chars: usize, len: usize) -> usize {
     let char_width = ui.style.atlas.char_width();
-    let cols = (ui.bounds.w / (max_chars as f32 * char_width)) as usize;
-    (len as f32 / cols as f32).ceil() as usize
+    let cols = ui.bounds.w / (max_chars as f32 * char_width);
+    (len as f32 / cols).ceil() as usize
 }
 
 /// Change the current font size.
@@ -224,7 +233,7 @@ fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
         path.set_extension(THEME_FILTER_EXT);
         cfg.theme_folder = config::dir_as_string(&path);
         if let Err(e) = ui.style.theme.save(path) {
-            ui.report(format!("Error loading theme: {e}"));
+            ui.report(format!("Error saving theme: {e}"));
         }
     }
 }
