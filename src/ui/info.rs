@@ -239,7 +239,8 @@ harmonic results when mixing or modulating multiple
 generators.".to_string(),
         Info::FilterCutoff => text =
 "Approximate frequency where the filter starts
-attenuating input. Also the resonant.".to_string(),
+attenuating input. Also the resonant peak of the
+filter.".to_string(),
         Info::FilterResonance => text =
 "How much to emphasize frequencies near the cutoff
 frequency.".to_string(),
