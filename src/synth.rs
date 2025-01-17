@@ -1,33 +1,43 @@
 //! Subtractive/FM synth engine.
 
-use core::f64;
-use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::{Path, PathBuf}, sync::Arc};
+pub(crate) mod pcm;
 
-use ordered_float::OrderedFloat;
-use pitch_detector::pitch::{HannedFftDetector, PitchDetector};
+use core::f64;
+use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path};
+
+use pcm::PcmData;
 use rand::prelude::*;
 use fundsp::hacker32::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{dsp::*, smpl::SmplData, ui::MAX_PATCH_NAME_CHARS};
+use crate::{dsp::*, ui::MAX_PATCH_NAME_CHARS};
 
-pub const REF_PITCH: f64 = 60.0; // C4
-pub const REF_FREQ: f32 = 261.6256; // C4
+/// The MIDI pitch of the default note (C4). Used to adjust frequency controls
+/// of loaded samples.
+pub const REF_PITCH: f64 = 60.0;
 
-const SEMITONE_RATIO: f32 = 1.059463; // 12-ET
+/// The frequency of the middle note (C4). This seems not to cause any problems
+/// despite the actual frequency of C4 changing with each tuning.
+pub const REF_FREQ: f32 = 261.6256;
+
+/// Frequency ratio of one semitone in 12-ET.
+const SEMITONE_RATIO: f32 = 1.059463;
+
+/// Maximum voices that can be playing at one time in a channel, including
+/// voices in the release phase.
 const VOICES_PER_CHANNEL: usize = 3;
 
-/// Minimum env scale is just the inverse.
+/// Maximum scale when modulating envelopes. The minimum is just the inverse.
 pub const MAX_ENV_SCALE: f32 = 16.0;
 
 pub const MIN_FREQ_RATIO: f32 = 0.25;
 pub const MAX_FREQ_RATIO: f32 = 16.0;
 
-// Hz values
+// (Hz)
 pub const MIN_LFO_RATE: f32 = 0.1;
 pub const MAX_LFO_RATE: f32 = 20.0;
 
-// Hz values
+// (Hz)
 pub const MIN_FILTER_CUTOFF: f32 = 20.0;
 pub const MAX_FILTER_CUTOFF: f32 = 22_000.0;
 
@@ -37,24 +47,35 @@ pub const FILTER_CUTOFF_MOD_BASE: f32 = MAX_FILTER_CUTOFF / MIN_FILTER_CUTOFF;
 /// minimum resonance.
 pub const MIN_FILTER_RESONANCE: f32 = 0.1;
 
-// Hz values
-const PITCH_FLOOR: f32 = 20.0;
-const PITCH_CEILING: f32 = 5000.0;
+/// Minimum Hz value for pitch-based modulation (E1).
+const PITCH_FLOOR: f32 = 41.25;
 
-pub const PITCH_MOD_BASE: f32 = 16.0;
+/// Maximum Hz value for pitch-based modulation (E7).
+const PITCH_CEILING: f32 = 2640.0;
 
-/// Smoothing time for transitions.
+/// Maximum pitch modulation multiplier. The minimum is just the inverse.
+pub const MAX_PITCH_MOD: f32 = 16.0;
+
+/// Smoothing time for transitions, in seconds.
 pub const SMOOTH_TIME: f32 = 0.01;
 
 /// Arbitrary constant for scaling FM depth.
 const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 
-const LFO_DELAY_CURVE: f32 = 3.0; // cubic
+/// Use a cubic attack envelope for LFO delay.
+const LFO_DELAY_CURVE: f32 = 3.0;
 
 /// Wraps a Shared value for serialization.
-#[derive(Clone, Serialize, Deserialize)]
+/// Cloning creates a new Shared value.
+#[derive(Serialize, Deserialize)]
 #[serde(from = "f32", into = "f32")]
 pub struct Parameter(pub Shared);
+
+impl Clone for Parameter {
+    fn clone(&self) -> Self {
+        Self(shared(self.0.value()))
+    }
+}
 
 impl From<f32> for Parameter {
     fn from(value: f32) -> Self {
@@ -70,7 +91,7 @@ impl From<Parameter> for f32 {
 
 impl Default for Parameter {
     fn default() -> Self {
-        Parameter(shared(1.0))
+        Self(shared(1.0))
     }
 }
 
@@ -124,7 +145,7 @@ pub enum Waveform {
 }
 
 impl Waveform {
-    /// Variants that generators can use.
+    /// Variants that generators can be set to.
     pub const VARIANTS: [Waveform; 7] = [
         Self::Sawtooth,
         Self::Pulse,
@@ -135,7 +156,7 @@ impl Waveform {
         Self::Pcm(None),
     ];
 
-    /// Variants that LFOs can use.
+    /// Variants that LFOs can be set to.
     pub const LFO_VARIANTS: [Waveform; 6] = [
         Self::Sawtooth,
         Self::Pulse,
@@ -168,277 +189,37 @@ impl Waveform {
         !matches!(self, Self::Noise)
     }
 
-    /// Make a generator DSP net.
-    fn make_osc_net(&self,
-        settings: &Patch, vars: &VoiceVars, osc: &Oscillator, index: usize, fm_oscs: Net
-    ) -> Net {
-        let prev_freq = vars.prev_freq.unwrap_or(vars.freq.value());
-        let glide_env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
-        let base = (var(&vars.freq) >> glide_env >> follow(settings.glide_time * 0.5))
-            * var(&osc.freq_ratio.0)
-            * (settings.dsp_component(vars, ModTarget::OscPitch(index), &[])
-                + settings.dsp_component(vars, ModTarget::Pitch, &[])
-                >> pow_shape(PITCH_MOD_BASE))
-            * ((settings.dsp_component(vars, ModTarget::OscFinePitch(index), &[])
-                + settings.dsp_component(vars, ModTarget::FinePitch, &[]))
-                * 0.5 + var(&osc.fine_pitch.0) >> pow_shape(SEMITONE_RATIO))
-            * (1.0 + fm_oscs * FM_DEPTH_MULTIPLIER);
-        let tone = var(&osc.tone.0)
-            + settings.dsp_component(vars, ModTarget::Tone(index), &[])
-            >> shape_fn(clamp01);
-
-        let au: Box<dyn AudioUnit> = match self {
-            Self::Sawtooth => if osc.oversample {
-                Box::new(base >> oversample(saw().phase(0.0)))
-            } else {
-                Box::new(base >> saw().phase(0.0))
-            },
-            Self::Pulse => if osc.oversample {
-                Box::new((base | tone) >> oversample(pulse().phase(0.0)))
-            } else {
-                Box::new((base | tone) >> pulse().phase(0.0))
-            },
-            Self::Triangle => if osc.oversample {
-                Box::new(base >> oversample(triangle().phase(0.0)))
-            } else {
-                Box::new(base >> triangle().phase(0.0))
-            },
-            Self::Sine => if osc.oversample {
-                Box::new(base >> oversample(sine().phase(0.0)))
-            } else {
-                Box::new(base >> sine().phase(0.0))
-            },
-            Self::Hold => Box::new((noise().seed(random()) | base) >> hold(0.0)),
-            Self::Noise => Box::new((noise().seed(random()) | tone)
-                >> (pinkpass() * (1.0 - pass()) & pass() * pass())),
-            Self::Pcm(data) => if let Some(data) = data {
-                let f = data.wave.sample_rate() as f32 / vars.rate / REF_FREQ;
-                Box::new(base * f >>
-                    resample(wavech(&data.wave, 0, data.loop_point)))
-            } else {
-                Box::new(zero())
-            },
-        };
-        Net::wrap(au)
-    }
-
-    /// Make an LFO DSP net.
-    fn make_lfo_net(&self,
-        settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]
-    ) -> Net {
-        let lfo = &settings.lfos[index];
-        let f = var(&lfo.freq.0)
-            * (settings.dsp_component(vars, ModTarget::LFORate(index), path)
-            >> pow_shape(MAX_LFO_RATE/MIN_LFO_RATE))
-            >> shape_fn(|x| clamp(MIN_LFO_RATE, MAX_LFO_RATE, x));
-        let dt = lfo.delay;
-        let d = envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)));
-        let p = vars.lfo_phases[index];
-
-        Net::wrap(match self {
-            Self::Sawtooth => Box::new(f >> saw_lfo(p) * d >> smooth()),
-            Self::Pulse => Box::new(f >> sqr_lfo(p) * d >> smooth()),
-            Self::Triangle => Box::new(f >> tri_lfo(p) * d),
-            Self::Sine => Box::new(f >> sin_lfo(p) * d),
-            Self::Hold => Box::new(f >> hold_lfo(p) * d >> smooth()),
-            Self::Noise => Box::new(brown().seed((p * u64::MAX as f32) as u64) * d),
-            Self::Pcm(data) => if let Some(data) = data {
-                Box::new(wavech(&data.wave, 0, data.loop_point))
-            } else {
-                Box::new(zero())
-            },
-        })
-    }
-
     /// Check whether this waveform is affected by the "tone" control.
     fn has_tone_control(&self) -> bool {
         matches!(*self, Waveform::Pulse | Waveform::Noise)
     }
 
-    /// Check whether this waveform can use oversampling in generators.
+    /// Check whether this waveform can use oversampling.
     pub fn uses_oversampling(&self) -> bool {
         !matches!(*self, Waveform::Hold | Waveform::Noise | Waveform::Pcm(_))
     }
 }
 
-/// Stores data for PCM waveforms.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct PcmData {
-    data: Vec<u8>, // for serialization
-    #[serde(skip)]
-    #[serde(default = "empty_wave")]
-    pub wave: Arc<Wave>,
-    pub loop_point: Option<usize>,
-    #[serde(skip)]
-    pub path: Option<PathBuf>,
-    #[serde(skip)]
-    pub midi_pitch: Option<f32>,
-}
+/// Default pressure at song start. Equivalent to 0xA/0xF.
+pub const DEFAULT_PRESSURE: f32 = 2.0/3.0;
 
-/// For serde.
-fn empty_wave() -> Arc<Wave> {
-    Arc::new(Wave::new(1, 44100.0))
-}
-
-// TODO: costly clones here
-impl PcmData {
-    /// Supported file extensions for loading.
-    pub const FILE_EXTENSIONS: [&str; 11] =
-        ["aac", "aiff", "caf", "flac", "m4a", "mkv", "mp3", "mp4", "ogg", "wav", "webm"];
-
-    /// Check whether a path has a loadable file extension.
-    fn can_load_path(path: &Path) -> bool {
-        let ext = path.extension().unwrap_or_default()
-            .to_str().unwrap_or_default().to_ascii_lowercase();
-        Self::FILE_EXTENSIONS.iter()
-            .any(|x| x.to_ascii_lowercase() == ext)
-    }
-
-    /// Load PCM from an audio file.
-    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
-        let data = fs::read(&path)?;
-        let mut wave = Wave::load_slice(data.clone())?;
-        wave.normalize();
-
-        let smpl = SmplData::from_wave(&data);
-        let loop_point = smpl.as_ref().and_then(|smpl|
-            smpl.sample_loops.first().map(|lp|
-                min(*lp.start(), wave.len().saturating_sub(1))));
-        let midi_pitch = smpl.as_ref().map(|smpl| smpl.midi_pitch);
-
-        Ok(Self {
-            wave: Arc::new(wave),
-            data,
-            loop_point,
-            path: Some(path.as_ref().to_path_buf()),
-            midi_pitch,
-        })
-    }
-
-    /// Loads the audio file with position offset by `offset` in the file's
-    /// directory.
-    pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
-        let path = path.parent().and_then(|p| {
-            fs::read_dir(p).ok().and_then(|entries| {
-                let entries: Vec<_> = entries.flatten()
-                    .filter(|e| Self::can_load_path(&e.path()))
-                    .collect();
-                entries.iter().position(|e| e.path() == *path).map(|i| {
-                    let i = (i as isize + offset)
-                        .rem_euclid(entries.len() as isize) as usize;
-                    entries[i].path()
-                })
-            })
-        }).unwrap_or(path.to_owned());
-
-        Self::load(path)
-    }
-
-    /// Deserialized PcmData needs to be initialized before use.
-    pub fn init(&mut self) -> Result<(), Box<dyn Error>> {
-        let mut wave = Wave::load_slice(self.data.clone())?;
-        wave.normalize();
-        self.wave = Arc::new(wave);
-        Ok(())
-    }
-
-    /// Adjust loop point to be smoother.
-    pub fn fix_loop_point(&mut self) {
-        // look for a sample that's after a similar sample to the last sample
-        // in the file, in terms of position and slope.
-        if let Some(pt) = &mut self.loop_point {
-            // don't mess with the loop point if it's zero -- it might be a
-            // single-cycle wave
-            if *pt == 0 || self.wave.len() < 3 {
-                return
-            }
-
-            // don't move the point by more than 2 ms
-            let max_distance = (self.wave.sample_rate() as f32 * 0.002) as usize;
-            let window_start = pt.saturating_sub(max_distance);
-            let window_end = std::cmp::Ord::min(*pt + max_distance, self.wave.len() - 3);
-
-            let last_sample = self.wave.at(0, self.wave.len() - 1);
-            let second_last_sample = self.wave.at(0, self.wave.len() - 2);
-            let delta = last_sample - second_last_sample;
-            let target_value = second_last_sample + delta;
-            let mut matches = Vec::new();
-
-            for i in window_start..window_end {
-                let s1 = self.wave.at(0, i);
-                let s2 = self.wave.at(0, i + 1);
-                let test_delta = s2 - s1;
-
-                if test_delta.signum() == delta.signum() {
-                    matches.push((i + 2, s2));
-                }
-            }
-
-            if let Some((i, _)) = matches.into_iter()
-                .min_by_key(|(_, s)| OrderedFloat((target_value - s).abs())) {
-                *pt = i;
-            }
-        }
-    }
-
-    /// Attempts to detect the fundamental frequency of the sample.
-    pub fn detect_pitch(&self) -> Option<f64> {
-        let signal: Vec<_> = (0..self.wave.len())
-            .map(|i| self.wave.at(0, i) as f64)
-            .collect();
-        let rate = self.wave.sample_rate();
-
-        HannedFftDetector::default().detect_pitch(&signal, rate)
-    }
-}
-
-/// Clamps `r` to the freq. ratio range that can be set in the UI,
-/// by adding or removing octaves.
-pub fn clamp_freq_ratio(mut r: f32) -> f32 {
-    while r > MAX_FREQ_RATIO {
-        r *= 0.5;
-    }
-    while r < MIN_FREQ_RATIO {
-        r *= 2.0;
-    }
-    r
-}
-
-#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
-pub enum FilterType {
-    Ladder,
-    Lowpass,
-    Highpass,
-    Bandpass,
-    Notch,
-}
-
-impl FilterType {
-    pub const VARIANTS: [FilterType; 5] =
-        [Self::Ladder, Self::Lowpass, Self::Highpass, Self::Bandpass, Self::Notch];
-
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Ladder => "Ladder",
-            Self::Lowpass => "Lowpass",
-            Self::Highpass => "Highpass",
-            Self::Bandpass => "Bandpass",
-            Self::Notch => "Notch",
-        }
-    }
-}
-
-pub const DEFAULT_PRESSURE: f32 = 2.0/3.0; // equivalent to A in column
-
-/// A Synth orchestrates the playing of patches.
+/// A Synth orchestrates the playing of voices.
 pub struct Synth {
+    /// Voices that are "on".
     active_voices: HashMap<Key, Voice>,
-    released_voices: Vec<VecDeque<Voice>>, // per channel
+    /// Voices that are "off" (releasing), but not yet deallocated.
+    released_voices: Vec<VecDeque<Voice>>,
+    /// Per-channel pitch bend memory.
     bend_memory: Vec<f32>,
+    /// Per-channel modulation level memory.
     mod_memory: Vec<f32>,
+    /// Per-channel pressure level memory.
     pressure_memory: Vec<f32>,
+    /// Previous frequency played by any note.
     prev_freq: Option<f32>,
+    /// Sample rate to pass when creating DSP.
     sample_rate: f32,
+    /// If true, note-ons are ignored.
     pub muted: bool,
 }
 
@@ -464,7 +245,7 @@ impl Synth {
         self.prev_freq = None;
     }
 
-    /// Add channel memory slots to make `index` in bounds.
+    /// Add channel memory slots until `index` is in bounds.
     fn expand_memory(&mut self, index: usize) {
         while self.bend_memory.len() <= index {
             self.bend_memory.push(0.0);
@@ -480,7 +261,7 @@ impl Synth {
         }
     }
 
-    /// If pressure is None, use memory.
+    /// Start a note. If pressure is None, use memory.
     pub fn note_on(&mut self, key: Key, pitch: f32, pressure: Option<f32>,
         patch: &Patch, seq: &mut Sequencer, pan_polarity: &Shared,
     ) {
@@ -492,8 +273,7 @@ impl Synth {
         if key.origin == KeyOrigin::Pattern {
             let removed_keys: Vec<Key> = self.active_voices.keys()
                 .filter(|k| k.origin == key.origin && k.channel == key.channel)
-                .cloned()
-                .collect();
+                .cloned().collect();
             for key in removed_keys {
                 if let Some(voice) = self.active_voices.remove(&key) {
                     voice.off(seq);
@@ -502,12 +282,15 @@ impl Synth {
             }
         }
 
+        // calculate pitch bend
         let bend = if key.origin == KeyOrigin::Midi {
             self.expand_memory(key.channel as usize);
             self.bend_memory[key.channel as usize]
         } else {
             0.0
         };
+
+        // handle play mode behavior & determine whether to insert a new voice
         let insert_voice = match patch.play_mode {
             PlayMode::Poly => true,
             PlayMode::Mono => {
@@ -529,18 +312,21 @@ impl Synth {
                 }
             },
         };
+
         if insert_voice {
             let channel = key.channel as usize;
             self.expand_memory(channel);
+
             let pressure = if let Some(p) = pressure {
                 self.pressure_memory[channel] = p;
                 p
             } else {
                 self.pressure_memory[channel]
             };
-            self.active_voices.insert(key, Voice::new(pitch, bend, pressure,
-                self.mod_memory[channel], self.prev_freq, patch, seq, self.sample_rate,
-                pan_polarity));
+            let voice = Voice::new(pitch, bend, pressure, self.mod_memory[channel],
+                self.prev_freq, patch, seq, self.sample_rate, pan_polarity);
+
+            self.active_voices.insert(key, voice);
             self.check_truncate_voices(channel, seq);
             self.prev_freq = Some(midi_hz(pitch));
         }
@@ -555,6 +341,7 @@ impl Synth {
         }
     }
 
+    /// Handle a note off event.
     pub fn note_off(&mut self, key: Key, seq: &mut Sequencer) {
         if let Some(voice) = self.active_voices.remove(&key) {
             voice.off(seq);
@@ -566,8 +353,7 @@ impl Synth {
     pub fn clear_notes_with_origin(&mut self, seq: &mut Sequencer, origin: KeyOrigin) {
         let remove_keys: Vec<_> = self.active_voices.keys()
             .filter(|k| k.origin == origin)
-            .cloned()
-            .collect();
+            .cloned().collect();
 
         for k in remove_keys {
             let voice = self.active_voices.remove(&k)
@@ -608,7 +394,7 @@ impl Synth {
         }
     }
 
-    /// Set `key` note's pitch to `pitch` (as MIDI pitch).
+    /// Set `key` note's MIDI pitch.
     pub fn bend_to(&mut self, key: Key, pitch: f32) {
         if let Some(voice) = self.active_voices.get_mut(&key) {
             self.prev_freq = Some(midi_hz(pitch));
@@ -617,10 +403,14 @@ impl Synth {
         }
     }
 
+    /// Handle polyphonic aftertouch.
     pub fn poly_pressure(&mut self, key: Key, pressure: f32) {
-        self.active_voices.get(&key).inspect(|v| v.vars.pressure.set(pressure));
+        if let Some(v) = self.active_voices.get(&key) {
+            v.vars.pressure.set(pressure);
+        }
     }
 
+    /// Handle MIDI-channel-based aftertouch.
     pub fn channel_pressure(&mut self, channel: u8, pressure: f32) {
         self.set_vel_memory(channel, pressure);
         for (key, voice) in self.active_voices.iter_mut() {
@@ -640,11 +430,13 @@ impl Synth {
         }
     }
 
+    /// Set pressure that new notes will use.
     pub fn set_vel_memory(&mut self, channel: u8, pressure: f32) {
         self.expand_memory(channel as usize);
         self.pressure_memory[channel as usize] = pressure;
     }
 
+    /// Set modulation level that new notes will use.
     pub fn set_mod_memory(&mut self, channel: u8, depth: f32) {
         self.expand_memory(channel as usize);
         self.mod_memory[channel as usize] = depth;
@@ -656,7 +448,7 @@ impl Synth {
 pub struct Patch {
     pub name: String,
     pub gain: Parameter,
-    pub pan: Parameter, // range -1..1
+    pub pan: Parameter,
     pub glide_time: f32,
     pub play_mode: PlayMode,
     pub filters: Vec<Filter>,
@@ -671,6 +463,7 @@ pub struct Patch {
 }
 
 impl Patch {
+    /// Current save version.
     const VERSION: u8 = 1;
 
     pub fn new(name: String) -> Self {
@@ -686,15 +479,18 @@ impl Patch {
             play_mode: PlayMode::Poly,
             glide_time: 0.0,
             pan: Parameter(shared(0.0)),
-            mod_matrix: vec![Modulation {
-                source: ModSource::Envelope(0),
-                target: ModTarget::Gain,
-                depth: Parameter(shared(1.0)),
-            }, Modulation {
-                source: ModSource::Pressure,
-                target: ModTarget::Gain,
-                depth: Parameter(shared(1.0)),
-            }],
+            mod_matrix: vec![
+                Modulation {
+                    source: ModSource::Envelope(0),
+                    target: ModTarget::Gain,
+                    depth: Parameter(shared(1.0)),
+                },
+                Modulation {
+                    source: ModSource::Pressure,
+                    target: ModTarget::Gain,
+                    depth: Parameter(shared(1.0)),
+                },
+            ],
             version: Self::VERSION,
         }
     }
@@ -710,8 +506,8 @@ impl Patch {
             }
         }
 
-        // convert generator levels
         if self.version < 1 {
+            // convert generator levels
             for osc in self.oscs.iter_mut() {
                 osc.level.0.set(osc.level.0.value().powi(2));
             }
@@ -734,54 +530,48 @@ impl Patch {
         Ok(fs::write(path, contents)?)
     }
 
-    /// Create a copy of the patch.
-    pub fn duplicate(&self) -> Result<Self, Box<dyn Error>> {
-        // we don't clone() here, since that wouldn't create unique copies
-        // of Shared instances
-        let data = rmp_serde::to_vec(self)?;
-        let mut patch = rmp_serde::from_slice::<Self>(&data)?;
+    /// Create a copy of the patch. Copies share access to wave data.
+    pub fn duplicate(&self) -> Self {
+        let mut patch = self.clone();
+
         if !patch.name.starts_with("Copy of") {
             patch.name = format!("Copy of {}", patch.name);
             patch.name.truncate(MAX_PATCH_NAME_CHARS);
         }
-        patch.init();
 
-        // copy over sample paths
-        for (i, osc) in patch.oscs.iter_mut().enumerate() {
-            if let Waveform::Pcm(Some(new_data)) = &mut osc.waveform {
-                if let Waveform::Pcm(Some(old_data)) = &self.oscs[i].waveform {
-                    new_data.path = old_data.path.clone();
-                }
-            }
-        }
-
-        Ok(patch)
+        patch
     }
 
-    /// Returns the DSP net for the patch, given voice parameters.
-    fn dsp_component(&self, vars: &VoiceVars, target: ModTarget, path: &[ModSource]) -> Net {
-        let mut net = Net::wrap(Box::new(constant(if target.is_additive() { 0.0 } else { 1.0 })));
+    /// Returns the DSP net for a modulation, given voice parameters.
+    fn mod_net(&self, vars: &VoiceVars, target: ModTarget, path: &[ModSource]) -> Net {
+        let mut net = Net::wrap(Box::new(
+            constant(if target.is_additive() { 0.0 } else { 1.0 })));
+
         for (i, m) in self.mod_matrix.iter().enumerate() {
             if m.target == target && !path.contains(&m.source) {
                 if target.is_additive() {
-                    net = net + m.dsp_component(self, vars, i, path);
+                    net = net + m.make_net(self, vars, i, path);
                 } else {
-                    net = net * m.dsp_component(self, vars, i, path);
+                    net = net * m.make_net(self, vars, i, path);
                 }
             }
         }
+
         net
     }
 
     /// Returns valid modulation sources for the patch.
     pub fn mod_sources(&self) -> Vec<ModSource> {
-        let mut v = vec![ModSource::Pitch, ModSource::Pressure, ModSource::Modulation, ModSource::Random];
-        for i in 0..self.envs.len() {
-            v.push(ModSource::Envelope(i));
-        }
-        for i in 0..self.lfos.len() {
-            v.push(ModSource::LFO(i));
-        }
+        let mut v = vec![
+            ModSource::Pitch,
+            ModSource::Pressure,
+            ModSource::Modulation,
+            ModSource::Random
+        ];
+
+        v.extend((0..self.envs.len()).map(|i| ModSource::Envelope(i)));
+        v.extend((0..self.lfos.len()).map(|i| ModSource::LFO(i)));
+
         v
     }
 
@@ -794,6 +584,7 @@ impl Patch {
             ModTarget::FinePitch,
             ModTarget::ClipGain,
         ];
+
         for (i, osc) in self.oscs.iter().enumerate() {
             v.push(ModTarget::Level(i));
             v.push(ModTarget::OscPitch(i));
@@ -802,55 +593,62 @@ impl Patch {
                 v.push(ModTarget::Tone(i));
             }
         }
+
         for i in 0..self.filters.len() {
             v.push(ModTarget::FilterCutoff(i));
             v.push(ModTarget::FilterQ(i));
         }
+
         for i in 0..self.envs.len() {
             v.push(ModTarget::EnvScale(i));
         }
+
         for (i, lfo) in self.lfos.iter().enumerate() {
             if lfo.waveform.uses_freq() {
                 v.push(ModTarget::LFORate(i));
             }
         }
+
         for i in 0..self.mod_matrix.len() {
             v.push(ModTarget::ModDepth(i));
         }
+
         v
     }
 
     /// Remove a generator, updating other settings as needed.
     pub fn remove_osc(&mut self, i: usize) {
-        if i < self.oscs.len() {
-            self.oscs.remove(i);
+        if i >= self.oscs.len() {
+            return
+        }
 
-            // update outputs for new osc indices
-            for (j, osc) in self.oscs.iter_mut().enumerate() {
-                if j == 0 {
-                    // first osc always has normal output
-                    osc.output = OscOutput::Mix(0);
-                } else {
-                    match osc.output {
-                        OscOutput::Mix(n) | OscOutput::AM(n)
-                            | OscOutput::FM(n) | OscOutput::FM(n) if n == i =>
-                            osc.output = OscOutput::Mix(0),
-                        OscOutput::Mix(n) if n > i => osc.output = OscOutput::Mix(n - 1),
-                        OscOutput::AM(n) if n > i => osc.output = OscOutput::AM(n - 1),
-                        OscOutput::RM(n) if n > i => osc.output = OscOutput::RM(n - 1),
-                        OscOutput::FM(n) if n > i => osc.output = OscOutput::FM(n - 1),
-                        _ => (),
-                    }
+        self.oscs.remove(i);
+
+        // update outputs
+        for (j, osc) in self.oscs.iter_mut().enumerate() {
+            if j == 0 {
+                // first osc always has normal output
+                osc.output = OscOutput::Mix(0);
+            } else {
+                match &mut osc.output {
+                    OscOutput::Mix(n) | OscOutput::AM(n)
+                        | OscOutput::RM(n) | OscOutput::FM(n) if *n == i =>
+                        osc.output = OscOutput::Mix(0),
+                    OscOutput::Mix(n) | OscOutput::AM(n)
+                        | OscOutput::RM(n) | OscOutput::FM(n) if *n > i => *n -= 1,
+                    _ => (),
                 }
             }
+        }
 
-            // update mod matrix for new osc indices
-            self.mod_matrix.retain(|m| m.target.osc() != Some(i));
-            for m in self.mod_matrix.iter_mut() {
-                if let Some(n) = m.target.osc() {
-                    if n > i {
-                        m.target = ModTarget::Tone(n - 1);
-                    }
+        // update mod matrix
+
+        self.mod_matrix.retain(|m| m.target.osc() != Some(i));
+
+        for m in self.mod_matrix.iter_mut() {
+            if let Some(n) = m.target.osc_mut() {
+                if *n > i {
+                    *n -= 1;
                 }
             }
         }
@@ -858,21 +656,17 @@ impl Patch {
 
     /// Remove a filter, updating other settings as needed.
     pub fn remove_filter(&mut self, i: usize) {
-        if i < self.filters.len() {
-            self.filters.remove(i);
+        if i >= self.filters.len() {
+            return
+        }
 
-            // update mod matrix for new indices
-            self.mod_matrix.retain(|m| m.target != ModTarget::FilterCutoff(i)
-                && m.target != ModTarget::FilterQ(i));
-            for m in self.mod_matrix.iter_mut() {
-                if let ModTarget::FilterCutoff(n) = m.target {
-                    if n > i {
-                        m.target = ModTarget::FilterCutoff(n - 1);
-                    }
-                } else if let ModTarget::FilterQ(n) = m.target {
-                    if n > i {
-                        m.target = ModTarget::FilterQ(n - 1);
-                    }
+        self.filters.remove(i);
+        self.mod_matrix.retain(|m| m.target.filter() != Some(i));
+
+        for m in self.mod_matrix.iter_mut() {
+            if let Some(n) = m.target.filter_mut() {
+                if *n > i {
+                    *n -= 1;
                 }
             }
         }
@@ -882,13 +676,12 @@ impl Patch {
     pub fn remove_env(&mut self, i: usize) {
         if i < self.envs.len() {
             self.envs.remove(i);
-
-            // update mod matrix for new indices
             self.mod_matrix.retain(|m| m.source != ModSource::Envelope(i));
+
             for m in self.mod_matrix.iter_mut() {
-                if let ModSource::Envelope(n) = m.source {
-                    if n > i {
-                        m.source = ModSource::Envelope(n - 1);
+                if let ModSource::Envelope(n) = &mut m.source {
+                    if *n > i {
+                        *n -= 1;
                     }
                 }
             }
@@ -899,19 +692,18 @@ impl Patch {
     pub fn remove_lfo(&mut self, i: usize) {
         if i < self.lfos.len() {
             self.lfos.remove(i);
+            self.mod_matrix.retain(|m| m.source != ModSource::LFO(i)
+                && m.target != ModTarget::LFORate(i));
 
-            // update mod matrix for new indices
-            self.mod_matrix.retain(|m|
-                m.source != ModSource::LFO(i) && m.target != ModTarget::LFORate(i));
             for m in self.mod_matrix.iter_mut() {
-                if let ModSource::LFO(n) = m.source {
-                    if n > i {
-                        m.source = ModSource::LFO(n - 1);
+                if let ModSource::LFO(n) = &mut m.source {
+                    if *n > i {
+                        *n -= 1;
                     }
                 }
-                if let ModTarget::LFORate(n) = m.target {
-                    if n > i {
-                        m.target = ModTarget::LFORate(n - 1)
+                if let ModTarget::LFORate(n) = &mut m.target {
+                    if *n > i {
+                        *n -= 1;
                     }
                 }
             }
@@ -922,13 +714,12 @@ impl Patch {
     pub fn remove_mod(&mut self, i: usize) {
         if i < self.mod_matrix.len() {
             self.mod_matrix.remove(i);
-
-            // update mod matrix for new indices
             self.mod_matrix.retain(|m| m.target != ModTarget::ModDepth(i));
+
             for m in self.mod_matrix.iter_mut() {
-                if let ModTarget::ModDepth(n) = m.target {
-                    if n > i {
-                        m.target = ModTarget::ModDepth(n - 1);
+                if let ModTarget::ModDepth(n) = &mut m.target {
+                    if *n > i {
+                        *n -= 1;
                     }
                 }
             }
@@ -937,37 +728,46 @@ impl Patch {
 
     /// Construct a DSP net for generator `i`.
     fn make_osc(&self, i: usize, vars: &VoiceVars) -> Net {
-        let mut mixed_oscs = Net::new(0, 1);
-        let mut am_oscs = Net::wrap(Box::new(constant(1.0)));
-        let mut fm_oscs = Net::new(0, 1);
+        let mut freq_mod = Net::new(0, 1);
+
+        for (j, osc) in self.oscs.iter().enumerate() {
+            if j > i && osc.output == OscOutput::FM(i) {
+                freq_mod = freq_mod + self.make_osc(j, vars);
+            }
+        }
+
+        let level = {
+            let modu = self.mod_net(vars, ModTarget::Level(i), &[]);
+            (var(&self.oscs[i].level.0) >> smooth()) * (modu >> shape_fn(|x| x*x))
+        };
+        let mut net = self.oscs[i].make_net(self, vars, i, freq_mod) * level;
+
+        // need to iterate multiple times because order of operations matters
+
         for (j, osc) in self.oscs.iter().enumerate() {
             if j > i {
-                if osc.output == OscOutput::Mix(i) {
-                    mixed_oscs = mixed_oscs + self.make_osc(j, vars);
-                } else if osc.output == OscOutput::AM(i) {
-                    am_oscs = am_oscs * (1.0 + self.make_osc(j, vars));
+                if osc.output == OscOutput::AM(i) {
+                    net = net * (1.0 + self.make_osc(j, vars));
                 } else if osc.output == OscOutput::RM(i) {
-                    am_oscs = am_oscs * self.make_osc(j, vars);
-                } else if osc.output == OscOutput::FM(i) {
-                    fm_oscs = fm_oscs + self.make_osc(j, vars);
+                    net = net * self.make_osc(j, vars);
                 }
             }
         }
 
-        let level = (var(&self.oscs[i].level.0) >> smooth())
-            * (self.dsp_component(vars, ModTarget::Level(i), &[]) >> shape_fn(|x| x*x));
+        for (j, osc) in self.oscs.iter().enumerate() {
+            if j > i && osc.output == OscOutput::Mix(i) {
+                net = net + self.make_osc(j, vars);
+            }
+        }
 
-        (self.oscs[i].waveform.make_osc_net(self, vars, &self.oscs[i], i, fm_oscs))
-            * level
-            * am_oscs
-            + mixed_oscs
+        net
     }
 
-    /// Construct a DSP net for all patch filters.
-    fn make_filter_net(&self, vars: &VoiceVars) -> Net {
-        let mut net = Net::wrap(Box::new(pass()));
+    /// Filter a net through the patch filter chain.
+    fn filter(&self, vars: &VoiceVars, net: Net) -> Net {
+        let mut net = net;
         for (i, filter) in self.filters.iter().enumerate() {
-            net = net >> filter.make_net(self, vars, i);
+            net = filter.filter(self, vars, i, net);
         }
         net
     }
@@ -978,10 +778,8 @@ impl Patch {
         for m in &self.mod_matrix {
             if m.target == ModTarget::Gain {
                 if let ModSource::Envelope(i) = m.source {
-                    if let Some(env) = self.envs.get(i) {
-                        if env.sustain == 0.0 {
-                            return false
-                        }
+                    if self.envs.get(i).is_some_and(|env| env.sustain == 0.0) {
+                        return false
                     }
                 }
             }
@@ -1037,6 +835,64 @@ impl Default for Oscillator {
             waveform: Waveform::Sine,
             output: OscOutput::Mix(0),
             oversample: false,
+        }
+    }
+}
+
+impl Oscillator {
+    /// Make a generator DSP net.
+    fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize, freq_mod: Net
+    ) -> Net {
+        // TODO: glide can be skipped if glide time is zero
+        let glide = {
+            let prev_freq = vars.prev_freq.unwrap_or(vars.freq.value());
+            let env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
+            env >> follow(settings.glide_time * 0.5)
+        };
+        let base_freq = (var(&vars.freq) >> glide)
+            * var(&self.freq_ratio.0)
+            * (settings.mod_net(vars, ModTarget::OscPitch(index), &[])
+                + settings.mod_net(vars, ModTarget::Pitch, &[])
+                >> pow_shape(MAX_PITCH_MOD))
+            * ((settings.mod_net(vars, ModTarget::OscFinePitch(index), &[])
+                + settings.mod_net(vars, ModTarget::FinePitch, &[]))
+                * 0.5 + var(&self.fine_pitch.0) >> pow_shape(SEMITONE_RATIO))
+            * (1.0 + freq_mod * FM_DEPTH_MULTIPLIER);
+        let tone = var(&self.tone.0)
+            + settings.mod_net(vars, ModTarget::Tone(index), &[])
+            >> shape_fn(clamp01);
+
+        match &self.waveform {
+            Waveform::Sawtooth => if self.oversample {
+                base_freq >> oversample(saw().phase(0.0))
+            } else {
+                base_freq >> saw().phase(0.0)
+            },
+            Waveform::Pulse => if self.oversample {
+                (base_freq | tone) >> oversample(pulse().phase(0.0))
+            } else {
+                (base_freq | tone) >> pulse().phase(0.0)
+            },
+            Waveform::Triangle => if self.oversample {
+                base_freq >> oversample(triangle().phase(0.0))
+            } else {
+                base_freq >> triangle().phase(0.0)
+            },
+            Waveform::Sine => if self.oversample {
+                base_freq >> oversample(sine().phase(0.0))
+            } else {
+                base_freq >> sine().phase(0.0)
+            },
+            Waveform::Hold => (noise().seed(random()) | base_freq) >> hold(0.0),
+            Waveform::Noise => (noise().seed(random()) | tone)
+                >> (pinkpass() * (1.0 - pass()) & pass() * pass()),
+            Waveform::Pcm(data) => if let Some(data) = data {
+                let f = data.wave.sample_rate() as f32 / vars.sample_rate / REF_FREQ;
+                base_freq * f >>
+                    resample(wavech(&data.wave, 0, data.loop_point))
+            } else {
+                Net::new(0, 1)
+            },
         }
     }
 }
@@ -1109,29 +965,31 @@ pub struct Filter {
 }
 
 impl Filter {
-    /// Create DSP net.
-    fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize) -> Net {
-        let kt = match self.key_tracking {
-            KeyTracking::None => Net::wrap(Box::new(constant(1.0))),
-            KeyTracking::Partial => Net::wrap(Box::new(
-                var_fn(&vars.freq, |x| pow(x * 1.0/REF_FREQ, 0.5)))),
-            KeyTracking::Full => Net::wrap(Box::new(
-                var(&vars.freq) * (1.0/REF_FREQ))),
-        };
-        let cutoff_mod = settings.dsp_component(vars, ModTarget::FilterCutoff(index), &[])
-            >> pow_shape(FILTER_CUTOFF_MOD_BASE);
-        let reso_mod = settings.dsp_component(vars, ModTarget::FilterQ(index), &[]);
-        let f = match self.filter_type {
-            FilterType::Ladder => Net::wrap(Box::new(moog())),
-            FilterType::Lowpass => Net::wrap(Box::new(lowpass())),
-            FilterType::Highpass => Net::wrap(Box::new(highpass())),
-            FilterType::Bandpass => Net::wrap(Box::new(bandpass())),
-            FilterType::Notch => Net::wrap(Box::new(notch())),
-        };
-        (pass()
-            | var(&self.cutoff.0) * kt * cutoff_mod
+    /// Filter DSP net.
+    fn filter(&self, settings: &Patch, vars: &VoiceVars, index: usize, net: Net) -> Net {
+        let cutoff = {
+            let kt_freq = Net::wrap(match self.key_tracking {
+                KeyTracking::None => Box::new(var(&self.cutoff.0)),
+                KeyTracking::Partial => Box::new(var(&self.cutoff.0)
+                    * var_fn(&vars.freq, |x| pow(x/REF_FREQ, 0.5))),
+                KeyTracking::Full => Box::new(var(&self.cutoff.0)
+                    * var_fn(&vars.freq, |x| x/REF_FREQ)),
+            });
+            let modu = settings.mod_net(vars, ModTarget::FilterCutoff(index), &[])
+                >> pow_shape(FILTER_CUTOFF_MOD_BASE);
+            kt_freq * modu
                 >> shape_fn(|x| clamp(MIN_FILTER_CUTOFF, MAX_FILTER_CUTOFF, x))
-            | var(&self.resonance.0) + reso_mod) >> f
+        };
+        let reso = var(&self.resonance.0)
+            + settings.mod_net(vars, ModTarget::FilterQ(index), &[]);
+        let filter = Net::wrap(match self.filter_type {
+            FilterType::Ladder => Box::new(moog()),
+            FilterType::Lowpass => Box::new(lowpass()),
+            FilterType::Highpass => Box::new(highpass()),
+            FilterType::Bandpass => Box::new(bandpass()),
+            FilterType::Notch => Box::new(notch()),
+        });
+        (net | cutoff | reso) >> filter
     }
 }
 
@@ -1146,6 +1004,32 @@ impl Default for Filter {
     }
 }
 
+#[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
+pub enum FilterType {
+    Ladder,
+    Lowpass,
+    Highpass,
+    Bandpass,
+    Notch,
+}
+
+impl FilterType {
+    pub const VARIANTS: [FilterType; 5] =
+        [Self::Ladder, Self::Lowpass, Self::Highpass, Self::Bandpass, Self::Notch];
+
+    /// Returns the UI string for the filter type.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Ladder => "Ladder",
+            Self::Lowpass => "Lowpass",
+            Self::Highpass => "Highpass",
+            Self::Bandpass => "Bandpass",
+            Self::Notch => "Notch",
+        }
+    }
+}
+
+/// ADSR envelope.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ADSR {
     pub attack: f32,
@@ -1158,15 +1042,15 @@ pub struct ADSR {
 }
 
 impl ADSR {
-    fn make_node(&self, settings: &Patch, vars: &VoiceVars, index: usize,
+    fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize,
         path: &[ModSource], sqrt_attack: bool,
     ) -> Net {
-        let scale = settings.dsp_component(vars, ModTarget::EnvScale(index), path)
+        let scale = settings.mod_net(vars, ModTarget::EnvScale(index), path)
             >> pow_shape(1.0/MAX_ENV_SCALE);
         let adsr = adsr_scalable(self.attack, self.decay, self.sustain, self.release,
             sqrt_attack);
 
-        Net::wrap(Box::new((var(&vars.gate) | scale) >> adsr))
+        (var(&vars.gate) | scale) >> adsr
     }
 }
 
@@ -1199,6 +1083,41 @@ impl Default for LFO {
     }
 }
 
+impl LFO {
+    /// Make an LFO DSP net.
+    fn make_net(&self,
+        settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]
+    ) -> Net {
+        let f = {
+            let f_mod = settings.mod_net(vars, ModTarget::LFORate(index), path)
+                >> pow_shape(MAX_LFO_RATE/MIN_LFO_RATE);
+            var(&self.freq.0) * f_mod
+                >> shape_fn(|x| clamp(MIN_LFO_RATE, MAX_LFO_RATE, x))
+        };
+        let d = {
+            let dt = self.delay;
+            envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)))
+        };
+        let p = vars.lfo_phases[index];
+
+        match &self.waveform {
+            Waveform::Sawtooth => f >> saw_lfo(p) * d >> smooth(),
+            Waveform::Pulse => f >> sqr_lfo(p) * d >> smooth(),
+            Waveform::Triangle => f >> tri_lfo(p) * d,
+            Waveform::Sine => f >> sin_lfo(p) * d,
+            Waveform::Hold => f >> hold_lfo(p) * d >> smooth(),
+            Waveform::Noise => Net::wrap(Box::new(
+                brown().seed((p * u64::MAX as f32) as u64) * d)),
+            Waveform::Pcm(data) => Net::wrap(if let Some(data) = data {
+                Box::new(wavech(&data.wave, 0, data.loop_point))
+            } else {
+                Box::new(zero())
+            }),
+        }
+    }
+}
+
+/// Mod matrix entry.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Modulation {
     pub source: ModSource,
@@ -1217,29 +1136,31 @@ impl Default for Modulation {
 }
 
 impl Modulation {
-    fn dsp_component(&self, settings: &Patch, vars: &VoiceVars, index: usize,
+    fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize,
         path: &[ModSource]
     ) -> Net {
         let mut path = path.to_vec();
         path.push(self.source);
 
         let net = match self.source {
-            ModSource::Pitch => Net::wrap(Box::new(var_fn(&vars.freq,|f| dexerp(PITCH_FLOOR, PITCH_CEILING, f)))),
+            ModSource::Pitch => Net::wrap(Box::new(
+                var_fn(&vars.freq,|f| dexerp(PITCH_FLOOR, PITCH_CEILING, f)))),
             ModSource::Pressure => Net::wrap(Box::new(var(&vars.pressure) >> smooth())),
-            ModSource::Modulation => Net::wrap(Box::new(var(&vars.modulation) >> smooth())),
+            ModSource::Modulation =>
+                Net::wrap(Box::new(var(&vars.modulation) >> smooth())),
             ModSource::Random => Net::wrap(Box::new(constant(vars.random_values[index]))),
             ModSource::Envelope(i) => match settings.envs.get(i) {
-                Some(env) => Net::wrap(Box::new(env.make_node(
-                    settings, vars, i, &path, self.target.uses_sqrt_attack()))),
-                None => Net::wrap(Box::new(zero())),
+                Some(env) => env.make_net(
+                    settings, vars, i, &path, self.target.uses_sqrt_attack()),
+                None => Net::new(0, 1),
             },
             ModSource::LFO(i) => match settings.lfos.get(i) {
-                Some(osc) => Net::wrap(Box::new(osc.waveform.make_lfo_net(settings, vars, i, &path))),
-                None => Net::wrap(Box::new(zero())),
+                Some(lfo) => lfo.make_net(settings, vars, i, &path),
+                None => Net::new(0, 1),
             }
         };
         let depth = var(&self.depth.0) >> smooth()
-            + settings.dsp_component(vars, ModTarget::ModDepth(index), &path);
+            + settings.mod_net(vars, ModTarget::ModDepth(index), &path);
 
         if self.target.is_additive() {
             // zero depth = +0 for additive targets
@@ -1280,6 +1201,7 @@ impl Display for ModSource {
 }
 
 impl ModSource {
+    /// Returns true if the source oscillates in -1..1 rather than 0..1.
     fn is_bipolar(&self) -> bool {
         matches!(*self, ModSource::LFO(_))
     }
@@ -1300,20 +1222,46 @@ pub enum ModTarget {
     EnvScale(usize),
     LFORate(usize),
     ModDepth(usize),
-    ClipGain, // distortion, inaccurate name for legacy reasons
+    /// Distortion. Inaccurate name for legacy reasons.
+    ClipGain,
 }
 
 impl ModTarget {
     /// Returns true if modulations should be summed rather than multiplied.
     pub fn is_additive(&self) -> bool {
-        !matches!(*self, ModTarget::Gain | ModTarget::Level(_))
+        !matches!(*self, Self::Gain | Self::Level(_))
     }
 
-    /// Returns the target generator, if any.
+    /// Returns the generator index, if any.
     fn osc(&self) -> Option<usize> {
         match *self {
-            ModTarget::Level(n) | ModTarget::OscPitch(n) |
-                ModTarget::OscFinePitch(n) | ModTarget::Tone(n) => Some(n),
+            Self::Level(n) | Self::OscPitch(n) |
+                Self::OscFinePitch(n) | Self::Tone(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Returns the generator index, if any.
+    fn osc_mut(&mut self) -> Option<&mut usize> {
+        match self {
+            Self::Level(n) | Self::OscPitch(n) |
+                Self::OscFinePitch(n) | Self::Tone(n) => Some(n),
+            _ => None,
+        }
+    }
+
+    /// Returns the filter index, if any.
+    fn filter(&self) -> Option<usize> {
+        match *self {
+            Self::FilterCutoff(i) | Self::FilterQ(i) => Some(i),
+            _ => None,
+        }
+    }
+
+    /// Returns the filter index, if any.
+    fn filter_mut(&mut self) -> Option<&mut usize> {
+        match self {
+            Self::FilterCutoff(i) | Self::FilterQ(i) => Some(i),
             _ => None,
         }
     }
@@ -1349,12 +1297,15 @@ impl Display for ModTarget {
 
 struct Voice {
     vars: VoiceVars,
+    /// MIDI pitch before MIDI pitch bend.
     base_pitch: f32,
+    /// Estimated length of release before deallocation.
     release_time: f32,
     event_id: EventId,
 }
 
 impl Voice {
+    /// Create and play a new voice.
     fn new(pitch: f32, bend: f32, pressure: f32, modulation: f32, prev_freq: Option<f32>,
         settings: &Patch, seq: &mut Sequencer, rate: f32, pan_polarity: &Shared,
     ) -> Self {
@@ -1367,16 +1318,15 @@ impl Voice {
             random_values: settings.mod_matrix.iter().map(|_| random()).collect(),
             lfo_phases: settings.lfos.iter().map(|_| random()).collect(),
             prev_freq,
-            rate,
+            sample_rate: rate,
         };
         let gain = (var(&settings.gain.0) >> smooth())
-            * (settings.dsp_component(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x));
-        let filter_net = settings.make_filter_net(&vars);
+            * (settings.mod_net(&vars, ModTarget::Gain, &[]) >> shape_fn(|x| x*x));
 
-        // use dry signal if distortion is zero
+        // use dry signal when distortion is zero
         let clip = (
             var(&settings.distortion.0)
-                + settings.dsp_component(&vars, ModTarget::ClipGain, &[])
+                + settings.mod_net(&vars, ModTarget::ClipGain, &[])
             | pass()
         ) >> map(|i: &Frame<f32, U2>| if i[0] == 0.0 {
             i[1]
@@ -1384,11 +1334,13 @@ impl Voice {
             clamp11(i[1] * (1.0 - clamp01(i[0])).recip())
         });
 
-        let net = ((settings.make_osc(0, &vars) >> filter_net >> clip) * gain
-            | (var(&settings.pan.0) >> smooth()
-                + settings.dsp_component(&vars, ModTarget::Pan, &[]) * 2.0)
-                * var(pan_polarity) >> shape_fn(clamp11))
-            >> panner() >> multisplit::<U2, U2>()
+        let signal = (settings.filter(&vars, settings.make_osc(0, &vars)) >> clip) * gain;
+        let pan = (var(&settings.pan.0) >> smooth()
+            + settings.mod_net(&vars, ModTarget::Pan, &[]) * 2.0)
+            * var(pan_polarity) >> shape_fn(clamp11);
+
+        let net = (signal | pan) >> panner()
+            >> multisplit::<U2, U2>()
             >> (multipass::<U2>()
                 | multipass::<U2>() * (var(&settings.fx_send.0) >> split::<U2>()));
 
@@ -1396,7 +1348,8 @@ impl Voice {
             vars,
             base_pitch: pitch,
             release_time: settings.release_time(),
-            event_id: seq.push_relative(0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(net)),
+            event_id: seq.push_relative(
+                0.0, f64::INFINITY, Fade::Smooth, 0.0, 0.0, Box::new(net)),
         }
     }
 
@@ -1410,36 +1363,18 @@ impl Voice {
     }
 }
 
+/// State of a playing voice.
 struct VoiceVars {
     freq: Shared,
     pressure: Shared,
     modulation: Shared,
+    /// Triggers envelope release when zero.
     gate: Shared,
+    /// Used by the "Random" modulation source.
     random_values: Vec<f32>,
+    /// Used to synchronize multiple DSP instances of the same logical LFO.
     lfo_phases: Vec<f32>,
+    /// Initial frequency to glide from.
     prev_freq: Option<f32>,
-    rate: f32,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_clamp_freq_ratio() {
-        assert_eq!(clamp_freq_ratio(20.0), 10.0);
-        assert_eq!(clamp_freq_ratio(40.0), 10.0);
-        assert_eq!(clamp_freq_ratio(0.1), 0.4);
-    }
-
-    #[test]
-    fn test_can_load_path() {
-        let wav_lower = Path::new("./files/a.wav");
-        let wav_upper = Path::new("./files/B.WAV");
-        let png = Path::new("./files/c.png");
-
-        assert_eq!(PcmData::can_load_path(wav_lower), true);
-        assert_eq!(PcmData::can_load_path(wav_upper), true);
-        assert_eq!(PcmData::can_load_path(png), false);
-    }
+    sample_rate: f32,
 }

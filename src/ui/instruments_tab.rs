@@ -1,4 +1,5 @@
 use macroquad::input::{KeyCode, is_key_pressed};
+use pcm::PcmData;
 
 use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
 
@@ -128,7 +129,7 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
 
     if ui.button("Duplicate", patch_index.is_some(), Info::DuplicatePatch) {
         if let Some(index) = patch_index {
-            if let Some(p) = patches.get(*index).and_then(|p| p.duplicate().ok()) {
+            if let Some(p) = patches.get(*index).map(|p| p.duplicate()) {
                 edits.push(Edit::InsertPatch(patches.len(), p));
                 *patch_index = Some(patches.len());
             }
@@ -746,7 +747,7 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
         ModTarget::LFORate(_) =>
             Box::new(|d| format!("x{:.2}", (MAX_LFO_RATE/MIN_LFO_RATE).powf(d))),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
-            Box::new(|d| format!("{:+.2} octaves", d * PITCH_MOD_BASE.log2())),
+            Box::new(|d| format!("{:+.2} octaves", d * MAX_PITCH_MOD.log2())),
         ModTarget::Pan => Box::new(|d| format!("{:+.2}", d * 2.0)),
     }
 }
@@ -767,7 +768,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
         ModTarget::LFORate(_) =>
             Box::new(|f| f.log(MAX_LFO_RATE/MIN_LFO_RATE)),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
-            Box::new(|f| f / PITCH_MOD_BASE.log2()),
+            Box::new(|f| f / MAX_PITCH_MOD.log2()),
         ModTarget::Pan => Box::new(|f| f * 0.5),
     }
 }
@@ -789,9 +790,21 @@ fn signed_sqrt(f: f32) -> f32 {
     f.abs().sqrt() * f.signum()
 }
 
+/// Clamps `r` to the freq. ratio range that can be set in the UI,
+/// by adding or removing octaves.
+pub fn clamp_freq_ratio(mut r: f32) -> f32 {
+    while r > MAX_FREQ_RATIO {
+        r *= 0.5;
+    }
+    while r < MIN_FREQ_RATIO {
+        r *= 2.0;
+    }
+    r
+}
+
 #[cfg(test)]
 mod tests {
-    use super::signed_sqrt;
+    use super::*;
 
     #[test]
     fn test_signed_sqrt() {
@@ -799,5 +812,12 @@ mod tests {
         assert_eq!(signed_sqrt(1.0), 1.0);
         assert_eq!(signed_sqrt(-1.0), -1.0);
         assert_eq!(signed_sqrt(-4.0), -2.0);
+    }
+
+    #[test]
+    fn test_clamp_freq_ratio() {
+        assert_eq!(clamp_freq_ratio(20.0), 10.0);
+        assert_eq!(clamp_freq_ratio(40.0), 10.0);
+        assert_eq!(clamp_freq_ratio(0.1), 0.4);
     }
 }

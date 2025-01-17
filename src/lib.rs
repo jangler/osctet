@@ -26,7 +26,6 @@ mod ui;
 pub mod module;
 pub mod playback;
 mod dsp;
-mod smpl;
 mod timespan;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
