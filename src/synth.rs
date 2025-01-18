@@ -1287,7 +1287,7 @@ impl Display for ModTarget {
             Self::FilterCutoff(n) => &format!("Filter {} freq", n + 1),
             Self::FilterQ(n) => &format!("Filter {} reso", n + 1),
             Self::EnvScale(n) => &format!("Env {} scale", n + 1),
-            Self::LFORate(n) => &format!("LFO {} freq", n + 1),
+            Self::LFORate(n) => &format!("LFO {} rate", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
             Self::ClipGain => "Distortion",
         };
