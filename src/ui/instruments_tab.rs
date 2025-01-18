@@ -106,17 +106,20 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     if ui.button("Load", true, Info::LoadPatch) {
         if let Some(paths) = super::new_file_dialog(player)
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
+            .add_filter("Sample", &PcmData::FILE_EXTENSIONS)
             .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
             .pick_files() {
             for (i, path) in paths.iter().enumerate() {
                 cfg.patch_folder = config::dir_as_string(path);
-                match Patch::load(path) {
-                    Ok(mut p) => {
-                        if let Some(s) = path.file_stem() {
-                            if let Some(s) = s.to_str() {
-                                p.name = s.to_owned();
-                            }
-                        }
+                let patch = if path.extension().and_then(|s| s.to_str())
+                    .is_some_and(|s| s == PATCH_FILTER_EXT)
+                {
+                    Patch::load(path)
+                } else {
+                    Patch::load_sample(path)
+                };
+                match patch {
+                    Ok(p) => {
                         edits.push(Edit::InsertPatch(patches.len() + i, p));
                         *patch_index = Some(patches.len() + i);
                     },

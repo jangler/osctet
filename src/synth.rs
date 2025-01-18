@@ -517,15 +517,32 @@ impl Patch {
     }
 
     /// Load a patch from disk.
-    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+    pub fn load(path: &Path) -> Result<Self, Box<dyn Error>> {
         let input = fs::read(path)?;
         let mut patch = rmp_serde::from_slice::<Self>(&input)?;
         patch.init();
+        patch.set_name_from_path(path);
         Ok(patch)
     }
 
+    /// Create a new patch by loading a sample from disk.
+    pub fn load_sample(path: &Path) -> Result<Self, Box<dyn Error>> {
+        let data = PcmData::load(path)?;
+        let mut patch = Patch::new("Sample".into());
+        patch.set_name_from_path(path);
+        patch.oscs[0].waveform = Waveform::Pcm(Some(data));
+        Ok(patch)
+    }
+
+    fn set_name_from_path(&mut self, path: &Path) {
+        if let Some(s) = path.file_stem().and_then(|s| s.to_str()) {
+            self.name = s.to_owned();
+            self.name.truncate(MAX_PATCH_NAME_CHARS);
+        }
+    }
+
     /// Save the patch to disk.
-    pub fn save(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, path: &Path) -> Result<(), Box<dyn Error>> {
         let contents = rmp_serde::to_vec(self)?;
         Ok(fs::write(path, contents)?)
     }
