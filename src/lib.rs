@@ -160,7 +160,7 @@ impl App {
             render_channel: None,
             sample_rate,
             table_cache: None,
-            version: format!("v{PKG_VERSION}-pre7"),
+            version: format!("v{PKG_VERSION}-pre8"),
         }
     }
 
