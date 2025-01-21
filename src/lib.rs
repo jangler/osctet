@@ -33,6 +33,7 @@ use timespan::Timespan;
 use ui::general_tab::TableCache;
 use ui::info::Info;
 use ui::instruments_tab::fix_patch_index;
+use ui::is_ctrl_down;
 use ui::pattern_tab::PatternEditor;
 
 /// Application name, for window title, etc.
@@ -491,6 +492,13 @@ impl App {
             }
             if self.ui.accepting_note_input() {
                 player.clear_notes_with_origin(KeyOrigin::Midi);
+            }
+
+            // ctrl+scroll
+            if is_ctrl_down() && mouse_wheel().1 != 0.0 {
+                let pe = &mut self.pattern_editor;
+                let d = mouse_wheel().1.signum() as i8;
+                pe.set_division(pe.beat_division.saturating_add_signed(d));
             }
 
             if player.is_playing() {

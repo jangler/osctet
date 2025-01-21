@@ -1850,6 +1850,6 @@ fn is_alt_down() -> bool {
 }
 
 /// Returns true if either Ctrl key is down.
-fn is_ctrl_down() -> bool {
+pub fn is_ctrl_down() -> bool {
     is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
 }

@@ -112,6 +112,7 @@ impl Default for ControlInfo {
 pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     let mut text = String::new();
     let mut actions = Vec::new();
+    let mut custom_actions = false;
 
     // keep max line width around 50 chars
     match info {
@@ -184,7 +185,11 @@ By default an arrow means one step, but in large
 tunings it may be useful to notate multiple steps
 with one arrow.".to_string(),
         Info::Division => {
-            text = "Current number of rows per beat.".to_string();
+            text =
+"Current number of rows per beat.
+
+Ctrl+Scroll - Change division".to_string();
+            custom_actions = true;
             actions = vec![Action::IncrementDivision, Action::DecrementDivision,
                 Action::HalveDivision, Action::DoubleDivision];
         },
@@ -509,7 +514,7 @@ or tempo ratios (ex. 3:2 or 3/2).".to_string();
     };
 
     if !actions.is_empty() {
-        if !text.is_empty() {
+        if !text.is_empty() && !custom_actions {
             text.push('\n');
         }
         for action in actions {
