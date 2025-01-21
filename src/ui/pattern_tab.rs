@@ -129,7 +129,6 @@ impl PatternEditor {
             isotick.as_f32());
         let offset = (self.screen_tick_max - self.screen_tick)
             * Timespan::approximate((new_pos - old_pos).into());
-        dbg!(old_pos, new_pos, offset.as_f32());
         self.beat_scroll = (self.beat_scroll + offset).max(Timespan::ZERO);
     }
 
