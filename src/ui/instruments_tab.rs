@@ -742,7 +742,8 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
         ModTarget::FilterCutoff(_) =>
             Box::new(|d| format!("{:+.2} octaves", d * FILTER_CUTOFF_MOD_BASE.log2())),
         ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Tone(_)
-            | ModTarget::ModDepth(_) => Box::new(|d| format!("{:+.2}", d)),
+            | ModTarget::ModDepth(_) | ModTarget::FxSend =>
+            Box::new(|d| format!("{:+.2}", d)),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|d| format!("{:+.1} cents", d * 50.0)),
         ModTarget::Gain | ModTarget::Level(_) =>
@@ -763,7 +764,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
         ModTarget::FilterCutoff(_) =>
             Box::new(|f| f / FILTER_CUTOFF_MOD_BASE.log2()),
         ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Tone(_)
-            | ModTarget::ModDepth(_) => Box::new(|f| f),
+            | ModTarget::ModDepth(_) | ModTarget::FxSend => Box::new(|f| f),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|f| f / 50.0),
         ModTarget::Gain | ModTarget::Level(_) =>

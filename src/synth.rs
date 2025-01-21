@@ -600,6 +600,7 @@ impl Patch {
             ModTarget::Pitch,
             ModTarget::FinePitch,
             ModTarget::ClipGain,
+            ModTarget::FxSend,
         ];
 
         for (i, osc) in self.oscs.iter().enumerate() {
@@ -1241,6 +1242,7 @@ pub enum ModTarget {
     ModDepth(usize),
     /// Distortion. Inaccurate name for legacy reasons.
     ClipGain,
+    FxSend,
 }
 
 impl ModTarget {
@@ -1307,6 +1309,7 @@ impl Display for ModTarget {
             Self::LFORate(n) => &format!("LFO {} rate", n + 1),
             Self::ModDepth(n) => &format!("Mod {} depth", n + 1),
             Self::ClipGain => "Distortion",
+            Self::FxSend => "FX send",
         };
         f.write_str(s)
     }
@@ -1355,11 +1358,14 @@ impl Voice {
         let pan = (var(&settings.pan.0) >> smooth()
             + settings.mod_net(&vars, ModTarget::Pan, &[]) * 2.0)
             * var(pan_polarity) >> shape_fn(clamp11);
+        let fx_send = (var(&settings.fx_send.0)
+            + settings.mod_net(&vars, ModTarget::FxSend, &[]))
+            >> shape_fn(clamp01);
 
         let net = (signal | pan) >> panner()
             >> multisplit::<U2, U2>()
             >> (multipass::<U2>()
-                | multipass::<U2>() * (var(&settings.fx_send.0) >> split::<U2>()));
+                | multipass::<U2>() * (fx_send >> split::<U2>()));
 
         Self {
             vars,
