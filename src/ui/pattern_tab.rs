@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use fundsp::math::delerp;
+
 use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch, timespan::Timespan};
 
 use super::*;
@@ -105,12 +107,30 @@ impl PatternEditor {
     /// Set division, adjusting other parameters as necessary.
     pub fn set_division(&mut self, division: u8) {
         let division = division.max(1);
+
+        // the tricky part here is to preserve the visual position of either
+        // the cursor or the center of the viewport
+        let isotick = if self.tick_visible(self.cursor_tick()) {
+            let n = (self.cursor_tick().as_f64() * division as f64).round() as i32;
+            Timespan::new(n, division)
+        } else {
+            (self.screen_tick + self.screen_tick_max) * Timespan::new(1, 2)
+        };
+        let old_pos = delerp(self.screen_tick.as_f32(), self.screen_tick_max.as_f32(),
+            isotick.as_f32());
+
         self.screen_tick_max = self.screen_tick
             + (self.screen_tick_max - self.screen_tick)
             * Timespan::new(self.beat_division as i32, division);
         self.beat_division = division;
         self.cursor_to_division();
-        self.scroll_to(self.cursor_tick());
+
+        let new_pos = delerp(self.screen_tick.as_f32(), self.screen_tick_max.as_f32(),
+            isotick.as_f32());
+        let offset = (self.screen_tick_max - self.screen_tick)
+            * Timespan::approximate((new_pos - old_pos).into());
+        dbg!(old_pos, new_pos, offset.as_f32());
+        self.beat_scroll = (self.beat_scroll + offset).max(Timespan::ZERO);
     }
 
     /// Returns the track the cursor is in.

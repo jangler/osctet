@@ -508,7 +508,7 @@ impl Ui {
     pub fn vertical_scrollbar(&mut self,
         current_y: &mut f32, max_y: f32, viewport_h: f32, keys: bool
     ) {
-        if !is_shift_down() {
+        if !is_shift_down() && !is_ctrl_down() {
             let (_, y_scroll) = mouse_wheel();
             if y_scroll != 0.0 {
                 let increment = if is_alt_down() {
@@ -578,7 +578,7 @@ impl Ui {
     pub fn horizontal_scroll(&mut self,
          current_x: &mut f32, max_x: f32, viewport_w: f32
     ) {
-        if is_shift_down() {
+        if is_shift_down() && !is_ctrl_down() {
             let (_, y_scroll) = mouse_wheel();
             if y_scroll != 0.0 {
                 let increment = self.style.line_height() * 3.0;
