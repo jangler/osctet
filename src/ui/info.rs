@@ -506,10 +506,18 @@ Shift+0..F - Track enter digit".to_string(),
 "Control column. Type to enter BPM values (ex. 120)
 or tempo ratios (ex. 3:2 or 3/2).".to_string();
             actions =
-                vec![Action::TapTempo, Action::RationalTempo, Action::Loop, Action::End];
+                vec![Action::TapTempo, Action::Loop, Action::End];
         },
         Info::NoteColumn => {
-            text = "Note column.".to_string();
+            let first_note = conf.note_keys.first().map(|(h, _)| h.to_string())
+                .unwrap_or_default();
+            let last_note = conf.note_keys.last().map(|(h, _)| h.to_string())
+                .unwrap_or_default();
+            text = format!(
+"Note column.
+
+{}..{} - Enter note", first_note, last_note);
+            custom_actions = true;
             actions = vec![Action::NoteOff, Action::CycleNotation, Action::UseLastNote];
         },
     };
