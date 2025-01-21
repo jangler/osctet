@@ -270,6 +270,7 @@ impl Synth {
         }
 
         // turn off prev note(s) in channel
+        // TODO: this won't work right for non-poly play modes!
         if key.origin == KeyOrigin::Pattern {
             let removed_keys: Vec<Key> = self.active_voices.keys()
                 .filter(|k| k.origin == key.origin && k.channel == key.channel)
@@ -307,7 +308,7 @@ impl Synth {
                     let voice = self.active_voices.drain().map(|(_, v)| v).next()
                         .expect("voices confirmed non-empty");
                     voice.vars.freq.set(midi_hz(pitch));
-                    self.active_voices.insert(key.clone(), voice);
+                    self.insert_voice(key.clone(), voice);
                     false
                 }
             },
@@ -326,9 +327,16 @@ impl Synth {
             let voice = Voice::new(pitch, bend, pressure, self.mod_memory[channel],
                 self.prev_freq, patch, seq, self.sample_rate, pan_polarity);
 
-            self.active_voices.insert(key, voice);
+            self.insert_voice(key, voice);
             self.check_truncate_voices(channel, seq);
             self.prev_freq = Some(midi_hz(pitch));
+        }
+    }
+
+    /// Insert a voice, releasing any previous voice with the same key.
+    fn insert_voice(&mut self, key: Key, voice: Voice) {
+        if let Some(voice) = self.active_voices.insert(key.clone(), voice) {
+            self.released_voices[key.channel as usize].push_back(voice);
         }
     }
 
