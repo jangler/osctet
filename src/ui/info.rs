@@ -188,7 +188,8 @@ with one arrow.".to_string(),
             text =
 "Current number of rows per beat.
 
-Ctrl+Scroll - Change division".to_string();
+Ctrl+Scroll - Inc/dec division
+Ctrl+Alt+Scroll - Double/halve division".to_string();
             custom_actions = true;
             actions = vec![Action::IncrementDivision, Action::DecrementDivision,
                 Action::HalveDivision, Action::DoubleDivision];

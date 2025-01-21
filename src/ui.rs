@@ -1845,7 +1845,7 @@ fn is_shift_down() -> bool {
 }
 
 /// Returns true if either Alt key is down.
-fn is_alt_down() -> bool {
+pub fn is_alt_down() -> bool {
     is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt)
 }
 
