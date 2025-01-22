@@ -162,9 +162,19 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
         let mut removed_index = None;
 
         labeled_group(ui, "Note in", Info::KitNoteIn, |ui| {
+            let mut notes = Vec::new();
+
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let label = format!("kit_{}_input", i);
+                ui.start_group();
                 ui.note_input(&label, &mut entry.input_note, Info::KitNoteIn);
+
+                if notes.contains(&entry.input_note) {
+                    ui.offset_label("*", Info::DuplicateKitEntry)
+                } else {
+                    notes.push(entry.input_note);
+                }
+                ui.end_group();
             }
         });
 

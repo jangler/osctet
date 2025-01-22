@@ -85,6 +85,7 @@ pub enum Info {
     InstrumentList,
     Font,
     Oversample,
+    DuplicateKitEntry,
 }
 
 impl Default for Info {
@@ -117,6 +118,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::DuplicateKitEntry =>
+            text = "Another mapping already uses this note.".to_string(),
         Info::Oversample => text =
 "Run the generator at twice the normal sample rate.
 Mainly useful for avoiding inharmonic artifacts in

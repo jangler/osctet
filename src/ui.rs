@@ -750,6 +750,7 @@ impl Ui {
     ) -> bool {
         const ID: &str = "checkbox";
 
+        // TODO: since label activates checkbox, highlight on label hover too
         let button_text = if *value { "X" } else { " " };
         self.start_widget();
         let (rect, event) = self.text_rect(button_text, enabled,
