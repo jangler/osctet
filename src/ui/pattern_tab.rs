@@ -353,62 +353,79 @@ impl PatternEditor {
         }
     }
 
-    /// Handle the interpolate key command.
+    /// Handle the Interpolate key command.
     fn interpolate(&self, module: &mut Module) {
-        let (start, mut end) = self.selection_corners();
+        let (mut start, end) = self.selection_corners();
+        let mut edit = Edit::PatternData { remove: Vec::new(), add: Vec::new() };
 
-        if start.tick == end.tick && (
-            start.column > 0
-            || start.track == 0
-            || module.event_at(&self.edit_start).is_none()
-        ) {
-            // interpolate to next event in column
-            let evt = module.tracks[self.edit_start.track]
-                .channels[self.edit_start.channel]
-                .events.iter()
-                .find(|e| e.tick > self.edit_start.tick
-                    && e.data.logical_column() == self.edit_start.column);
+        // iterate over columns
+        while start.x_tuple() <= end.x_tuple() {
+            let mut end = Position {
+                tick: end.tick,
+                ..start
+            };
+            let mut skip = false;
 
-            if let Some(evt) = evt {
-                end.tick = evt.tick;
-            } else {
-                return
+            if start.tick == end.tick && (
+                start.column > 0
+                || start.track == 0
+                || module.event_at(&start).is_none()
+            ) {
+                // interpolate to next event in column
+                let evt = module.tracks[start.track]
+                    .channels[start.channel]
+                    .events.iter()
+                    .find(|e| e.tick > start.tick
+                        && e.data.logical_column() == start.column);
+
+                if let Some(evt) = evt {
+                    end.tick = evt.tick;
+                } else {
+                    skip = true;
+                }
             }
+
+            if !skip {
+                let interp_event_at_start = module.event_at(&Position {
+                    column: start.column | EventData::INTERP_COL_FLAG,
+                    ..start
+                }).map(|e| e.data.clone());
+                let interp_event_at_end = module.event_at(&Position {
+                    column: end.column | EventData::INTERP_COL_FLAG,
+                    ..end
+                }).map(|e| e.data.clone());
+    
+                let events = if start.tick == end.tick {
+                    vec![
+                        LocatedEvent::from_position(start,
+                            EventData::TickGlide(start.column))
+                    ]
+                } else {
+                    vec![
+                        LocatedEvent::from_position(start,
+                            EventData::StartGlide(start.column)),
+                        LocatedEvent::from_position(end,
+                            EventData::EndGlide(start.column)),
+                    ]
+                };
+    
+                if let Edit::PatternData { remove, add } = &mut edit {
+                    remove.extend(events.iter().map(|e| e.position()));
+    
+                    match (interp_event_at_start, interp_event_at_end) {
+                        // if we're over an existing span, just delete it
+                        (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
+                            | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_)))
+                            | (Some(EventData::TickGlide(_)), Some(EventData::TickGlide(_)))
+                            => (),
+                        // otherwise, insert as normal
+                        _ => add.extend(events),
+                    }
+                }
+            }
+
+            start = next_channel(start, &module.tracks);
         }
-
-        let interp_event_at_start = module.event_at(&Position {
-            column: start.column | EventData::INTERP_COL_FLAG,
-            ..start
-        }).map(|e| e.data.clone());
-        let interp_event_at_end = module.event_at(&Position {
-            column: end.column | EventData::INTERP_COL_FLAG,
-            ..end
-        }).map(|e| e.data.clone());
-
-        let add = if start.tick == end.tick {
-            vec![LocatedEvent::from_position(start, EventData::TickGlide(start.column))]
-        } else {
-            vec![
-                LocatedEvent::from_position(start, EventData::StartGlide(start.column)),
-                LocatedEvent::from_position(end, EventData::EndGlide(start.column)),
-            ]
-        };
-
-        let edit = match (interp_event_at_start, interp_event_at_end) {
-            // if we're over an existing span, just delete it
-            (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
-                | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_)))
-                | (Some(EventData::TickGlide(_)), Some(EventData::TickGlide(_))) =>
-                Edit::PatternData {
-                    remove: add.iter().map(|e| e.position()).collect(),
-                    add: Vec::new(),
-                },
-            // otherwise, insert as normal
-            _ => Edit::PatternData {
-                remove: add.iter().map(|e| e.position()).collect(),
-                add,
-            },
-        };
 
         module.push_edit(edit);
     }
@@ -1433,25 +1450,32 @@ fn shift_column_left(pe: &mut PatternEditor, tracks: &[Track]) {
 
 /// Handle the "next column" key command.
 fn shift_column_right(pe: &mut PatternEditor, tracks: &[Track]) {
-    let column = pe.edit_end.column + 1;
-    let n_columns = if pe.edit_end.track == 0 { 1 } else { 3 };
-
-    if column < n_columns {
-        pe.edit_end.column = column;
-    } else if pe.edit_end.channel + 1 < tracks[pe.edit_end.track].channels.len() {
-        pe.edit_end.channel += 1;
-        pe.edit_end.column = 0;
-    } else if pe.edit_end.track + 1 < tracks.len() {
-        pe.edit_end.track += 1;
-        pe.edit_end.channel = 0;
-        pe.edit_end.column = 0;
-    }
+    pe.edit_end = next_column(pe.edit_end, tracks);
 
     if !is_shift_down() {
         pe.edit_start.track = pe.edit_end.track;
         pe.edit_start.channel = pe.edit_end.channel;
         pe.edit_start.column = pe.edit_end.column;
     }
+}
+
+fn next_column(pos: Position, tracks: &[Track]) -> Position {
+    let column = pos.column + 1;
+    let n_columns = if pos.track == 0 { 1 } else { 3 };
+    let mut pos = pos;
+
+    if column < n_columns {
+        pos.column = column;
+    } else if pos.channel + 1 < tracks[pos.track].channels.len() {
+        pos.channel += 1;
+        pos.column = 0;
+    } else if pos.track + 1 < tracks.len() {
+        pos.track += 1;
+        pos.channel = 0;
+        pos.column = 0;
+    }
+
+    pos
 }
 
 /// Handle the "previous channel" key command.
@@ -1471,15 +1495,23 @@ fn shift_channel_left(pe: &mut PatternEditor) {
 
 /// Handle the "next channel" key command.
 fn shift_channel_right(pe: &mut PatternEditor, tracks: &[Track]) {
-    let channel = pe.edit_end.channel + 1;
-    if channel < tracks[pe.edit_end.track].channels.len() {
-        pe.edit_end.channel = channel;
-    } else if pe.edit_end.track + 1 < tracks.len() {
-        pe.edit_end.channel = 0;
-        pe.edit_end.track += 1;
-    }
+    pe.edit_end = next_channel(pe.edit_end, tracks);
     pe.edit_start.track = pe.edit_end.track;
     pe.edit_start.channel = pe.edit_end.channel;
+}
+
+/// Shift a position one channel to the right.
+fn next_channel(pos: Position, tracks: &[Track]) -> Position {
+    let channel = pos.channel + 1;
+    let mut pos = pos;
+
+    if channel < tracks[pos.track].channels.len() {
+        pos.channel = channel;
+    } else if pos.track + 1 < tracks.len() {
+        pos.channel = 0;
+        pos.track += 1;
+    }
+    pos
 }
 
 /// Reposition the pattern cursors if in an invalid position.
