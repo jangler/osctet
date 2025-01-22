@@ -748,6 +748,8 @@ impl Ui {
     /// Draws a checkbox and returns true if it was changed this frame.
     pub fn checkbox(&mut self, label: &str, value: &mut bool, enabled: bool, info: Info
     ) -> bool {
+        const ID: &str = "checkbox";
+
         let button_text = if *value { "X" } else { " " };
         self.start_widget();
         let (rect, event) = self.text_rect(button_text, enabled,
@@ -755,14 +757,15 @@ impl Ui {
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg(),
             &self.style.theme.content_bg());
-        let clicked = event == MouseEvent::Released;
-        self.push_text(self.cursor_x + rect.w + self.style.margin,
+        let rect = self.push_text(self.cursor_x + rect.w + self.style.margin,
             self.cursor_y + self.style.margin,
             label.to_owned(), if enabled {
                 self.style.theme.fg()
             } else {
                 self.style.theme.border_disabled()
             });
+        let clicked = event == MouseEvent::Released
+            || self.mouse_hits(rect, ID) && is_mouse_button_released(MouseButton::Left);
         if clicked {
             *value = !*value;
         }

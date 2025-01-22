@@ -760,6 +760,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(sample_rate as f64);
 
+    // TODO: sequencer backend is probably not necessary anymore due to mutexing
     let fx_settings: FXSettings = Default::default();
     let mut global_fx = GlobalFX::new(seq.backend(), &fx_settings);
     global_fx.net.set_sample_rate(sample_rate as f64);
