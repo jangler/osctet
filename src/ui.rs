@@ -189,6 +189,7 @@ pub struct Ui {
     draw_queue: Vec<DrawOp>,
     pub layout: Layout,
     dialog: Option<Dialog>,
+    dialog_first_frame: bool,
     group_rects: Vec<Rect>,
     pub note_queue: Vec<(Key, EventData)>,
     instrument_edit_index: Option<usize>,
@@ -230,6 +231,7 @@ impl Ui {
             layout: Layout::Vertical,
             draw_queue: Vec::new(),
             dialog: None,
+            dialog_first_frame: false,
             group_rects: Vec::new(),
             note_queue: Vec::new(),
             instrument_edit_index: None,
@@ -1464,6 +1466,7 @@ impl Ui {
 
     fn open_dialog(&mut self, dialog: Dialog) {
         self.dialog = Some(dialog);
+        self.dialog_first_frame = true;
     }
 
     /// Report an error in an alert dialog.
@@ -1473,7 +1476,7 @@ impl Ui {
 
     /// Prompt for confirmation before performing an action.
     pub fn confirm(&mut self, prompt: &str, action: Action) {
-        self.dialog = Some(Dialog::OkCancel(prompt.to_owned(), action));
+        self.open_dialog(Dialog::OkCancel(prompt.to_owned(), action));
     }
 
     /// Temporarily use the info box to display a message.
@@ -1486,6 +1489,7 @@ impl Ui {
 
     pub fn accepting_keyboard_input(&self) -> bool {
         matches!(self.focus, Focus::Text(_) | Focus::Hotkey(_))
+            || matches!(self.dialog, Some(Dialog::Alert(_)))
     }
 
     pub fn accepting_note_input(&self) -> bool {
@@ -1705,9 +1709,9 @@ impl Ui {
                     self.push_rect(r, self.style.theme.panel_bg(),
                         Some(self.style.theme.border_unfocused()));
                     self.push_text(r.x, r.y, s, self.style.theme.fg());
-                    close = is_key_pressed(KeyCode::Escape)
+                    close = !self.dialog_first_frame && (is_any_key_pressed()
                         || (self.mouse_consumed.is_none()
-                            && is_mouse_button_pressed(MouseButton::Left))
+                            && is_any_mouse_button_pressed()));
                 }
                 Dialog::OkCancel(s, a) => {
                     let a = *a;
@@ -1719,6 +1723,7 @@ impl Ui {
                     }
                 }
             };
+            self.dialog_first_frame = false;
         }
 
         if close {
@@ -1856,4 +1861,13 @@ pub fn is_alt_down() -> bool {
 /// Returns true if either Ctrl key is down.
 pub fn is_ctrl_down() -> bool {
     is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl)
+}
+
+fn is_any_key_pressed() -> bool {
+    !get_keys_pressed().is_empty()
+}
+
+fn is_any_mouse_button_pressed() -> bool {
+    [MouseButton::Left, MouseButton::Right, MouseButton::Middle]
+        .iter().cloned().any(is_mouse_button_pressed)
 }

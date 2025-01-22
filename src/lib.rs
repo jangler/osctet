@@ -170,7 +170,6 @@ impl App {
     fn keyjazz_track(&self) -> usize {
         // TODO: switching tracks while keyjazzing could result in stuck notes
         // TODO: entering note input mode while keyjazzing could result in stuck notes
-        // TODO: can keyjazzing mess up synth memory in a way that matters?
         if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
             self.pattern_editor.cursor_track()
         } else {
