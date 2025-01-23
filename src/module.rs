@@ -1,4 +1,4 @@
-//! Definitions for all stored module data except patches.
+//! Definitions for most stored module data.
 
 use std::{collections::HashSet, error::Error, fs::File, io::{BufReader, Read, Write}, path::PathBuf};
 
@@ -32,7 +32,6 @@ pub struct Module {
     redo_stack: Vec<Edit>,
     #[serde(skip)]
     track_history: Vec<TrackEdit>,
-
     #[serde(skip)]
     pub has_unsaved_changes: bool,
 }
@@ -69,12 +68,12 @@ impl Module {
         let mut input = Vec::new();
         GzDecoder::new(BufReader::new(file)).read_to_end(&mut input)?;
         let mut module = rmp_serde::from_slice::<Self>(&input)?;
-        module.init_pcm();
+        module.init_patches();
         Ok(module)
     }
 
-    /// Initialize sample data.
-    fn init_pcm(&mut self) {
+    /// Initialize deserialized patches.
+    fn init_patches(&mut self) {
         for patch in &mut self.patches {
             patch.init();
         }
@@ -103,7 +102,7 @@ impl Module {
         }
     }
 
-    /// Returns the kit patch that `note` to, if any.
+    /// Returns the kit patch that `note` maps to, if any.
     fn get_kit_patch(&self, note: Note) -> Option<(&Patch, Note)> {
         self.kit.iter()
             .find(|x| x.input_note == note)
@@ -247,17 +246,7 @@ impl Module {
         });
     }
 
-    /// Returns the nearest loop start to the given tick.
-    pub fn nearest_loop(&self, tick: Timespan) -> Option<Timespan> {
-        self.tracks[0].channels.iter().flat_map(|c| {
-            c.events.iter().filter_map(|e| match e.data {
-                EventData::Loop => Some(e.tick),
-                _ => None,
-            })
-        }).max_by_key(|t| (*t - tick).abs())
-    }
-
-    /// Performs an edit operation and handles undo/redo stacks.
+    /// Performs an edit operation and updates undo/redo stacks.
     pub fn push_edit(&mut self, edit: Edit) {
         let edit = self.flip_edit(edit);
         self.undo_stack.push(edit);
@@ -402,7 +391,7 @@ impl Module {
         self.track_history.drain(..).collect()
     }
 
-    /// Returns the first loop event before beat count `before_time`.
+    /// Returns the last loop event before beat count `before_time`.
     pub fn find_loop_start(&self, before_time: f64) -> Option<Timespan> {
         self.tracks[0].channels.iter().flat_map(|c| {
             c.events.iter()
@@ -413,27 +402,30 @@ impl Module {
 
     /// Returns true if the module has an End event.
     pub fn ends(&self) -> bool {
-        for channel in &self.tracks[0].channels {
-            for event in &channel.events {
-                if event.data == EventData::End {
-                    return true
-                }
-            }
-        }
-        false
+        self.tracks[0].channels.iter().any(|c|
+            c.events.iter().any(|e| e.data == EventData::End)
+        )
+    }
+
+    /// Return all events in the global channel, in sorted order.
+    fn ctrl_events(&self) -> Vec<&Event> {
+        let mut events: Vec<_> = self.tracks[0].channels.iter()
+            .flat_map(|c| c.events.iter())
+            .collect();
+        events.sort_by_key(|e| e.tick);
+        events
     }
 
     /// Returns true if the module loops.
     pub fn loops(&self) -> bool {
-        for channel in &self.tracks[0].channels {
-            for event in &channel.events {
-                match event.data {
-                    EventData::End => return false,
-                    EventData::Loop => return true,
-                    _ => (),
-                }
+        for event in self.ctrl_events() {
+            match event.data {
+                EventData::End => return false,
+                EventData::Loop => return true,
+                _ => (),
             }
         }
+
         false
     }
 
@@ -442,6 +434,7 @@ impl Module {
         let mut n = 0;
         let mut t = start.track;
         let mut c = start.channel;
+
         while t < end.track || c < end.channel {
             n += 1;
             c += 1;
@@ -450,6 +443,7 @@ impl Module {
                 c = 0;
             }
         }
+
         n
     }
 
@@ -464,32 +458,26 @@ impl Module {
 
     /// Return the tempo at a given tick.
     pub fn tempo_at(&self, tick: Timespan) -> f32 {
-        let mut events: Vec<_> = self.tracks[0].channels.iter()
-            .flat_map(|c| c.events.iter().filter(|e| e.tick <= tick))
-            .collect();
-        events.sort_by_key(|e| e.tick);
-
         let mut result = DEFAULT_TEMPO;
-        for evt in events {
+
+        for evt in self.ctrl_events().iter().take_while(|e| e.tick <= tick) {
             match evt.data {
                 EventData::Tempo(t) => result = t,
                 EventData::RationalTempo(n, d) => result *= n as f32 / d as f32,
                 _ => (),
             }
         }
+
         result
     }
 
     /// Returns the total playtime of the module in seconds.
     pub fn playtime(&self) -> f64 {
-        let ctrl_events: Vec<_> = self.tracks[0].channels.iter()
-            .flat_map(|c| c.events.iter())
-            .collect();
         let mut tick = Timespan::ZERO;
         let mut time = 0.0;
         let mut tempo = DEFAULT_TEMPO;
 
-        for evt in ctrl_events {
+        for evt in self.ctrl_events() {
             match evt.data {
                 EventData::Tempo(t) => {
                     time += tick_interval(evt.tick - tick, tempo);
@@ -557,23 +545,20 @@ pub struct Channel {
 impl Channel {
     /// Shifts events after `start` by `distance` ticks, returning deleted events.
     pub fn shift_events(&mut self, start: Timespan, distance: Timespan) -> Vec<Event> {
-        let mut deleted = Vec::new();
-
-        if distance < Timespan::ZERO {
+        let deleted = if distance < Timespan::ZERO {
             let (keep, pass) = std::mem::take(&mut self.events).into_iter()
-                .partition(|e| e.tick < start
-                    || e.tick >= start - distance);
+                .partition(|e| e.tick < start || e.tick >= start - distance);
             self.events = keep;
-            deleted = pass;
-        }
+            pass
+        } else {
+            Vec::new()
+        };
 
         for event in self.events.iter_mut() {
             if event.tick >= start {
                 event.tick = (event.tick + distance).max(Timespan::ZERO);
             }
         }
-
-        self.sort_events();
 
         deleted
     }
@@ -586,7 +571,7 @@ impl Channel {
 
     /// Return interpolation events in a (spatial) column.
     pub fn interp_by_col(&self, col: u8) -> impl Iterator<Item = &Event> + use<'_> {
-        self.events.iter().filter(move |e| matches!(e.data, 
+        self.events.iter().filter(move |e| matches!(e.data,
             EventData::StartGlide(i)
             | EventData::EndGlide(i)
             | EventData::TickGlide(i) if i == col))
@@ -596,11 +581,7 @@ impl Channel {
     pub fn is_interpolated(&self, col: u8, tick: Timespan) -> bool {
         let mut depth = 0;
 
-        for event in self.interp_by_col(col) {
-            if event.tick > tick {
-                break
-            }
-
+        for event in self.interp_by_col(col).take_while(|e| e.tick <= tick) {
             match event.data {
                 EventData::StartGlide(_) => if event.tick < tick {
                     depth += 1
@@ -693,6 +674,7 @@ pub struct Position {
     pub tick: Timespan,
     pub track: usize,
     pub channel: usize,
+    /// Logical column, not spatial column.
     pub column: u8,
 }
 
@@ -711,11 +693,12 @@ impl Position {
         (self.track, self.channel, self.column)
     }
 
-    /// Recalculate the position for an offset in channels.
+    /// Recalculate the position, given an offset in channels.
     /// Returns None if the position is out of range.
     pub fn add_channels(&self, channels: usize, tracks: &[Track]) -> Option<Self> {
         let mut track = self.track;
         let mut channel = self.channel;
+
         for _ in 0..channels {
             channel += 1;
             if channel >= tracks[track].channels.len() {
@@ -726,6 +709,7 @@ impl Position {
                 return None
             }
         }
+
         Some(Self {
             track,
             channel,

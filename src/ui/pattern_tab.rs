@@ -1502,16 +1502,7 @@ fn shift_channel_right(pe: &mut PatternEditor, tracks: &[Track]) {
 
 /// Shift a position one channel to the right.
 fn next_channel(pos: Position, tracks: &[Track]) -> Position {
-    let channel = pos.channel + 1;
-    let mut pos = pos;
-
-    if channel < tracks[pos.track].channels.len() {
-        pos.channel = channel;
-    } else if pos.track + 1 < tracks.len() {
-        pos.channel = 0;
-        pos.track += 1;
-    }
-    pos
+    pos.add_channels(1, tracks).unwrap_or(pos)
 }
 
 /// Reposition the pattern cursors if in an invalid position.
