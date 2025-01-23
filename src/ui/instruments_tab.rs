@@ -1,3 +1,4 @@
+use lfo::{AR_RATE_MULTIPLIER, LFO, MAX_LFO_RATE, MIN_LFO_RATE};
 use macroquad::input::{KeyCode, is_key_pressed};
 use pcm::PcmData;
 
@@ -632,9 +633,15 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
 
         labeled_group(ui, "Rate", Info::None, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
+                let scale = if lfo.audio_rate {
+                    AR_RATE_MULTIPLIER
+                } else {
+                    1.0
+                };
                 ui.formatted_shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
                     MIN_LFO_RATE..=MAX_LFO_RATE, 2, lfo.waveform.uses_freq(),
-                    Info::None, |f| format!("{f:.2} Hz"), |f| f);
+                    Info::None, |f| format!("{:.2} Hz", f * scale),
+                    |f| f / scale);
             }
         });
 
@@ -642,6 +649,13 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
                 ui.formatted_slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
                     0.0..=10.0, 2, true, Info::LfoDelay, |f| format!("{f:.2} s"), |f| f);
+            }
+        });
+        
+        labeled_group(ui, "AR", Info::LfoAudioRate, |ui| {
+            for lfo in patch.lfos.iter_mut() {
+                let enabled = !matches!(lfo.waveform, Waveform::Noise);
+                ui.checkbox("", &mut lfo.audio_rate, enabled, Info::LfoAudioRate);
             }
         });
 

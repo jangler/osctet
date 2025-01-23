@@ -86,6 +86,7 @@ pub enum Info {
     Font,
     Oversample,
     DuplicateKitEntry,
+    LfoAudioRate,
 }
 
 impl Default for Info {
@@ -120,6 +121,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
         Info::None => (),
         Info::DuplicateKitEntry =>
             text = "Another mapping already uses this note.".to_string(),
+        Info::LfoAudioRate =>
+            text = "Oscillate at audio rate, i.e. at audible frequencies.".to_string(),
         Info::Oversample => text =
 "Run the generator at twice the normal sample rate.
 Mainly useful for avoiding inharmonic artifacts in

@@ -1,10 +1,12 @@
 //! Subtractive/FM synth engine.
 
 pub(crate) mod pcm;
+pub(crate) mod lfo;
 
 use core::f64;
 use std::{collections::{HashMap, VecDeque}, error::Error, fmt::Display, fs, path::Path};
 
+use lfo::LFO;
 use pcm::PcmData;
 use rand::prelude::*;
 use fundsp::hacker32::*;
@@ -34,10 +36,6 @@ pub const MIN_FREQ_RATIO: f32 = 0.25;
 pub const MAX_FREQ_RATIO: f32 = 16.0;
 
 // (Hz)
-pub const MIN_LFO_RATE: f32 = 0.1;
-pub const MAX_LFO_RATE: f32 = 20.0;
-
-// (Hz)
 pub const MIN_FILTER_CUTOFF: f32 = 20.0;
 pub const MAX_FILTER_CUTOFF: f32 = 22_000.0;
 
@@ -61,9 +59,6 @@ pub const SMOOTH_TIME: f32 = 0.01;
 
 /// Arbitrary constant for scaling FM depth.
 const FM_DEPTH_MULTIPLIER: f32 = 20.0;
-
-/// Use a cubic attack envelope for LFO delay.
-const LFO_DELAY_CURVE: f32 = 3.0;
 
 /// Wraps a Shared value for serialization.
 /// Cloning creates a new Shared value.
@@ -1089,57 +1084,6 @@ impl Default for ADSR {
             sustain: 1.0,
             release: 0.01,
             _power: 0.0,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct LFO {
-    pub waveform: Waveform,
-    pub freq: Parameter,
-    pub delay: f32,
-}
-
-impl Default for LFO {
-    fn default() -> Self {
-        Self {
-            waveform: Waveform::Triangle,
-            freq: Parameter(shared(1.0)),
-            delay: 0.0,
-        }
-    }
-}
-
-impl LFO {
-    /// Make an LFO DSP net.
-    fn make_net(&self,
-        settings: &Patch, vars: &VoiceVars, index: usize, path: &[ModSource]
-    ) -> Net {
-        let f = {
-            let f_mod = settings.mod_net(vars, ModTarget::LFORate(index), path)
-                >> pow_shape(MAX_LFO_RATE/MIN_LFO_RATE);
-            var(&self.freq.0) * f_mod
-                >> shape_fn(|x| clamp(MIN_LFO_RATE, MAX_LFO_RATE, x))
-        };
-        let d = {
-            let dt = self.delay;
-            envelope(move |t| clamp01(pow(t / dt, LFO_DELAY_CURVE)))
-        };
-        let p = vars.lfo_phases[index];
-
-        match &self.waveform {
-            Waveform::Sawtooth => f >> saw_lfo(p) * d >> smooth(),
-            Waveform::Pulse => f >> sqr_lfo(p) * d >> smooth(),
-            Waveform::Triangle => f >> tri_lfo(p) * d,
-            Waveform::Sine => f >> sin_lfo(p) * d,
-            Waveform::Hold => f >> hold_lfo(p) * d >> smooth(),
-            Waveform::Noise => Net::wrap(Box::new(
-                brown().seed((p * u64::MAX as f32) as u64) * d)),
-            Waveform::Pcm(data) => Net::wrap(if let Some(data) = data {
-                Box::new(wavech(&data.wave, 0, data.loop_point))
-            } else {
-                Box::new(zero())
-            }),
         }
     }
 }
