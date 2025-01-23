@@ -12,7 +12,7 @@ const LOOP_FADEOUT_TIME: f64 = 10.0;
 /// Handles module playback. In methods that take a `track` argument, 0 can
 /// safely be used for keyjazz events (since track 0 will never sequence).
 pub struct Player {
-    pub seq: Sequencer,
+    seq: Sequencer,
     synths: Vec<Synth>, // one per track
     playing: bool,
     beat: f64,
@@ -48,6 +48,7 @@ impl Player {
         self.beat = 0.0;
         self.tempo = DEFAULT_TEMPO;
         self.looped = false;
+        self.metronome = false;
     }
 
     /// Return the closest `Timespan` to the playhead.
@@ -86,12 +87,9 @@ impl Player {
     pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
         for edit in edits {
             match edit {
-                TrackEdit::Insert(i) => {
-                    self.synths.insert(i, Synth::new(self.sample_rate));
-                }
-                TrackEdit::Remove(i) => {
-                    self.synths.remove(i);
-                }
+                TrackEdit::Insert(i) =>
+                    self.synths.insert(i, Synth::new(self.sample_rate)),
+                TrackEdit::Remove(i) => { self.synths.remove(i); }
             }
         }
     }
@@ -165,7 +163,8 @@ impl Player {
         }
 
         let prev_time = self.beat;
-        self.beat += interval_ticks(dt, self.tempo);
+        self.beat += interval_beats(dt, self.tempo);
+        let current_timespan = Timespan::approximate(self.beat);
 
         let mut events = Vec::new();
 
@@ -178,8 +177,8 @@ impl Player {
 
                 for event in &channel.events {
                     let col = event.data.logical_column();
-
                     let t = event.tick.as_f64();
+
                     if t < self.beat {
                         if t >= prev_time {
                             events.push(LocatedEvent {
@@ -221,7 +220,7 @@ impl Player {
                                 track: track_i,
                                 channel: channel_i,
                                 event: Event {
-                                    tick: Timespan::approximate(self.beat),
+                                    tick: current_timespan,
                                     data,
                                 },
                             });
@@ -289,14 +288,12 @@ impl Player {
                             }
                         }
                     }
-                    EventData::Pressure(v) => {
+                    EventData::Pressure(v) =>
                         self.channel_pressure(track_i, channel_i as u8,
-                            v as f32 / EventData::DIGIT_MAX as f32);
-                    }
-                    EventData::Modulation(v) => {
+                            v as f32 / EventData::DIGIT_MAX as f32),
+                    EventData::Modulation(v) =>
                         self.modulate(track_i, channel_i as u8,
-                            v as f32 / EventData::DIGIT_MAX as f32);
-                    }
+                            v as f32 / EventData::DIGIT_MAX as f32),
                     EventData::NoteOff => active_note = None,
                     EventData::Tempo(t) => self.tempo = t,
                     EventData::RationalTempo(n, d) => self.tempo *= n as f32 / d as f32,
@@ -349,14 +346,12 @@ impl Player {
 
             for evt in events {
                 match evt.data {
-                    EventData::Pressure(v) => {
+                    EventData::Pressure(v) =>
                         self.synths[track_i].set_vel_memory(
-                            channel_i as u8, v as f32 / EventData::DIGIT_MAX as f32);
-                    }
-                    EventData::Modulation(v) => {
+                            channel_i as u8, v as f32 / EventData::DIGIT_MAX as f32),
+                    EventData::Modulation(v) =>
                         self.synths[track_i].set_mod_memory(
-                            channel_i as u8, v as f32 / EventData::DIGIT_MAX as f32);
-                    }
+                            channel_i as u8, v as f32 / EventData::DIGIT_MAX as f32),
                     _ => ()
                 }
             }
@@ -434,17 +429,13 @@ impl Player {
                     }
                 }
             }
-            EventData::Pressure(v) => {
+            EventData::Pressure(v) =>
                 self.channel_pressure(track, channel as u8,
-                    v as f32 / EventData::DIGIT_MAX as f32);
-            }
-            EventData::Modulation(v) => {
+                    v as f32 / EventData::DIGIT_MAX as f32),
+            EventData::Modulation(v) =>
                 self.modulate(track, channel as u8,
-                    v as f32 / EventData::DIGIT_MAX as f32);
-            }
-            EventData::NoteOff => {
-                self.note_off(track, key);
-            }
+                    v as f32 / EventData::DIGIT_MAX as f32),
+            EventData::NoteOff => self.note_off(track, key),
             EventData::Tempo(t) => self.tempo = t,
             EventData::RationalTempo(n, d) => {
                 let channel = &module.tracks[track].channels[channel];
@@ -472,7 +463,7 @@ impl Player {
 }
 
 /// Convert a time interval to beat-space.
-fn interval_ticks(dt: f64, tempo: f32) -> f64 {
+fn interval_beats(dt: f64, tempo: f32) -> f64 {
     dt * tempo as f64 / 60.0
 }
 
@@ -487,28 +478,29 @@ pub enum RenderUpdate {
     Done(Wave, PathBuf),
 }
 
-/// Renders module to PCM. Loops forever if module is missing END!
+/// Renders module to PCM. Loops forever if module is missing End!
 /// If `track` is some, solo that track for rendering.
 pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
 ) -> Receiver<RenderUpdate> {
     let (tx, rx) = mpsc::channel();
 
     thread::spawn(move || {
-        let sample_rate = 44100;
-        let mut wave = Wave::new(2, sample_rate as f64);
+        const SAMPLE_RATE: f64 = 44100.0;
+        const BLOCK_SIZE: i32 = 64;
+
+        let mut wave = Wave::new(2, SAMPLE_RATE);
         let mut seq = Sequencer::new(false, 4);
-        seq.set_sample_rate(sample_rate as f64);
+        seq.set_sample_rate(SAMPLE_RATE);
         let mut fx = GlobalFX::new(seq.backend(), &module.fx);
         let fadeout_gain = shared(1.0);
         fx.net = fx.net * (var(&fadeout_gain) | var(&fadeout_gain));
-        fx.net.set_sample_rate(sample_rate as f64);
-        let mut player = Player::new(seq, module.tracks.len(), sample_rate as f32);
+        fx.net.set_sample_rate(SAMPLE_RATE);
+        let mut player = Player::new(seq, module.tracks.len(), SAMPLE_RATE as f32);
         if let Some(track) = track {
             player.toggle_solo(&module, track);
         }
         let mut backend = BlockRateAdapter::new(Box::new(fx.net.backend()));
-        let block_size = 64;
-        let dt = block_size as f64 / sample_rate as f64;
+        let dt = BLOCK_SIZE as f64 / SAMPLE_RATE;
         let mut playtime = 0.0;
         let mut time_since_loop = 0.0;
         let render_time = if module.loops() {
@@ -516,20 +508,26 @@ pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
         } else {
             module.playtime()
         };
+        let mut prev_progress = 0.0;
 
         player.play();
         while player.playing && time_since_loop < LOOP_FADEOUT_TIME {
             player.frame(&module, dt);
             playtime += dt;
-            for _ in 0..block_size {
+            for _ in 0..BLOCK_SIZE {
                 wave.push(backend.get_stereo());
             }
             if player.looped {
                 fadeout_gain.set(1.0 - (time_since_loop / LOOP_FADEOUT_TIME) as f32);
                 time_since_loop += dt;
             }
-            if let Err(e) = tx.send(RenderUpdate::Progress(playtime / render_time)) {
-                eprintln!("{e}");
+
+            let progress = playtime / render_time;
+            if progress - prev_progress >= 0.01 {
+                prev_progress = progress;
+                if let Err(e) = tx.send(RenderUpdate::Progress(progress)) {
+                    eprintln!("{e}");
+                }
             }
         }
 
@@ -546,7 +544,8 @@ pub fn render_tracks(module: Arc<Module>, path: PathBuf) -> Receiver<RenderUpdat
     let (tx, rx) = mpsc::channel();
     let track_range = 1..module.tracks.len();
     let progress = Arc::new(Mutex::new(
-        track_range.clone().map(|_| 0.0).collect::<Vec<_>>()));
+        track_range.clone().map(|_| 0.0).collect::<Vec<_>>()
+    ));
 
     for i in track_range {
         let path = path
@@ -588,14 +587,12 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
         let t = (time - start.as_f32()) / (next.tick.as_f32() - start.as_f32());
 
         match next.data {
-            EventData::Pitch(b) => {
-                if let Some(EventData::Pitch(a)) = prev {
-                    let a = module.tuning.midi_pitch(a);
-                    let b = module.tuning.midi_pitch(&b);
-                    Some(EventData::InterpolatedPitch(lerp(a, b, t)))
-                } else {
-                    None
-                }
+            EventData::Pitch(b) => if let Some(EventData::Pitch(a)) = prev {
+                let a = module.tuning.midi_pitch(a);
+                let b = module.tuning.midi_pitch(&b);
+                Some(EventData::InterpolatedPitch(lerp(a, b, t)))
+            } else {
+                None
             }
             EventData::Tempo(b) => {
                 let a = match prev {
