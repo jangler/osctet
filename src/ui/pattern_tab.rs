@@ -528,19 +528,19 @@ impl PatternEditor {
 
     /// Handle the "next event" key command.
     fn next_event(&mut self, module: &Module) {
-        let tick = self.edit_start.tick;
+        let tick = self.edit_end.tick;
         self.snap_to_event(module, |t| *t > tick);
     }
 
     /// Handle the "previous event" key command.
     fn prev_event(&mut self, module: &Module) {
-        let tick = self.edit_start.tick;
+        let tick = self.edit_end.tick;
         self.snap_to_event(module, |t| *t < tick);
     }
 
     /// Snap cursor to the closest channel event whose position matches `filter_fn`.
     fn snap_to_event(&mut self, module: &Module, filter_fn: impl Fn(&Timespan) -> bool) {
-        let cursor = &mut self.edit_start;
+        let cursor = &mut self.edit_end;
         let tick = module.tracks[cursor.track].channels[cursor.channel].events.iter()
             .map(|e| e.tick)
             .filter(filter_fn)
