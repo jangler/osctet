@@ -356,7 +356,8 @@ impl PatternEditor {
     /// Handle the Interpolate key command.
     fn interpolate(&self, module: &mut Module) {
         let (mut start, end) = self.selection_corners();
-        let mut edit = Edit::PatternData { remove: Vec::new(), add: Vec::new() };
+        let mut remove = Vec::new();
+        let mut add = Vec::new();
 
         // iterate over columns
         while start.x_tuple() <= end.x_tuple() {
@@ -386,48 +387,68 @@ impl PatternEditor {
             }
 
             if !skip {
-                let interp_event_at_start = module.event_at(&Position {
+                let start_interp_pos = Position {
                     column: start.column | EventData::INTERP_COL_FLAG,
                     ..start
-                }).map(|e| e.data.clone());
-                let interp_event_at_end = module.event_at(&Position {
-                    column: end.column | EventData::INTERP_COL_FLAG,
-                    ..end
-                }).map(|e| e.data.clone());
-    
-                let events = if start.tick == end.tick {
-                    vec![
-                        LocatedEvent::from_position(start,
-                            EventData::TickGlide(start.column))
-                    ]
-                } else {
-                    vec![
-                        LocatedEvent::from_position(start,
-                            EventData::StartGlide(start.column)),
-                        LocatedEvent::from_position(end,
-                            EventData::EndGlide(start.column)),
-                    ]
                 };
-    
-                if let Edit::PatternData { remove, add } = &mut edit {
-                    remove.extend(events.iter().map(|e| e.position()));
-    
-                    match (interp_event_at_start, interp_event_at_end) {
-                        // if we're over an existing span, just delete it
-                        (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
-                            | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_)))
-                            | (Some(EventData::TickGlide(_)), Some(EventData::TickGlide(_)))
-                            => (),
-                        // otherwise, insert as normal
-                        _ => add.extend(events),
+                let interp_event_at_start =
+                    module.event_at(&start_interp_pos).map(|e| e.data.clone());
+
+                if start.tick == end.tick {
+                    match interp_event_at_start {
+                        None => add.push(LocatedEvent::from_position(start,
+                            EventData::TickGlide(start.column))),
+                        Some(EventData::TickGlide(_)) => remove.push(start_interp_pos),
+                        _ => (),
                     }
-                }
+                } else {
+                    let end_interp_pos = Position {
+                        column: start.column | EventData::INTERP_COL_FLAG,
+                        ..end
+                    };
+                    let interp_event_at_end =
+                        module.event_at(&end_interp_pos).map(|e| e.data.clone());
+                    
+                    if matches!((&interp_event_at_start, &interp_event_at_end),
+                        (Some(EventData::StartGlide(_)), Some(EventData::EndGlide(_)))
+                        | (Some(EventData::EndGlide(_)), Some(EventData::StartGlide(_)))) {
+                        remove.push(start_interp_pos);
+                        remove.push(end_interp_pos);
+                    } else {
+                        match interp_event_at_start {
+                            None => add.push(LocatedEvent::from_position(start,
+                                EventData::StartGlide(start.column))),
+                            Some(EventData::TickGlide(_)) => {
+                                add.push(LocatedEvent::from_position(start,
+                                    EventData::StartGlide(start.column)));
+                                remove.push(start_interp_pos);
+                            }
+                            Some(EventData::EndGlide(_)) => remove.push(start_interp_pos),
+                            _ => (),
+                        }
+                        match interp_event_at_end {
+                            None => add.push(LocatedEvent::from_position(end,
+                                EventData::EndGlide(start.column))),
+                            Some(EventData::TickGlide(_)) => {
+                                add.push(LocatedEvent::from_position(end,
+                                    EventData::EndGlide(start.column)));
+                                remove.push(end_interp_pos);
+                            }
+                            Some(EventData::StartGlide(_)) => remove.push(end_interp_pos),
+                            _ => (),
+                        }
+                    }
+                };
             }
 
-            start = next_channel(start, &module.tracks);
+            if let Some(pos) = start.add_channels(1, &module.tracks) {
+                start = pos
+            } else {
+                break
+            }
         }
 
-        module.push_edit(edit);
+        module.push_edit(Edit::PatternData { remove, add });
     }
 
     /// Delete in each channel of the current track.
