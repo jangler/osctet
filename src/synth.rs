@@ -1007,7 +1007,8 @@ impl Filter {
                 >> shape_fn(|x| clamp(MIN_FILTER_CUTOFF, MAX_FILTER_CUTOFF, x))
         };
         let reso = var(&self.resonance.0)
-            + settings.mod_net(vars, ModTarget::FilterQ(index), &[]);
+            + settings.mod_net(vars, ModTarget::FilterQ(index), &[])
+            >> shape_fn(clamp01);
         let filter = Net::wrap(match self.filter_type {
             FilterType::Ladder => Box::new(moog()),
             FilterType::Lowpass => Box::new(lowpass()),
