@@ -579,24 +579,24 @@ impl Channel {
 
     /// Returns true if the (spatial) column is interpolated at `tick`.
     pub fn is_interpolated(&self, col: u8, tick: Timespan) -> bool {
-        let mut depth = 0;
+        let mut glide = false;
 
         for event in self.interp_by_col(col).take_while(|e| e.tick <= tick) {
             match event.data {
                 EventData::StartGlide(_) => if event.tick < tick {
-                    depth += 1
+                    glide = true
                 }
                 EventData::EndGlide(_) => if event.tick < tick {
-                    depth -= 1
+                    glide = false
                 }
                 EventData::TickGlide(_) => if event.tick == tick {
-                    return true;
+                    return true
                 }
                 _ => panic!("expected glide event"),
             }
         }
 
-        depth > 0
+        glide
     }
 
     /// Returns the last event before `tick` in `column`.
