@@ -242,7 +242,7 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
 
 fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
     ui.header("GENERAL", Info::None);
-    ui.shared_slider("gain", "Level", &patch.gain.0, 0.0..=1.0, None, 2, true, Info::None);
+    ui.shared_slider("gain", "Level", &patch.gain.0, 0.0..=2.0, None, 2, true, Info::None);
     ui.formatted_shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, 1, true, Info::None,
         |f| format!("{f:+.2}"), |f| f);
     ui.slider("glide_time", "Glide time", &mut patch.glide_time,
