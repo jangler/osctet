@@ -274,7 +274,7 @@ the amount of increase.".to_string(),
 will be notated the same as an equal temperament
 with the same number of notes.".to_string(),
         Info::SavePatch => text = "Write the selected patch to disk.".to_string(),
-        Info::LoadPatch => text = "Load patches from disk.".to_string(),
+        Info::LoadPatch => text = "Load patches or samples from disk.".to_string(),
         Info::DuplicatePatch =>
             text = "Create a copy of the selected patch.".to_string(),
         Info::LoadSample => text =

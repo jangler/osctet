@@ -4,6 +4,7 @@ use crate::{config::{self, Config}, playback::Player, Midi};
 
 use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, Ui};
 
+/// State for the settings tab UI.
 pub struct SettingsState {
     scroll: f32,
     sample_rate: u32,

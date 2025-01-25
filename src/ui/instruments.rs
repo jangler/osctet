@@ -10,6 +10,7 @@ use super::{info::Info, Layout, Ui};
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "oscins";
 
+/// State for the instruments tab UI.
 pub struct InstrumentsState {
     scroll: f32,
     /// If None, kit is selected.
@@ -35,13 +36,11 @@ pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
     }
 
     ui.layout = Layout::Horizontal;
-    ui.start_group();
-    patch_list(ui, module, &mut state.patch_index, cfg, player);
-    ui.end_group();
     let old_y = ui.cursor_y;
-
     ui.cursor_y -= state.scroll;
     ui.cursor_z -= 1;
+
+    patch_list(ui, module, &mut state.patch_index, cfg, player);
     ui.space(1.0);
     ui.start_group();
     if let Some(index) = &state.patch_index {
@@ -51,6 +50,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
     } else {
         kit_controls(ui, module, player);
     }
+
     ui.cursor_z += 1;
     ui.cursor_y += state.scroll;
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
@@ -62,16 +62,15 @@ pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
 fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     cfg: &mut Config, player: &mut Player
 ) {
+    ui.start_group();
+
     let mut edits = Vec::new();
     let patches = &mut module.patches;
 
     let mut names = vec![String::from("Kit")];
     names.extend(patches.iter().map(|x| x.name.clone()));
 
-    let mut list_index = match patch_index {
-        Some(i) => *i + 1,
-        None => 0,
-    };
+    let mut list_index = patch_index.map(|i| i + 1).unwrap_or_default();
     if let Some(s) = ui.instrument_list(&names, &mut list_index, 10) {
         if list_index > 0 {
             if let Some(patch) = patches.get_mut(list_index - 1) {
@@ -107,11 +106,12 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     let patches = &mut module.patches;
     if ui.button("Save", patch_index.is_some(), Info::SavePatch) {
         if let Some(patch) = patch_index.map(|i| patches.get(i)).flatten() {
-            if let Some(mut path) = super::new_file_dialog(player)
+            let dialog = super::new_file_dialog(player)
                 .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
                 .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
-                .set_file_name(patch.name.clone())
-                .save_file() {
+                .set_file_name(patch.name.clone());
+
+            if let Some(mut path) = dialog.save_file() {
                 path.set_extension(PATCH_FILTER_EXT);
                 cfg.patch_folder = config::dir_as_string(&path);
                 if let Err(e) = patch.save(&path) {
@@ -121,11 +121,12 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
         }
     }
     if ui.button("Load", true, Info::LoadPatch) {
-        if let Some(paths) = super::new_file_dialog(player)
+        let dialog = super::new_file_dialog(player)
             .add_filter(PATCH_FILTER_NAME, &[PATCH_FILTER_EXT])
             .add_filter("Sample", &PcmData::FILE_EXTENSIONS)
-            .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")))
-            .pick_files() {
+            .set_directory(cfg.patch_folder.clone().unwrap_or(String::from(".")));
+
+        if let Some(paths) = dialog.pick_files() {
             for (i, path) in paths.iter().enumerate() {
                 cfg.patch_folder = config::dir_as_string(path);
                 let patch = if path.extension().and_then(|s| s.to_str())
@@ -148,11 +149,10 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
     ui.end_group();
 
     if ui.button("Duplicate", patch_index.is_some(), Info::DuplicatePatch) {
-        if let Some(index) = patch_index {
-            if let Some(p) = patches.get(*index).map(|p| p.duplicate()) {
-                edits.push(Edit::InsertPatch(patches.len(), p));
-                *patch_index = Some(patches.len());
-            }
+        let index = patch_index.unwrap();
+        if let Some(p) = patches.get(index).map(|p| p.duplicate()) {
+            edits.push(Edit::InsertPatch(patches.len(), p));
+            *patch_index = Some(patches.len());
         }
     }
 
@@ -160,6 +160,8 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
         module.push_edit(edit);
         fix_patch_index(patch_index, module.patches.len());
     }
+
+    ui.end_group();
 }
 
 /// Correct the patch index if it's out of bounds.
@@ -167,9 +169,7 @@ pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
     if len == 0 {
         *index = None;
     } else if let Some(index) = index {
-        if *index >= len {
-            *index = len - 1;
-        }
+        *index = (*index).min(len - 1);
     }
 }
 
@@ -182,8 +182,8 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
             let mut notes = Vec::new();
 
             for (i, entry) in module.kit.iter_mut().enumerate() {
-                let label = format!("kit_{}_input", i);
                 ui.start_group();
+                let label = format!("kit_{}_input", i);
                 ui.note_input(&label, &mut entry.input_note, Info::KitNoteIn);
 
                 if notes.contains(&entry.input_note) {
@@ -199,7 +199,7 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 let name = module.patches.get(entry.patch_index)
                     .map(|x| x.name.as_ref())
-                    .unwrap_or("");
+                    .unwrap_or_default();
                 if let Some(j) = ui.combo_box(&format!("kit_{}_patch", i), "", name,
                     Info::KitPatch,
                     || module.patches.iter().map(|x| x.name.clone()).collect()) {
@@ -262,7 +262,7 @@ fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut
         &patch.fx_send.0, 0.0..=1.0, None, 1, true, Info::FxSend);
 
     ui.vertical_space();
-    oscillator_controls(ui, patch, cfg, player);
+    generator_controls(ui, patch, cfg, player);
     ui.vertical_space();
     filter_controls(ui, patch);
     ui.vertical_space();
@@ -271,10 +271,9 @@ fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut
     lfo_controls(ui, patch);
     ui.vertical_space();
     modulation_controls(ui, patch);
-    ui.vertical_space();
 }
 
-fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
+fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
     player: &mut Player
 ) {
     ui.header("GENERATORS", Info::Generators);
@@ -469,11 +468,12 @@ fn oscillator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
     player: &mut Player
 ) -> bool {
-    if let Some(path) = super::new_file_dialog(player)
+    let dialog = super::new_file_dialog(player)
         .add_filter("Audio file", &PcmData::FILE_EXTENSIONS)
         .set_directory(cfg.sample_folder.clone()
-            .unwrap_or(String::from(".")))
-        .pick_file() {
+            .unwrap_or(String::from(".")));
+
+    if let Some(path) = dialog.pick_file() {
         cfg.sample_folder = config::dir_as_string(&path);
         match PcmData::load(path) {
             Ok(result) => {
@@ -670,7 +670,7 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
 
         labeled_group(ui, "AR", Info::LfoAudioRate, |ui| {
             for lfo in patch.lfos.iter_mut() {
-                let enabled = !matches!(lfo.waveform, Waveform::Noise);
+                let enabled = lfo.waveform.uses_freq();
                 ui.checkbox("", &mut lfo.audio_rate, enabled, Info::LfoAudioRate);
             }
         });

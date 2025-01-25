@@ -5,6 +5,7 @@ use crate::{config::{self, Config}, fx::{Compression, GlobalFX, SpatialFx}, modu
 
 use super::*;
 
+/// State for the general tab UI.
 #[derive(Default)]
 pub struct GeneralState {
     scroll: f32,
