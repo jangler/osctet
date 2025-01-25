@@ -5,18 +5,24 @@ use crate::{config::{self, Config}, fx::{Compression, GlobalFX, SpatialFx}, modu
 
 use super::*;
 
+#[derive(Default)]
+pub struct GeneralState {
+    scroll: f32,
+    table_cache: Option<TableCache>,
+}
+
 /// Interval table cache.
-pub struct TableCache {
+struct TableCache {
     tuning: Tuning,
     table: Vec<Vec<String>>,
 }
 
 pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
-    player: &mut Player, scroll: &mut f32, table_cache: &mut Option<TableCache>,
+    player: &mut Player, state: &mut GeneralState
 ) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
-    ui.cursor_y -= *scroll;
+    ui.cursor_y -= state.scroll;
     ui.cursor_z -= 1;
     ui.start_group();
 
@@ -26,14 +32,15 @@ pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.vertical_space();
     compression_controls(ui, &mut module.fx.comp, fx);
     ui.vertical_space();
-    tuning_controls(ui, &mut module.tuning, cfg, player, table_cache);
+    tuning_controls(ui, &mut module.tuning, cfg, player, &mut state.table_cache);
     ui.vertical_space();
-    interval_table(ui, &mut module.tuning, table_cache);
+    interval_table(ui, &mut module.tuning, &mut state.table_cache);
 
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_z += 1;
     ui.cursor_y = old_y;
-    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
+    ui.vertical_scrollbar(&mut state.scroll,
+        scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn metadata_controls(ui: &mut Ui, module: &mut Module) {

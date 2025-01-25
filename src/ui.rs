@@ -15,10 +15,10 @@ use theme::Theme;
 
 use crate::{config::Config, input::{Action, Hotkey, Modifiers}, module::EventData, pitch::Note, playback::Player, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
-pub mod general_tab;
-pub mod pattern_tab;
-pub mod instruments_tab;
-pub mod settings_tab;
+pub mod general;
+pub mod pattern;
+pub mod instruments;
+pub mod settings;
 pub mod theme;
 pub mod text;
 mod textedit;

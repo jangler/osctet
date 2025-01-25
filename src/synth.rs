@@ -106,6 +106,24 @@ pub struct Key {
     pub key: u8,
 }
 
+impl Key {
+    pub fn new_from_keyboard(key: u8) -> Self {
+        Self {
+            origin: KeyOrigin::Keyboard,
+            channel: 0,
+            key,
+        }
+    }
+
+    pub fn new_from_midi(channel: u8, key: u8) -> Self {
+        Self {
+            origin: KeyOrigin::Midi,
+            channel,
+            key,
+        }
+    }
+}
+
 /// How to behave when a note starts before the last has ended.
 #[derive(PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum PlayMode {

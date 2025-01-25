@@ -77,6 +77,14 @@ impl Player {
         self.play();
     }
 
+    pub fn toggle_play_from(&mut self, tick: Timespan, module: &Module) {
+        if self.playing {
+            self.stop()
+        } else {
+            self.play_from(tick, module)
+        }
+    }
+
     /// Start playing at `tick` in record mode.
     pub fn record_from(&mut self, tick: Timespan, module: &Module) {
         self.metronome = true;

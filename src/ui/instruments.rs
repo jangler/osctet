@@ -10,26 +10,41 @@ use super::{info::Info, Layout, Ui};
 const PATCH_FILTER_NAME: &str = "Instrument";
 const PATCH_FILTER_EXT: &str = "oscins";
 
-pub fn draw(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
-    scroll: &mut f32, cfg: &mut Config, player: &mut Player
+pub struct InstrumentsState {
+    scroll: f32,
+    /// If None, kit is selected.
+    pub patch_index: Option<usize>,
+}
+
+impl InstrumentsState {
+    pub fn new(patch_index: Option<usize>) -> Self {
+        Self {
+            scroll: 0.0,
+            patch_index,
+        }
+    }
+}
+
+pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
+    cfg: &mut Config, player: &mut Player
 ) {
     if is_key_pressed(KeyCode::Up) {
-        shift_patch_index(-1, patch_index, module.patches.len());
+        shift_patch_index(-1, &mut state.patch_index, module.patches.len());
     } else if is_key_pressed(KeyCode::Down) {
-        shift_patch_index(1, patch_index, module.patches.len());
+        shift_patch_index(1, &mut state.patch_index, module.patches.len());
     }
 
     ui.layout = Layout::Horizontal;
     ui.start_group();
-    patch_list(ui, module, patch_index, cfg, player);
+    patch_list(ui, module, &mut state.patch_index, cfg, player);
     ui.end_group();
     let old_y = ui.cursor_y;
 
-    ui.cursor_y -= *scroll;
+    ui.cursor_y -= state.scroll;
     ui.cursor_z -= 1;
     ui.space(1.0);
     ui.start_group();
-    if let Some(index) = patch_index {
+    if let Some(index) = &state.patch_index {
         if let Some(patch) = module.patches.get_mut(*index) {
             patch_controls(ui, patch, cfg, player);
         }
@@ -37,10 +52,11 @@ pub fn draw(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
         kit_controls(ui, module, player);
     }
     ui.cursor_z += 1;
-    ui.cursor_y += *scroll;
+    ui.cursor_y += state.scroll;
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_y = old_y;
-    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
+    ui.vertical_scrollbar(&mut state.scroll,
+        scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,

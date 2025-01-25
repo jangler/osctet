@@ -4,18 +4,32 @@ use crate::{config::{self, Config}, playback::Player, Midi};
 
 use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, Ui};
 
-pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
+pub struct SettingsState {
+    scroll: f32,
+    sample_rate: u32,
+}
+
+impl SettingsState {
+    pub fn new(sample_rate: u32) -> Self {
+        Self {
+            scroll: 0.0,
+            sample_rate,
+        }
+    }
+}
+
+pub fn draw(ui: &mut Ui, cfg: &mut Config, state: &mut SettingsState,
     player: &mut Player, midi: &mut Midi
 ) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
-    ui.cursor_y -= *scroll;
+    ui.cursor_y -= state.scroll;
     ui.cursor_z -= 1;
     ui.start_group();
 
     general_controls(ui, cfg);
     ui.vertical_space();
-    io_controls(ui, cfg, sample_rate, midi);
+    io_controls(ui, cfg, state.sample_rate, midi);
     ui.vertical_space();
     appearance_controls(ui, cfg, player);
     ui.vertical_space();
@@ -27,7 +41,8 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, scroll: &mut f32, sample_rate: u32,
     let scroll_h = ui.end_group().unwrap().h + ui.style.margin;
     ui.cursor_z += 1;
     ui.cursor_y = old_y;
-    ui.vertical_scrollbar(scroll, scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
+    ui.vertical_scrollbar(&mut state.scroll,
+        scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
 fn general_controls(ui: &mut Ui, cfg: &mut Config) {

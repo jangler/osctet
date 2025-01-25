@@ -644,6 +644,11 @@ impl EventData {
     /// Binary or'ed with "spatial column" value.
     pub const INTERP_COL_FLAG: u8 = 0x80;
 
+    /// Convert a 7-bit MIDI value to a digit value.
+    pub fn digit_from_midi(midi_value: u8) -> u8 {
+        (midi_value as f32 * Self::DIGIT_MAX as f32 / 127.0).round() as u8
+    }
+
     /// Returns the column where the event should be drawn.
     pub fn spatial_column(&self) -> u8 {
         self.logical_column() & !Self::INTERP_COL_FLAG
@@ -783,5 +788,18 @@ impl LocatedEvent {
             channel: self.channel,
             column: self.event.data.logical_column(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_digit_from_midi() {
+        assert_eq!(EventData::digit_from_midi(0x00), 0x0);
+        assert_eq!(EventData::digit_from_midi(0x7f), 0xF);
+        assert_eq!(EventData::digit_from_midi(0x3f), 0x7);
+        assert_eq!(EventData::digit_from_midi(0x40), 0x8);
     }
 }
