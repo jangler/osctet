@@ -667,7 +667,7 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
                     0.0..=10.0, 2, true, Info::LfoDelay, |f| format!("{f:.2} s"), |f| f);
             }
         });
-        
+
         labeled_group(ui, "AR", Info::LfoAudioRate, |ui| {
             for lfo in patch.lfos.iter_mut() {
                 let enabled = !matches!(lfo.waveform, Waveform::Noise);
@@ -782,8 +782,7 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
         ModTarget::FilterCutoff(_) =>
             Box::new(|d| format!("{:+.2} octaves", d * FILTER_CUTOFF_MOD_BASE.log2())),
         ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Tone(_)
-            | ModTarget::ModDepth(_) | ModTarget::FxSend =>
-            Box::new(|d| format!("{:+.2}", d)),
+            | ModTarget::FxSend => Box::new(|d| format!("{:+.2}", d)),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|d| format!("{:+.1} cents", d * 50.0)),
         ModTarget::Gain | ModTarget::Level(_) =>
@@ -792,7 +791,8 @@ fn display_mod(target: &ModTarget) -> Box<dyn Fn(f32) -> String> {
             Box::new(|d| format!("x{:.2}", (MAX_LFO_RATE/MIN_LFO_RATE).powf(d))),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
             Box::new(|d| format!("{:+.2} octaves", d * MAX_PITCH_MOD.log2())),
-        ModTarget::Pan => Box::new(|d| format!("{:+.2}", d * 2.0)),
+        ModTarget::Pan | ModTarget::ModDepth(_) =>
+            Box::new(|d| format!("{:+.2}", d * 2.0)),
     }
 }
 
@@ -804,7 +804,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
         ModTarget::FilterCutoff(_) =>
             Box::new(|f| f / FILTER_CUTOFF_MOD_BASE.log2()),
         ModTarget::ClipGain | ModTarget::FilterQ(_) | ModTarget::Tone(_)
-            | ModTarget::ModDepth(_) | ModTarget::FxSend => Box::new(|f| f),
+            | ModTarget::FxSend => Box::new(|f| f),
         ModTarget::FinePitch | ModTarget::OscFinePitch(_) =>
             Box::new(|f| f / 50.0),
         ModTarget::Gain | ModTarget::Level(_) =>
@@ -813,7 +813,7 @@ fn convert_mod(target: &ModTarget) -> Box<dyn FnOnce(f32) -> f32> {
             Box::new(|f| f.log(MAX_LFO_RATE/MIN_LFO_RATE)),
         ModTarget::Pitch | ModTarget::OscPitch(_) =>
             Box::new(|f| f / MAX_PITCH_MOD.log2()),
-        ModTarget::Pan => Box::new(|f| f * 0.5),
+        ModTarget::Pan | ModTarget::ModDepth(_) => Box::new(|f| f * 0.5),
     }
 }
 

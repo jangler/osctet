@@ -485,7 +485,7 @@ pub struct Patch {
 
 impl Patch {
     /// Current save version.
-    const VERSION: u8 = 1;
+    const VERSION: u8 = 2;
 
     pub fn new(name: String) -> Self {
         Self {
@@ -531,6 +531,15 @@ impl Patch {
             // convert generator levels
             for osc in self.oscs.iter_mut() {
                 osc.level.0.set(osc.level.0.value().powi(2));
+            }
+        }
+
+        if self.version < 2 {
+            // convert mod depth levels
+            for m in self.mod_matrix.iter_mut() {
+                if matches!(m.target, ModTarget::ModDepth(_)) {
+                    m.depth.0.set(m.depth.0.value() * 0.5);
+                }
             }
         }
 
@@ -1149,7 +1158,7 @@ impl Modulation {
             }
         };
         let depth = var(&self.depth.0) >> smooth()
-            + settings.mod_net(vars, ModTarget::ModDepth(index), &path);
+            + settings.mod_net(vars, ModTarget::ModDepth(index), &path) * 2.0;
 
         if self.target.is_additive() {
             // zero depth = +0 for additive targets
