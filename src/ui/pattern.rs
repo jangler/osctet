@@ -726,6 +726,10 @@ impl PatternEditor {
     fn paste(&self, module: &mut Module, mix: bool) {
         if let Some(clip) = &self.clipboard {
             let tick_offset = self.edit_start.tick - clip.start.tick;
+            let start = Position {
+                column: clip.start.column,
+                ..self.edit_start
+            };
             let end = Position {
                 tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
                 column: clip.end.column,
@@ -737,7 +741,8 @@ impl PatternEditor {
                         column: 0,
                     })
             };
-            let event_positions: Vec<_> = module.scan_events(self.edit_start, end)
+
+            let event_positions: Vec<_> = module.scan_events(start, end)
                 .iter().map(|x| x.position()).collect();
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
