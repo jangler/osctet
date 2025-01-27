@@ -891,13 +891,14 @@ impl Oscillator {
     /// Make a generator DSP net.
     fn make_net(&self, settings: &Patch, vars: &VoiceVars, index: usize, freq_mod: Net
     ) -> Net {
-        // TODO: glide can be skipped if glide time is zero
-        let glide = {
+        let var_freq = Net::wrap(if settings.glide_time == 0.0 {
+            Box::new(var(&vars.freq))
+        } else {
             let prev_freq = vars.prev_freq.unwrap_or(vars.freq.value());
             let env = envelope2(move |t, x| if t == 0.0 { prev_freq } else { x });
-            env >> follow(settings.glide_time * 0.5)
-        };
-        let base_freq = (var(&vars.freq) >> glide)
+            Box::new(var(&vars.freq) >> env >> follow(settings.glide_time * 0.5))
+        });
+        let base_freq = var_freq
             * var(&self.freq_ratio.0)
             * (settings.mod_net(vars, ModTarget::OscPitch(index), &[])
                 + settings.mod_net(vars, ModTarget::Pitch, &[])
