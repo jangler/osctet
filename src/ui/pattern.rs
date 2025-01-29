@@ -568,13 +568,13 @@ impl PatternEditor {
     /// If the cursor tick is off-divison, set the division to the smallest
     /// division that contains the cursor tick.
     fn division_to_cursor(&mut self) {
-        let tick = self.cursor_tick();
+        let ticks = [self.edit_start.tick, self.edit_end.tick];
 
-        if self.off_division(tick) {
+        if ticks.iter().any(|t| self.off_division(*t)) {
             let old_div = self.beat_division;
             self.beat_division = 2;
 
-            while self.off_division(tick) {
+            while ticks.iter().any(|t| self.off_division(*t)) {
                 self.beat_division += 1;
             }
 
