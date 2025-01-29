@@ -110,8 +110,8 @@ impl PatternEditor {
 
         // the tricky part here is to preserve the visual position of either
         // the cursor or the center of the viewport
-        let isotick = if self.tick_visible(self.cursor_tick()) {
-            let n = (self.cursor_tick().as_f64() * division as f64).round() as i32;
+        let isotick = if self.tick_visible(self.edit_end.tick) {
+            let n = (self.edit_end.tick.as_f64() * division as f64).round() as i32;
             Timespan::new(n, division)
         } else {
             (self.screen_tick + self.screen_tick_max) * Timespan::new(1, 2)
@@ -990,7 +990,7 @@ impl PatternEditor {
 
     /// If cursor is off-screen, scroll to center the cursor.
     fn scroll_to_cursor(&mut self) {
-        let tick = self.cursor_tick();
+        let tick = self.edit_end.tick;
         if !self.tick_visible(tick) {
             self.scroll_to(tick);
         }
