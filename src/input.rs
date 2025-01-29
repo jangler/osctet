@@ -414,19 +414,26 @@ fn key_to_string(key: KeyCode) -> String {
     s.to_owned()
 }
 
-/// Combination of modifier keys. This is kind of a silly way to store this
-/// information, but it serializes to TOML a lot nicer than a struct of three
-/// booleans.
+/// Combination of modifier keys. This is a silly way to store this information,
+/// but it serializes to TOML a lot nicer than a struct of three booleans.
 #[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Modifiers {
     None,
+    Super,
     Ctrl,
     Alt,
     Shift,
+    SuperCtrl,
+    SuperAlt,
+    SuperShift,
     CtrlAlt,
     CtrlShift,
     AltShift,
+    SuperCtrlAlt,
+    SuperCtrlShift,
+    SuperAltShift,
     CtrlAltShift,
+    SuperCtrlAltShift,
 }
 
 impl Modifiers {
@@ -435,42 +442,96 @@ impl Modifiers {
         let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
         let alt = is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt);
         let shift = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
-        match (ctrl, alt, shift) {
-            (false, false, false) => Self::None,
-            (true, false, false) => Self::Ctrl,
-            (false, true, false) => Self::Alt,
-            (false, false, true) => Self::Shift,
-            (true, true, false) => Self::CtrlAlt,
-            (true, false, true) => Self::CtrlShift,
-            (false, true, true) => Self::AltShift,
-            (true, true, true) => Self::CtrlAltShift,
+        let sup = is_key_down(KeyCode::LeftSuper) || is_key_down(KeyCode::RightSuper);
+        Self::from_boolean([sup, ctrl, alt, shift])
+    }
+
+    fn from_boolean(states: [bool; 4]) -> Self {
+        match states {
+            [false, false, false, false] => Self::None,
+            [false, true, false, false] => Self::Ctrl,
+            [false, false, true, false] => Self::Alt,
+            [false, false, false, true] => Self::Shift,
+            [false, true, true, false] => Self::CtrlAlt,
+            [false, true, false, true] => Self::CtrlShift,
+            [false, false, true, true] => Self::AltShift,
+            [false, true, true, true] => Self::CtrlAltShift,
+            [true, false, false, false] => Self::Super,
+            [true, true, false, false] => Self::SuperCtrl,
+            [true, false, true, false] => Self::SuperAlt,
+            [true, false, false, true] => Self::SuperShift,
+            [true, true, true, false] => Self::SuperCtrlAlt,
+            [true, true, false, true] => Self::SuperCtrlShift,
+            [true, false, true, true] => Self::SuperAltShift,
+            [true, true, true, true] => Self::SuperCtrlAltShift,
+        }
+    }
+
+    fn to_boolean(&self) -> [bool; 4] {
+        match self {
+            Self::None => [false, false, false, false],
+            Self::Ctrl => [false, true, false, false],
+            Self::Alt => [false, false, true, false],
+            Self::Shift => [false, false, false, true],
+            Self::CtrlAlt => [false, true, true, false],
+            Self::CtrlShift => [false, true, false, true],
+            Self::AltShift => [false, false, true, true],
+            Self::CtrlAltShift => [false, true, true, true],
+            Self::Super => [true, false, false, false],
+            Self::SuperCtrl => [true, true, false, false],
+            Self::SuperAlt => [true, false, true, false],
+            Self::SuperShift => [true, false, false, true],
+            Self::SuperCtrlAlt => [true, true, true, false],
+            Self::SuperCtrlShift => [true, true, false, true],
+            Self::SuperAltShift => [true, false, true, true],
+            Self::SuperCtrlAltShift => [true, true, true, true],
         }
     }
 
     /// Returns a version of this modifier with shift omitted. This is used
     /// for actions that have special alternative behavior when shift is held.
     pub fn without_shift(&self) -> Self {
-        match self {
-            Self::Shift => Self::None,
-            Self::CtrlShift => Self::Ctrl,
-            Self::AltShift => Self::Alt,
-            Self::CtrlAltShift => Self::CtrlAlt,
-            _ => *self,
-        }
+        let mut states = self.to_boolean();
+        states[2] = false;
+        Self::from_boolean(states)
+    }
+
+    /// Returns a version of this modifier with Ctrl replaced with Super.
+    pub fn swap_super_and_ctrl(&mut self) {
+        let mut states = self.to_boolean();
+        states.swap(0, 1);
+        *self = Self::from_boolean(states)
     }
 }
 
 impl fmt::Display for Modifiers {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            Self::None => "(none)",
-            Self::Ctrl => "Ctrl",
-            Self::Alt => "Alt",
-            Self::Shift => "Shift",
-            Self::CtrlAlt => "Ctrl+Alt",
-            Self::CtrlShift => "Ctrl+Shift",
-            Self::AltShift => "Alt+Shift",
-            Self::CtrlAltShift => "Ctrl+Alt+Shift",
+        let states = self.to_boolean();
+        let mut tokens = Vec::new();
+        if states[0] {
+            if cfg!(target_os = "macos") {
+                tokens.push("Cmd")
+            } else {
+                tokens.push("Super")
+            }
+        }
+        if states[1] {
+            tokens.push("Ctrl")
+        }
+        if states[2] {
+            if cfg!(target_os = "macos") {
+                tokens.push("Option")
+            } else {
+                tokens.push("Alt")
+            }
+        }
+        if states[3] {
+            tokens.push("Shift")
+        }
+        write!(f, "{}", if tokens.is_empty() {
+            "(none)".into()
+        } else {
+            tokens.join("+")
         })
     }
 }

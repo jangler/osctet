@@ -132,7 +132,7 @@ pub fn dir_as_string(p: &Path) -> Option<String> {
 /// Returns the default hotkey-action mapping.
 fn default_keys() -> Vec<(Hotkey, Action)> {
     // this is a function instead of a constant so we can use `Hotkey::new`
-    vec![
+    let mut keys = vec![
         // global
         (Hotkey::new(Modifiers::Ctrl, KeyCode::N), Action::NewSong),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::O), Action::OpenSong),
@@ -212,5 +212,13 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::Insert), Action::InsertRows),
         (Hotkey::new(Modifiers::None, KeyCode::Backspace), Action::DeleteRows),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::P), Action::PlaceEvenly),
-    ]
+    ];
+
+    if cfg!(target_os = "macos") {
+        for (k, _) in &mut keys {
+            k.mods.swap_super_and_ctrl()
+        }
+    }
+
+    keys
 }
