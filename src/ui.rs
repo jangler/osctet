@@ -194,8 +194,8 @@ pub struct Ui {
     pub note_queue: Vec<(Key, EventData)>,
     instrument_edit_index: Option<usize>,
     mouse_consumed: Option<String>,
-    v_scrollbar_grabbed: bool,
-    h_scrollbar_grabbed: bool,
+    v_scrollbar_grab_pos: Option<f32>,
+    h_scrollbar_grab_pos: Option<f32>,
     notification: Option<Notification>,
     text_clipboard: Option<String>,
     group_ignores_geometry: bool,
@@ -236,8 +236,8 @@ impl Ui {
             note_queue: Vec::new(),
             instrument_edit_index: None,
             mouse_consumed: None,
-            v_scrollbar_grabbed: false,
-            h_scrollbar_grabbed: false,
+            v_scrollbar_grab_pos: None,
+            h_scrollbar_grab_pos: None,
             notification: None,
             text_clipboard: None,
             group_ignores_geometry: false,
@@ -255,7 +255,9 @@ impl Ui {
     }
 
     pub fn grabbed(&self) -> bool {
-        self.v_scrollbar_grabbed || self.focus.is_slider()
+        self.v_scrollbar_grab_pos.is_some()
+            || self.h_scrollbar_grab_pos.is_some()
+            || self.focus.is_slider()
     }
 
     pub fn get_tab(&self, key: &str) -> Option<usize> {
@@ -561,17 +563,18 @@ impl Ui {
         if hit {
             self.info = Info::VerticalScrollbar;
             if is_mouse_button_pressed(MouseButton::Left) {
-                self.v_scrollbar_grabbed = true;
+                self.v_scrollbar_grab_pos = Some(mouse_position_vec2().y - handle.y);
             }
         }
 
-        if is_mouse_button_down(MouseButton::Left) && (self.v_scrollbar_grabbed || hit) {
+        if is_mouse_button_down(MouseButton::Left) && self.v_scrollbar_grab_pos.is_some() {
             let (_, y) = mouse_position();
-            let offset = ((y - trough.y - handle.h / 2.0) / (trough.h - handle.h))
+            let grab_pos = self.v_scrollbar_grab_pos.unwrap();
+            let offset = ((y - trough.y - grab_pos) / (trough.h - handle.h))
                 .clamp(0.0, 1.0);
             *current_y = ((max_y - viewport_h) * offset).round();
         } else {
-            self.v_scrollbar_grabbed = false;
+            self.v_scrollbar_grab_pos = None;
         }
 
         self.bounds.w -= w;
@@ -616,17 +619,18 @@ impl Ui {
         if hit {
             self.info = Info::HorizontalScrollbar;
             if is_mouse_button_pressed(MouseButton::Left) {
-                self.h_scrollbar_grabbed = true;
+                self.h_scrollbar_grab_pos = Some(mouse_position_vec2().x - handle.x);
             }
         }
 
-        if is_mouse_button_down(MouseButton::Left) && (self.h_scrollbar_grabbed || hit) {
+        if is_mouse_button_down(MouseButton::Left) && self.h_scrollbar_grab_pos.is_some() {
             let (x, _) = mouse_position();
-            let offset = ((x - trough.x - handle.w / 2.0) / (trough.w - handle.w))
+            let grab_pos = self.h_scrollbar_grab_pos.unwrap();
+            let offset = ((x - trough.x - grab_pos) / (trough.w - handle.w))
                 .clamp(0.0, 1.0);
             *current_x = ((max_x - viewport_w) * offset).round();
         } else {
-            self.h_scrollbar_grabbed = false;
+            self.h_scrollbar_grab_pos = None;
         }
 
         self.bounds.h -= h;
