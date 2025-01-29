@@ -675,7 +675,7 @@ impl EventData {
 }
 
 /// Pattern position.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Position {
     pub tick: Timespan,
     pub track: usize,
