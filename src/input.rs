@@ -496,7 +496,7 @@ impl Modifiers {
         Self::from_boolean(states)
     }
 
-    /// Returns a version of this modifier with Ctrl replaced with Super.
+    /// Swaps this modifier's Ctrl and Super states.
     pub fn swap_super_and_ctrl(&mut self) {
         let mut states = self.to_boolean();
         states.swap(0, 1);
