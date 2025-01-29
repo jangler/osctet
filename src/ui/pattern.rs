@@ -233,6 +233,16 @@ impl PatternEditor {
         (tl, br)
     }
 
+    /// As `selection_corners`, but the end position is offset by the row
+    /// timespan if the start and end ticks are unequal.
+    fn selection_corners_with_tail(&self) -> (Position, Position) {
+        let (start, mut end) = self.selection_corners();
+        if start.tick != end.tick {
+            end.tick += self.row_timespan();
+        }
+        (start, end)
+    }
+
     /// Draws the cursor/selection.
     fn draw_cursor(&self, ui: &mut Ui, track_xs: &[f32]) {
         let (tl, br) = self.selection_corners();
@@ -271,7 +281,7 @@ impl PatternEditor {
             Action::NextChannel => shift_channel_right(self, &module.tracks),
             Action::PrevChannel => shift_channel_left(self),
             Action::Delete => {
-                let (start, end) = self.selection_corners();
+                let (start, end) = self.selection_corners_with_tail();
                 if (start.track, start.channel, start.column)
                     == (end.track, end.channel, end.column)
                     && is_shift_down() {
@@ -285,7 +295,6 @@ impl PatternEditor {
                 insert_event_at_cursor(module, &self.edit_start, EventData::End, false),
             Action::Loop =>
                 insert_event_at_cursor(module, &self.edit_start, EventData::Loop, false),
-            Action::RationalTempo => self.rational_tempo(module),
             Action::TapTempo => self.tap_tempo(module),
             Action::InsertRows => self.push_rows(module),
             Action::DeleteRows => self.pull_rows(module),
@@ -293,7 +302,7 @@ impl PatternEditor {
                 | Action::NudgeSharp | Action::NudgeFlat
                 | Action::NudgeOctaveUp | Action::NudgeOctaveDown
                 | Action::NudgeEnharmonic =>
-                    nudge_notes(module, self.selection_corners(), cfg),
+                    nudge_notes(module, self.selection_corners_with_tail(), cfg),
             Action::ToggleFollow => self.follow = !self.follow,
             // TODO: re-enable this if & when recording is implemented
             // Action::ToggleRecord => if self.record {
@@ -453,7 +462,7 @@ impl PatternEditor {
 
     /// Delete in each channel of the current track.
     fn multi_channel_delete(&self, module: &mut Module) {
-        let (mut start, mut end) = self.selection_corners();
+        let (mut start, mut end) = self.selection_corners_with_tail();
         let n = module.tracks[self.edit_start.track].channels.len();
         let mut remove = Vec::new();
 
@@ -473,7 +482,7 @@ impl PatternEditor {
 
     /// Handle the "increment/decrement values" key commands.
     fn shift_values(&self, offset: i8, module: &mut Module) {
-        let (start, end) = self.selection_corners();
+        let (start, end) = self.selection_corners_with_tail();
 
         let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
             let mut evt = evt.clone();
@@ -508,7 +517,7 @@ impl PatternEditor {
 
     /// Handle the "cycle notation" key command.
     fn cycle_notation(&self, module: &mut Module) {
-        let (start, end) = self.selection_corners();
+        let (start, end) = self.selection_corners_with_tail();
 
         let replacements = module.scan_events(start, end).iter().filter_map(|evt| {
             match evt.event.data {
@@ -613,8 +622,8 @@ impl PatternEditor {
 
     /// Handle the "place events evenly" key command.
     fn place_events_evenly(&self, module: &mut Module) {
-        let (start, end) = self.selection_corners();
-        let tick_delta = end.tick - start.tick + self.row_timespan();
+        let (start, end) = self.selection_corners_with_tail();
+        let tick_delta = end.tick - start.tick;
         let events = module.scan_events(start, end);
         let channels: HashSet<_> = events.iter().map(|e| (e.track, e.channel)).collect();
 
@@ -687,29 +696,16 @@ impl PatternEditor {
         self.pending_interval = Some(0.0);
     }
 
-    /// Insert a rational tempo based on the current selection.
-    fn rational_tempo(&self, module: &mut Module) {
-        let (start, end) = self.selection_corners();
-        let span = end.tick - start.tick + self.row_timespan();
-        if span != Timespan::new(1, 1) {
-            let (n, d) = (span.num(), span.den());
-            if let Ok(n) = n.try_into() {
-                insert_event_at_cursor(module, &self.edit_start,
-                    EventData::RationalTempo(n, d), false);
-            }
-        }
-    }
-
     /// Cut selection to the clipboard.
     fn cut(&mut self, module: &mut Module) {
         self.copy(module);
-        let (start, end) = self.selection_corners();
+        let (start, end) = self.selection_corners_with_tail();
         module.delete_events(start, end);
     }
 
     /// Copy selection to the clipboard.
     fn copy(&mut self, module: &Module) {
-        let (start, end) = self.selection_corners();
+        let (start, end) = self.selection_corners_with_tail();
         let events = module.scan_events(start, end).iter().map(|x| ClipEvent {
             channel_offset: module.channels_between(start, x.position()),
             event: x.event.clone(),

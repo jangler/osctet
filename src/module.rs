@@ -134,8 +134,9 @@ impl Module {
     }
 
     /// Return copies of pattern events between two positions.
+    /// The end tick is exclusive unless start and end ticks are equal.
     pub fn scan_events(&self, start: Position, end: Position) -> Vec<LocatedEvent> {
-        let tick_range = start.tick..=end.tick;
+        let tick_range = start.tick..end.tick;
         let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
         let mut events = Vec::new();
 
@@ -143,7 +144,7 @@ impl Module {
             for (channel_i, channel) in track.channels.iter().enumerate() {
                 for evt in &channel.events {
                     let tuple = (track_i, channel_i, evt.data.spatial_column());
-                    if tick_range.contains(&evt.tick)
+                    if (tick_range.contains(&evt.tick) || evt.tick == start.tick)
                         && tuple >= start_tuple && tuple <= end_tuple {
                         events.push(LocatedEvent {
                             track: track_i,
