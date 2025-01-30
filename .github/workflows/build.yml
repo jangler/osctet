@@ -48,8 +48,10 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --release
+    - name: Bundle
+      run: mv target/release/osctet macos/Osctet.app/Contents/MacOS
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: macos
-        path: target/release/osctet
+        path: macos/Osctet.app
