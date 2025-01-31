@@ -1,0 +1,19 @@
+name: plutil
+
+on:
+  push:
+    branches:
+    - 'plutil'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+
+    runs-on: macos-13
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Lint
+      run: plutil macos/Osctet.app/Contents/Info.plist
