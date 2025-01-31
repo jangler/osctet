@@ -54,23 +54,10 @@ enum Dialog {
     OkCancel(String, Action),
 }
 
-/// Draws text with the top-left corner at (x, y), plus margins.
-/// Returns the bounds of the text, plus margins.
-fn draw_text_topleft(style: &Style, color: Color, label: &str, x: f32, y: f32
-) -> Rect {
-    style.atlas.draw_text(x + style.margin, y + style.margin, label, color)
-}
-
 /// Returns mouse position as a `Vec2`.
 fn mouse_position_vec2() -> Vec2 {
     let (x, y) = mouse_position();
     Vec2 { x, y }
-}
-
-/// Draw a rectangle with fill and stroke colors.
-fn draw_filled_rect(r: Rect, fill: Color, stroke: Color) {
-    draw_rectangle(r.x, r.y, r.w, r.h, fill);
-    draw_rectangle_lines(r.x, r.y, r.w, r.h, LINE_THICKNESS * 2.0, stroke);
 }
 
 /// UI style, including font and color theme.
@@ -116,17 +103,17 @@ impl Graphic {
     fn draw(&self, style: &Style) {
         match self {
             Self::Rect(rect, fill, stroke) => {
+                draw_rectangle(rect.x, rect.y, rect.w, rect.h, *fill);
                 if let Some(stroke) = stroke {
-                    draw_filled_rect(*rect, *fill, *stroke);
-                } else {
-                    draw_rectangle(rect.x, rect.y, rect.w, rect.h, *fill);
+                    draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h,
+                        LINE_THICKNESS * 2.0, *stroke);
                 }
             },
             Self::Line(x1, y1, x2, y2, color) => {
                 draw_line(*x1, *y1, *x2, *y2, LINE_THICKNESS, *color);
             },
             Self::Text(x, y, text, color) => {
-                draw_text_topleft(style, *color, text, *x, *y);
+                style.atlas.draw_text(x + style.margin, y + style.margin, text, *color);
             }
         }
     }
@@ -183,10 +170,11 @@ pub struct Ui {
     pub style: Style,
     tabs: HashMap<String, usize>,
     bounds: Rect,
+    // cursor could be a Vec3, but at this point I'll just keep it
     cursor_x: f32,
     cursor_y: f32,
     cursor_z: i8,
-    draw_queue: Vec<DrawOp>,
+    draw_list: Vec<DrawOp>,
     pub layout: Layout,
     dialog: Option<Dialog>,
     dialog_first_frame: bool,
@@ -198,16 +186,24 @@ pub struct Ui {
     h_scrollbar_grab_pos: Option<f32>,
     notification: Option<Notification>,
     text_clipboard: Option<String>,
+    /// Whether the current group expands based on graphics geometry.
     group_ignores_geometry: bool,
+    /// Whether the top group on the stack is a widget.
     widget_on_stack: bool,
+    /// Info for the currently hovered control.
     info: Info,
+    /// Control info for the currently hovered control.
     ctrl_info: ControlInfo,
+    /// Previous info state.
     saved_info: (Info, ControlInfo),
+    /// Remaining delay before info is displayed.
     info_delay: f32,
+    /// Cached and used to position the info/notification tooltip.
     bottom_right_corner: Vec2,
     focus: Focus,
     pending_focus: Option<String>,
     lost_focus: Focus,
+    /// (Position, ID) pairs for tab key navigation.
     tab_nav_list: Vec<(Vec2, String)>,
 }
 
@@ -217,6 +213,8 @@ impl Ui {
             .unwrap_or(&text::FONT_BYTES[0]))
             .expect("included font should be loadable");
 
+        // really wish there were a way to specify that all remaining fields
+        // should be default
         Self {
             style: Style {
                 margin: atlas.max_height() - atlas.cap_height(),
@@ -229,7 +227,7 @@ impl Ui {
             cursor_y: 0.0,
             cursor_z: 0,
             layout: Layout::Vertical,
-            draw_queue: Vec::new(),
+            draw_list: Vec::new(),
             dialog: None,
             dialog_first_frame: false,
             group_rects: Vec::new(),
@@ -366,14 +364,14 @@ impl Ui {
     }
 
     pub fn end_frame(&mut self, tab_nav: bool) {
-        self.draw_queue.sort_by_key(|x| x.z);
+        self.draw_list.sort_by_key(|x| x.z);
         let screen_rect = Rect::new(0.0, 0.0, screen_width(), screen_height());
-        for op in &self.draw_queue {
+        for op in &self.draw_list {
             if op.graphic.overlaps(&self.style, &screen_rect) {
                 op.graphic.draw(&self.style);
             }
         }
-        self.draw_queue.clear();
+        self.draw_list.clear();
 
         // drain input queues
         while get_char_pressed().is_some() {}
@@ -385,19 +383,12 @@ impl Ui {
         };
 
         if tab_nav && is_key_pressed(KeyCode::Tab) && !is_alt_down() && !is_ctrl_down() {
-            if is_shift_down() {
-                self.tab_focus(-1);
-            } else {
-                self.tab_focus(1);
-            }
+            let offset = if is_shift_down() { -1 } else { 1 };
+            self.tab_focus(offset);
         }
     }
 
     fn tab_focus(&mut self, offset: isize) {
-        if self.tab_nav_list.is_empty() {
-            return
-        }
-
         // the "next field" should be determined by position, not order of addition
         self.tab_nav_list.sort_by_key(|(v, _)| (v.y as i32, v.x as i32));
 
@@ -413,6 +404,7 @@ impl Ui {
         }
     }
 
+    /// Offset the placement cursor by `scale` margins of space.
     fn space(&mut self, scale: f32) {
         match self.layout {
             Layout::Horizontal => self.cursor_x += self.style.margin * scale,
@@ -420,6 +412,7 @@ impl Ui {
         }
     }
 
+    /// Offset the placement cursor by the standard amount of vertical space.
     pub fn vertical_space(&mut self) {
         self.space(2.0);
     }
@@ -438,7 +431,7 @@ impl Ui {
             ),
         };
         self.expand_groups(x, y);
-        self.draw_queue.push(DrawOp {
+        self.draw_list.push(DrawOp {
             z: self.cursor_z,
             graphic,
         });
@@ -580,7 +573,7 @@ impl Ui {
         self.bounds.w -= w;
     }
 
-    pub fn horizontal_scroll(&mut self,
+    pub fn horizontal_scrollbar(&mut self,
          current_x: &mut f32, max_x: f32, viewport_w: f32
     ) {
         if is_shift_down() && !is_ctrl_down() {
@@ -659,11 +652,12 @@ impl Ui {
         rect.contains(pt)
     }
 
-    /// A label is non-interactive text.
+    /// Draw a label in the normal foreground color.
     pub fn label(&mut self, label: &str, info: Info) {
         self.colored_label(label, info, self.style.theme.fg());
     }
 
+    /// A label is non-interactive text.
     pub fn colored_label(&mut self, label: &str, info: Info, color: Color) {
         self.start_widget();
         self.push_text(self.cursor_x, self.cursor_y, label.to_owned(), color);
@@ -679,6 +673,7 @@ impl Ui {
         self.end_widget("label", info, ControlInfo::None);
     }
 
+    /// Section header. `label` should be uppercase.
     pub fn header(&mut self, label: &str, info: Info) {
         let rect = Rect {
             x: self.cursor_x,
@@ -693,6 +688,7 @@ impl Ui {
         self.end_widget("header", info, ControlInfo::None);
     }
 
+    /// Generic interactable rectangle widget with text inside.
     fn text_rect(&mut self, label: &str, enabled: bool, x: f32, y: f32,
         bg: &Color, bg_hover: &Color, bg_click: &Color,
     ) -> (Rect, MouseEvent) {
@@ -992,6 +988,8 @@ impl Ui {
             display_unit(unit), |x| x)
     }
 
+    /// Draws a slider, using `display` and `convert` to convert the
+    /// underlying value.
     pub fn formatted_slider(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>, power: i32, enabled: bool, info: Info,
         display: impl Fn(f32) -> String, convert: impl FnOnce(f32) -> f32,
@@ -1103,6 +1101,7 @@ impl Ui {
         changed
     }
 
+    /// Handle a slider's text entry state.
     fn slider_text_entry(&mut self, id: &str, label: &str, val: &mut f32,
         range: RangeInclusive<f32>, convert: impl FnOnce(f32) -> f32,
     ) -> bool {
@@ -1127,6 +1126,7 @@ impl Ui {
         changed
     }
 
+    /// Draw a horizontal table of color swatches.
     pub fn color_table(&mut self, colors: Vec<Color>) {
         let dim = self.style.line_height();
         let margin = self.style.margin;
@@ -1509,6 +1509,7 @@ impl Ui {
         self.cursor_z -= TOOLTIP_Z_OFFSET;
     }
 
+    /// Layouts a note input widget.
     /// Returns the key that set the new note value.
     pub fn note_input(&mut self, id: &str, note: &mut Note, info: Info) -> Option<Key> {
         let label = note.to_string();
@@ -1792,6 +1793,7 @@ fn deinterpolate(x: f32, range: &RangeInclusive<f32>) -> f32 {
     (x - range.start()) / (range.end() - range.start())
 }
 
+/// Returns a bounding rect for a slice of text lines.
 fn fit_strings(style: &Style, v: &[String]) -> Rect {
     let mut rect: Rect = Default::default();
     for s in v {
@@ -1801,6 +1803,7 @@ fn fit_strings(style: &Style, v: &[String]) -> Rect {
     rect
 }
 
+/// Centers a rect within the window.
 fn center(r: Rect) -> Rect {
     Rect {
         x: (screen_width() / 2.0 - r.w / 2.0).round(),
@@ -1811,16 +1814,11 @@ fn center(r: Rect) -> Rect {
 
 fn combo_box_list_rect(style: &Style, button_rect: Rect, options: &[String]) -> Rect {
     // should options be drawn above or below the button?
-    let y_direction = if button_rect.y > screen_height() / 2.0 {
-        -1.0
-    } else {
-        1.0
-    };
-
+    let draw_above = button_rect.y > screen_height() / 2.0;
     let h = button_rect.h * options.len() as f32 + 2.0;
     Rect {
         x: button_rect.x,
-        y: if y_direction < 0.0 {
+        y: if draw_above {
             button_rect.y - h + 1.0
         } else {
             button_rect.y + button_rect.h - 1.0
@@ -1837,12 +1835,14 @@ struct Notification {
 }
 
 fn is_mod(key: KeyCode) -> bool {
-    matches!(key, KeyCode::LeftAlt | KeyCode::RightAlt
+    matches!(key,
+        KeyCode::LeftAlt | KeyCode::RightAlt
         | KeyCode::LeftControl | KeyCode::RightControl
         | KeyCode::LeftShift | KeyCode::RightShift
         | KeyCode::LeftSuper | KeyCode::RightSuper)
 }
 
+/// Generates a `formatted_slider` display function for a unit.
 fn display_unit(unit: Option<&'static str>) -> Box<dyn Fn(f32) -> String> {
     if let Some(unit) = unit {
         let unit = unit.to_owned();

@@ -1185,7 +1185,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
     {
         let max_x = track_xs.last().unwrap() - left_x
             + ui.style.margin * 4.0 + ui.style.atlas.char_width();
-        ui.horizontal_scroll(&mut pe.h_scroll, max_x, ui.bounds.w);
+        ui.horizontal_scrollbar(&mut pe.h_scroll, max_x, ui.bounds.w);
     }
     ui.cursor_x = track_xs[0];
     let viewport = Rect {
