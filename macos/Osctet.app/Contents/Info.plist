@@ -14,7 +14,7 @@
     <string>APPL</string>
     <key>CFBundleExecutable</key>
     <string>osctet</string>
-    <key>CFBundleDoucmentTypes</key>
+    <key>CFBundleDocumentTypes</key>
     <array>
         <dict>
             <key>CFBundleTypeExtensions</key>
@@ -31,4 +31,7 @@
             <true/>
         </dict>
     </array>
+    <key>CFBundleIconFile</key>
+    <string>osctet.icns</string>
 </dict>
+</plist>
