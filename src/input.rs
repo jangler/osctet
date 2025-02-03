@@ -492,7 +492,7 @@ impl Modifiers {
     /// for actions that have special alternative behavior when shift is held.
     pub fn without_shift(&self) -> Self {
         let mut states = self.to_boolean();
-        states[2] = false;
+        states[3] = false;
         Self::from_boolean(states)
     }
 
