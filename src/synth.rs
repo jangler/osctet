@@ -91,7 +91,7 @@ impl Default for Parameter {
 }
 
 /// Source type for note keys.
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum KeyOrigin {
     Keyboard,
     Midi,
@@ -99,7 +99,7 @@ pub enum KeyOrigin {
 }
 
 /// Source for note keys, to track on/offs.
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct Key {
     pub origin: KeyOrigin,
     pub channel: u8,

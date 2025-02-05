@@ -335,20 +335,19 @@ impl App {
             MidiEvent::NoteOn { channel, key, velocity } => {
                 let key = Key::new_from_midi(channel, key);
                 if velocity != 0 {
-                    let note = input::note_from_midi(
-                        key.key, &module.tuning, &self.config);
+                    let note = input::note_from_midi(key.key, &module.tuning, &self.config);
+                    self.ui.note_queue.push((key.clone(), EventData::Pitch(note)));
+                    let v = EventData::digit_from_midi(velocity);
+                    self.ui.note_queue.push((key.clone(), EventData::Pressure(v)));
+
                     let index = self.keyjazz_patch_index(module);
-                    if let Some((patch, note)) = module.map_input(index, note) {
-                        let pitch = module.tuning.midi_pitch(&note);
-                        let pressure = velocity as f32 / 127.0;
+                    if let Some((patch, mapped_note)) = module.map_input(index, note) {
                         if !self.ui.accepting_note_input() {
+                            let pitch = module.tuning.midi_pitch(&mapped_note);
+                            let pressure = velocity as f32 / 127.0;
                             player.note_on(self.keyjazz_track(),
                                 key.clone(), pitch, Some(pressure), patch);
                         }
-                        self.ui.note_queue.push((key.clone(),
-                            EventData::Pitch(note)));
-                        let v = EventData::digit_from_midi(velocity);
-                        self.ui.note_queue.push((key, EventData::Pressure(v)));
                     }
                 } else {
                     player.note_off(self.keyjazz_track(), key.clone());
