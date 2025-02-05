@@ -1384,7 +1384,15 @@ fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Co
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData,
     all_channels: bool
 ) {
+    // only write control data in control columns
     if data.is_ctrl() != (cursor.track == 0) {
+        return
+    }
+
+    // midi pitch bend can only overwrite midi pitch bend
+    if matches!(data, EventData::Bend(_))
+        && !matches!(module.event_at(cursor).map(|e| &e.data),
+            Some(EventData::Bend(_)) | None) {
         return
     }
 
