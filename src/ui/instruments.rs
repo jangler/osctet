@@ -349,6 +349,10 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                             data.fix_loop_point();
                         }
                     }
+
+                    if !data.filename.is_empty() {
+                        ui.offset_label(&format!("({})", &data.filename), Info::None);
+                    }
                 }
 
                 if loaded_sample {

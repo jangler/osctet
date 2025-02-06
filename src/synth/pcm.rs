@@ -20,6 +20,8 @@ pub struct PcmData {
     pub path: Option<PathBuf>,
     #[serde(skip)]
     pub midi_pitch: Option<f32>,
+    #[serde(default)]
+    pub filename: String,
 }
 
 /// Default for serde.
@@ -52,6 +54,10 @@ impl PcmData {
             smpl.sample_loops.first().map(|lp|
                 (*lp.start()).min(wave.len().saturating_sub(1))));
         let midi_pitch = smpl.as_ref().map(|smpl| smpl.midi_pitch);
+        let filename = path.as_ref().file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string();
 
         Ok(Self {
             wave: Arc::new(wave),
@@ -59,6 +65,7 @@ impl PcmData {
             loop_point,
             path: Some(path.as_ref().to_path_buf()),
             midi_pitch,
+            filename,
         })
     }
 
