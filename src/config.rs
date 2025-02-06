@@ -196,6 +196,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Ctrl, KeyCode::V), Action::Paste),
         (Hotkey::new(Modifiers::CtrlShift, KeyCode::V), Action::MixPaste),
         (Hotkey::new(Modifiers::CtrlAlt, KeyCode::V), Action::InsertPaste),
+        (Hotkey::new(Modifiers::Ctrl, KeyCode::H), Action::StretchPaste),
 
         // playback
         (Hotkey::new(Modifiers::None, KeyCode::Enter), Action::PlayFromScreen),

@@ -131,6 +131,24 @@ impl ops::Mul<Self> for Timespan {
     }
 }
 
+impl ops::Div<Self> for Timespan {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        let n = self.n as i64 * rhs.d as i64;
+        let d = self.d as i64 * rhs.n as i64;
+        let gcd = n.unsigned_abs().gcd(d as u64);
+        let d = d / gcd as i64;
+
+        if d <= u8::MAX as i64 {
+            let n = n as i32 / gcd as i32;
+            Self::new(n, d as u8)
+        } else {
+            Self::approximate(self.as_f64() * rhs.as_f64())
+        }
+    }
+}
+
 impl From::<Timespan> for f64 {
     fn from(value: Timespan) -> Self {
         value.n as f64 / value.d as f64

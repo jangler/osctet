@@ -416,6 +416,9 @@ track.".to_string(),
             Action::InsertPaste => text =
 "Paste, shifting existing events by the size of the
 clipboard.".to_string(),
+            Action::StretchPaste => text =
+"Paste, stretching clipboard data to the length of
+the selected timespan.".to_string(),
             Action::UseLastNote =>
                 text = "Insert a copy of the last note in the channel.".to_string(),
             Action::IncrementDivision => text = "Increase beat division by 1.".to_string(),

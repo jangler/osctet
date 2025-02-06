@@ -53,6 +53,14 @@ struct PatternClip {
     channels: usize,
 }
 
+/// Different behavior variants for the paste command.
+#[derive(PartialEq)]
+enum PasteMode {
+    Normal,
+    Mix,
+    Stretch,
+}
+
 /// Event in the pattern data clipboard.
 #[derive(Debug)]
 struct ClipEvent {
@@ -266,13 +274,14 @@ impl PatternEditor {
         match action {
             Action::Cut => self.cut(module),
             Action::Copy => self.copy(module),
-            Action::Paste => self.paste(module, false),
-            Action::MixPaste => self.paste(module, true),
+            Action::Paste => self.paste(module, PasteMode::Normal),
+            Action::MixPaste => self.paste(module, PasteMode::Mix),
             Action::InsertPaste => {
                 self.selection_to_clip(module);
                 self.push_rows(module);
-                self.paste(module, false);
+                self.paste(module, PasteMode::Normal);
             },
+            Action::StretchPaste => self.paste(module, PasteMode::Stretch),
             Action::PrevRow => self.translate_cursor(-self.row_timespan()),
             Action::NextRow => self.translate_cursor(self.row_timespan()),
             Action::PrevColumn => shift_column_left(
@@ -725,17 +734,20 @@ impl PatternEditor {
     }
 
     /// Paste from the clipboard.
-    fn paste(&self, module: &mut Module, mix: bool) {
+    fn paste(&self, module: &mut Module, mode: PasteMode) {
         if let Some(clip) = &self.clipboard {
-            let tick_offset = self.edit_start.tick - clip.start.tick;
+            let (start, end) = self.selection_corners_with_tail();
             let start = Position {
                 column: clip.start.column,
-                ..self.edit_start
+                ..start
             };
             let end = Position {
-                tick: self.edit_start.tick + clip.end.tick - clip.start.tick,
+                tick: match mode {
+                    PasteMode::Stretch => end.tick,
+                    _ => start.tick + clip.end.tick - clip.start.tick,
+                },
                 column: clip.end.column,
-                ..self.edit_start.add_channels(clip.channels, &module.tracks)
+                ..start.add_channels(clip.channels, &module.tracks)
                     .unwrap_or(Position {
                         track: module.tracks.len() - 1,
                         channel: module.tracks.last().unwrap().channels.len() - 1,
@@ -745,16 +757,23 @@ impl PatternEditor {
 
             let event_positions: Vec<_> = module.scan_events(start, end)
                 .iter().map(|x| x.position()).collect();
+            let scale = if mode == PasteMode::Stretch && end.tick != start.tick {
+                (end.tick - start.tick) / (clip.end.tick - clip.start.tick)
+            } else {
+                Timespan::new(1, 1)
+            };
 
             let add: Vec<_> = clip.events.iter().filter_map(|x| {
-                let tick = x.event.tick + tick_offset;
-                self.edit_start.add_channels(x.channel_offset, &module.tracks)
+                let start_offset = x.event.tick - clip.start.tick;
+                let tick = start.tick + start_offset * scale;
+                start.add_channels(x.channel_offset, &module.tracks)
                     .and_then(|pos| {
                         if x.event.data.is_ctrl() == (pos.track == 0)
-                            && (!mix || !event_positions.contains(&Position {
-                                tick,
-                                ..pos
-                            })) {
+                            && (mode != PasteMode::Mix
+                                || !event_positions.contains(&Position {
+                                    tick,
+                                    ..pos
+                                })) {
                             Some(LocatedEvent {
                                 track: pos.track,
                                 channel: pos.channel,
@@ -769,7 +788,7 @@ impl PatternEditor {
                     })
             }).collect();
 
-            let remove = if mix {
+            let remove = if mode == PasteMode::Mix {
                 add.iter().map(|x| x.position()).collect()
             } else {
                 event_positions
