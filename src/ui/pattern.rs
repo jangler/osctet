@@ -1248,7 +1248,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut Patt
     draw_beats(ui, left_x, beat_height);
     ui.cursor_z += 1;
     if player.is_playing() {
-        draw_playhead(ui, playhead_tick, left_x, beat_height);
+        draw_playhead(ui, playhead_tick, left_x + pe.h_scroll, beat_height);
     }
     pe.draw_cursor(ui, &track_xs);
 
