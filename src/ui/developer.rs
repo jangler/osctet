@@ -1,6 +1,8 @@
 use cpal::StreamConfig;
 use macroquad::time::get_frame_time;
 
+use crate::playback::Player;
+
 use super::{info::Info, Layout, Ui};
 
 /// Update FPS display at this frequency.
@@ -26,14 +28,14 @@ impl DevState {
     }
 }
 
-pub fn draw(ui: &mut Ui, state: &mut DevState) {
+pub fn draw(ui: &mut Ui, state: &mut DevState, player: &Player) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
     ui.cursor_y -= state.scroll;
     ui.cursor_z -= 1;
     ui.start_group();
 
-    draw_diagnostics(ui, state);
+    draw_diagnostics(ui, state, player);
     ui.vertical_space();
     draw_options(ui, state);
 
@@ -44,7 +46,7 @@ pub fn draw(ui: &mut Ui, state: &mut DevState) {
         scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
-fn draw_diagnostics(ui: &mut Ui, state: &mut DevState) {
+fn draw_diagnostics(ui: &mut Ui, state: &mut DevState, player: &Player) {
     ui.header("DIAGNOSTICS", Info::None);
 
     // FPS
@@ -59,6 +61,8 @@ fn draw_diagnostics(ui: &mut Ui, state: &mut DevState) {
     if let Some(conf) = &state.stream_config {
         ui.label(&format!("{conf:?}"), Info::None);
     }
+
+    ui.label(&format!("Buffer size: {}", player.buffer_size), Info::None);
 }
 
 fn draw_options(ui: &mut Ui, state: &mut DevState) {

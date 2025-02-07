@@ -563,7 +563,8 @@ impl App {
                     &mut self.instruments_state, &mut self.config, &mut player),
                 TAB_SETTINGS => ui::settings::draw(&mut self.ui, &mut self.config,
                     &mut self.settings_state, &mut player, &mut self.midi),
-                TAB_DEVELOPER => ui::developer::draw(&mut self.ui, &mut self.dev_state),
+                TAB_DEVELOPER => ui::developer::draw(&mut self.ui, &mut self.dev_state,
+                    &player),
                 _ => panic!("bad tab value"),
             }
         }
@@ -774,6 +775,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
                     if frames_until_update == 0 {
                         let module = stream_module.lock().unwrap();
                         let mut player = stream_player.lock().unwrap();
+                        player.buffer_size = data.len() / 2;
                         player.frame(&module, update_interval);
                         frames_until_update = UPDATE_FRAMES;
                     }
