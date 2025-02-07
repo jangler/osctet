@@ -29,6 +29,7 @@ mod timespan;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
 use timespan::Timespan;
+use ui::developer::DevState;
 use ui::general::GeneralState;
 use ui::info::Info;
 use ui::instruments::{fix_patch_index, InstrumentsState};
@@ -111,7 +112,13 @@ const TAB_GENERAL: usize = 0;
 const TAB_PATTERN: usize = 1;
 const TAB_INSTRUMENTS: usize = 2;
 const TAB_SETTINGS: usize = 3;
+const TAB_DEVELOPER: usize = 4;
+
+#[cfg(not(debug_assertions))]
 const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
+
+#[cfg(debug_assertions)]
+const TABS: [&str; 5] = ["General", "Pattern", "Instruments", "Settings", "Developer"];
 
 /// Top-level store of application state.
 struct App {
@@ -124,6 +131,7 @@ struct App {
     pattern_editor: PatternEditor,
     instruments_state: InstrumentsState,
     settings_state: SettingsState,
+    dev_state: DevState,
     save_path: Option<PathBuf>,
     render_channel: Option<Receiver<RenderUpdate>>,
     version: String,
@@ -143,6 +151,7 @@ impl App {
             general_state: Default::default(),
             instruments_state: InstrumentsState::new(Some(0)),
             settings_state: SettingsState::new(sample_rate),
+            dev_state: DevState::default(),
             save_path: None,
             render_channel: None,
             version: format!("v{PKG_VERSION}-pre14"),
@@ -548,6 +557,7 @@ impl App {
                     &mut self.instruments_state, &mut self.config, &mut player),
                 TAB_SETTINGS => ui::settings::draw(&mut self.ui, &mut self.config,
                     &mut self.settings_state, &mut player, &mut self.midi),
+                TAB_DEVELOPER => ui::developer::draw(&mut self.ui, &mut self.dev_state),
                 _ => panic!("bad tab value"),
             }
         }

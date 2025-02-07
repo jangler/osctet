@@ -19,6 +19,7 @@ pub mod general;
 pub mod pattern;
 pub mod instruments;
 pub mod settings;
+pub mod developer;
 pub mod theme;
 pub mod text;
 mod textedit;
