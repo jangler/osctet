@@ -46,7 +46,8 @@ pub enum Info {
     ResetTheme(&'static str),
     FontSize(&'static str),
     ResetSettings,
-    Aftertouch,
+    UseAftertouch,
+    UseVelocity,
     TuningRoot,
     KitNoteIn,
     KitNoteOut,
@@ -297,10 +298,12 @@ harmonic spectra and strong fundamentals.".to_string(),
             format!("Reset colors to the default {variant} theme."),
         Info::FontSize(op) => text = format!("{op} font size."),
         Info::ResetSettings => text = "Reset all settings to defaults.".to_string(),
-        Info::Aftertouch => text =
+        Info::UseAftertouch => text =
 "If enabled, convert channel pressure and key pressure
-messages to pressure values. If disabled, only
-velocity is converted.".to_string(),
+messages to pressure values.".to_string(),
+        Info::UseVelocity => text =
+"If enabled, convert velocity messages to pressure
+values.".to_string(),
         Info::TuningRoot => text =
 "Determines which note is mapped to the start of
 the loaded scale. For equal-step scales, this has

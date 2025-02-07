@@ -334,6 +334,13 @@ impl Player {
         }
     }
 
+    /// Reset vel/mod memory.
+    pub fn reset_memory(&mut self) {
+        for synth in &mut self.synths {
+            synth.reset_memory();
+        }
+    }
+
     /// Reinitialize vel/mod memory (for looping).
     fn reinit_memory(&mut self, tick: Timespan, module: &Module) {
         for track in 0..module.tracks.len() {

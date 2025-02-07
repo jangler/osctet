@@ -11,14 +11,19 @@ fn config_path() -> PathBuf {
     exe_relative_path(CONFIG_FILENAME)
 }
 
-// this is a function instead of a constant to make serde happy
+// these are functions instead of constants to make serde happy
+
 fn default_font_size() -> usize { 1 }
+
+fn default_midi_send_velocity() -> bool { true }
 
 /// Stores local configuration.
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub default_midi_input: Option<String>,
     pub midi_send_pressure: Option<bool>,
+    #[serde(default = "default_midi_send_velocity")]
+    pub midi_send_velocity: bool,
     pub theme: Option<Theme>,
     pub module_folder: Option<String>,
     pub patch_folder: Option<String>,
@@ -107,6 +112,7 @@ impl Default for Config {
         Self {
             default_midi_input: None,
             midi_send_pressure: Some(true),
+            midi_send_velocity: default_midi_send_velocity(),
             theme: None,
             module_folder: None,
             patch_folder: None,

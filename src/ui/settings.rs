@@ -30,7 +30,7 @@ pub fn draw(ui: &mut Ui, cfg: &mut Config, state: &mut SettingsState,
 
     general_controls(ui, cfg);
     ui.vertical_space();
-    io_controls(ui, cfg, state.sample_rate, midi);
+    io_controls(ui, cfg, state.sample_rate, midi, player);
     ui.vertical_space();
     appearance_controls(ui, cfg, player);
     ui.vertical_space();
@@ -57,7 +57,9 @@ fn general_controls(ui: &mut Ui, cfg: &mut Config) {
     ui.checkbox("Display info text", &mut cfg.display_info, true, Info::DisplayInfo);
 }
 
-fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi) {
+fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi,
+    player: &mut Player
+) {
     ui.header("I/O", Info::None);
 
     if let Some(s) = ui.edit_box("Desired sample rate", 6,
@@ -92,8 +94,13 @@ fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi)
 
         let mut v = cfg.midi_send_pressure.unwrap_or(true);
         if ui.checkbox("Use aftertouch", &mut v, midi.port_name.is_some(),
-            Info::Aftertouch) {
+            Info::UseAftertouch) {
             cfg.midi_send_pressure = Some(v);
+        }
+
+        if ui.checkbox("Use velocity", &mut cfg.midi_send_velocity, midi.port_name.is_some(),
+            Info::UseVelocity) {
+            player.reset_memory();
         }
 
         ui.end_group();
