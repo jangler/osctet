@@ -1,9 +1,12 @@
+:root {
+    --fg-color: #313131;
+}
 html {
     background-color: #c7e3df;
 }
 body {
     background-color: #fcfcfc;
-    color: #414141;
+    color: var(--fg-color);
     margin: auto;
     padding: 1em;
     width: 100%;
@@ -18,4 +21,7 @@ body {
         display: table-cell;
         vertical-align: middle;
     }
+}
+#screenshot {
+    border: 1px solid var(--fg-color);
 }

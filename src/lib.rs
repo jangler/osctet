@@ -145,7 +145,7 @@ impl App {
             settings_state: SettingsState::new(sample_rate),
             save_path: None,
             render_channel: None,
-            version: format!("v{PKG_VERSION}-pre14"),
+            version: format!("v{PKG_VERSION}"),
         }
     }
 

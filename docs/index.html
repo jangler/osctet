@@ -25,15 +25,16 @@
 
         <h2>Download latest version</h2>
         <ul>
-            <li><a href="">Download for Windows</a></li>
-            <li><a href="">Download for Linux</a></li>
-            <li><a href="">Download for macOS</a></li>
+            <li><a href="">Download for Windows (x64)</a></li>
+            <li><a href="">Download for Linux (x64)</a></li>
+            <li><a href="">Download for macOS (x64)</a></li>
+            <li><a href="">Download for macOS (aarch64)</a></li>
         </ul>
-        <p>
+        <!-- <p>
             Osctet is tested on Windows, Linux, and
             <a href="https://www.winehq.org/">Wine</a>. macOS builds are
             provided, but may have platform-specific issues.
-        </p>
+        </p> -->
         <!-- <p>
             For older versions, see the
             <a href="https://github.com/jangler/osctet/releases">releases page</a>.
@@ -87,13 +88,30 @@
             <li>Supported audio hosts: WASAPI, ALSA, JACK, CoreAudio</li>
         </ul>
 
+        <h2>Known issues</h2>
+        <ul>
+            <li>
+                Modifier keys can get "stuck" when switching window focus using
+                the keyboard
+            </li>
+            <li>macOS version must be run from terminal (no app bundle)</li>
+            <li>Mouse movement may cause audio stutter for certain users</li>
+        </ul>
+        <p>
+            To report an issue, use the
+            <a href="https://github.com/jangler/osctet/issues">issue tracker</a>.
+        </p>
+
         <h2>Links</h2>
         <ul>
-            <li><a href="https://github.com/jangler/osctet/issues">Issue tracker</a></li>
+            <li><a href="https://github.com/jangler/osctet">Source code</a></li>
             <li>
                 <a href="https://github.com/jangler/faunatone">Faunatone</a>,
                 Osctet's sibling project
             </li>
         </ul>
+
+        <h2>Screenshot</h2>
+        <img id="screenshot" src="screenshot.png" alt="Screenshot"/>
     </body>
 </html>
