@@ -20,11 +20,14 @@ jobs:
       run: sudo apt install libasound2-dev libjack-jackd2-dev libwayland-dev
     - name: Build
       run: cargo build --release
+    - run: mv target/release/osctet .
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: linux-x86_64
-        path: target/release/osctet
+        path: |
+          osctet
+          demosongs/
 
   build-windows:
 
@@ -34,11 +37,14 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --release
+    - run: mv target/release/osctet.exe .
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: windows-x86_64
-        path: target/release/osctet.exe
+        path: |
+          osctet.exe
+          demosongs/
 
   build-macos:
 
@@ -48,6 +54,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --release
+    - run: mv target/release/osctet .
     # - name: Bundle
     #   run: |
     #     mkdir macos/Osctet.app/Contents/MacOS
@@ -56,7 +63,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: macos-x86_64
-        path: target/release/osctet
+        path: |
+          osctet
+          demosongs/
 
   build-macos-aarch:
 
@@ -66,6 +75,7 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --release
+    - run: mv target/release/osctet .
     # - name: Bundle
     #   run: |
     #     mkdir macos/Osctet.app/Contents/MacOS
@@ -74,4 +84,6 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: macos-aarch64
-        path: target/release/osctet
+        path: |
+          osctet
+          demosongs/
