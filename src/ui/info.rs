@@ -129,7 +129,7 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
 Mainly useful for avoiding inharmonic artifacts in
 high-pitched modulators.".to_string(),
         Info::Font =>
-            text = "Font is a modified version of Dina by Joergen Ibsen.".to_string(),
+            text = "Font is a modified version of Dina by Jørgen Ibsen.".to_string(),
         Info::InstrumentList => text =
 "Patch list. Right-click to edit names.
 
