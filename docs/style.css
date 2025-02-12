@@ -9,7 +9,7 @@ body {
     color: var(--fg-color);
     margin: auto;
     padding: 1em;
-    width: 100%;
+    width: 90%;
     max-width: 40em;
     font-family:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
 }
@@ -24,4 +24,7 @@ body {
 }
 #screenshot {
     border: 1px solid var(--fg-color);
+}
+img {
+    max-width: 100%;
 }
