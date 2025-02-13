@@ -175,8 +175,9 @@ impl SmplData {
 
         let num_loops = read_u32(data, 0x24)?;
         let sample_loops = (0..num_loops as usize).flat_map(|i| {
-            let start = read_u32(data, 0x34 + i * 4)?;
-            let end = read_u32(data, 0x38)?;
+            let offset = i * 24;
+            let start = read_u32(data, 0x34 + offset)?;
+            let end = read_u32(data, 0x38 + offset)?;
             Some((start as usize)..=(end as usize))
         }).collect();
 
