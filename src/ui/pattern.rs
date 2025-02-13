@@ -768,7 +768,7 @@ impl PatternEditor {
                 let tick = start.tick + start_offset * scale;
                 start.add_channels(x.channel_offset, &module.tracks)
                     .and_then(|pos| {
-                        if x.event.data.is_ctrl() == (pos.track == 0)
+                        if x.event.data.goes_in_track(pos.track)
                             && (mode != PasteMode::Mix
                                 || !event_positions.contains(&Position {
                                     tick,
@@ -978,7 +978,7 @@ impl PatternEditor {
     /// Handle event input in record mode.
     fn record_event(&mut self, data: EventData, module: &mut Module) {
         let cursor = self.edit_start;
-        if data.is_ctrl() != (cursor.track == 0) {
+        if !data.goes_in_track(cursor.track) {
             return
         }
 
@@ -1404,7 +1404,7 @@ fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventDat
     all_channels: bool
 ) {
     // only write control data in control columns
-    if data.is_ctrl() != (cursor.track == 0) {
+    if !data.goes_in_track(cursor.track) {
         return
     }
 

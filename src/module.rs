@@ -667,10 +667,18 @@ impl EventData {
         }
     }
 
-    /// Returns true if the data goes in the control/global track.
-    pub fn is_ctrl(&self) -> bool {
-        matches!(*self, Self::Tempo(_) | Self::RationalTempo(_, _)
-            | Self::End | Self::Loop | Self::Section)
+    /// Returns true if the data belongs in the given track index.
+    pub fn goes_in_track(&self, track: usize) -> bool {
+        match self {
+            Self::Bend(_) | Self::Pressure(_) | Self::Modulation(_)
+                | Self::NoteOff | Self::Pitch(_) => track != 0,
+            Self::Tempo(_) | Self::RationalTempo(_, _)
+                | Self::End | Self::Loop | Self::Section => track == 0,
+            Self::StartGlide(col) | Self::EndGlide(col) | Self::TickGlide(col)
+                => track != 0 || *col == GLOBAL_COLUMN,
+            Self::InterpolatedModulation(_) | Self::InterpolatedPitch(_)
+                | Self::InterpolatedPressure(_) => false, // never in pattern
+        }
     }
 }
 
