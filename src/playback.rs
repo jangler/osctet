@@ -21,6 +21,7 @@ pub struct Player {
     metronome: bool,
     sample_rate: f32,
     pub stereo_width: Shared,
+    pub buffer_size: usize,
 }
 
 impl Player {
@@ -35,6 +36,7 @@ impl Player {
             metronome: false,
             sample_rate,
             stereo_width: shared(1.0),
+            buffer_size: 0,
         }
     }
 

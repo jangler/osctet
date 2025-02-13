@@ -29,6 +29,7 @@ mod timespan;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
 use timespan::Timespan;
+use ui::developer::DevState;
 use ui::general::GeneralState;
 use ui::info::Info;
 use ui::instruments::{fix_patch_index, InstrumentsState};
@@ -111,7 +112,13 @@ const TAB_GENERAL: usize = 0;
 const TAB_PATTERN: usize = 1;
 const TAB_INSTRUMENTS: usize = 2;
 const TAB_SETTINGS: usize = 3;
+const TAB_DEVELOPER: usize = 4;
+
+#[cfg(not(debug_assertions))]
 const TABS: [&str; 4] = ["General", "Pattern", "Instruments", "Settings"];
+
+#[cfg(debug_assertions)]
+const TABS: [&str; 5] = ["General", "Pattern", "Instruments", "Settings", "Developer"];
 
 /// Top-level store of application state.
 struct App {
@@ -124,13 +131,16 @@ struct App {
     pattern_editor: PatternEditor,
     instruments_state: InstrumentsState,
     settings_state: SettingsState,
+    dev_state: DevState,
     save_path: Option<PathBuf>,
     render_channel: Option<Receiver<RenderUpdate>>,
     version: String,
 }
 
 impl App {
-    fn new(global_fx: GlobalFX, config: Config, sample_rate: u32) -> Self {
+    fn new(global_fx: GlobalFX, config: Config, sample_rate: u32,
+        audio_conf: Option<StreamConfig>
+    ) -> Self {
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
         App {
@@ -143,6 +153,7 @@ impl App {
             general_state: Default::default(),
             instruments_state: InstrumentsState::new(Some(0)),
             settings_state: SettingsState::new(sample_rate),
+            dev_state: DevState::new(audio_conf),
             save_path: None,
             render_channel: None,
             version: format!("v{PKG_VERSION}"),
@@ -440,6 +451,10 @@ impl App {
 
     /// Do 1 frame. Returns false if it's quitting time.
     fn frame(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>) -> bool {
+        if self.dev_state.only_draw_on_input && !mouse_kb_input() {
+            return true
+        }
+
         // block to scope mutexes
         {
             let mut module = module.lock().unwrap();
@@ -548,6 +563,8 @@ impl App {
                     &mut self.instruments_state, &mut self.config, &mut player),
                 TAB_SETTINGS => ui::settings::draw(&mut self.ui, &mut self.config,
                     &mut self.settings_state, &mut player, &mut self.midi),
+                TAB_DEVELOPER => ui::developer::draw(&mut self.ui, &mut self.dev_state,
+                    &player),
                 _ => panic!("bad tab value"),
             }
         }
@@ -724,6 +741,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let sample_rate = audio_conf.as_ref()
         .map(|config| config.sample_rate.0)
         .unwrap_or(44100);
+    let cloned_conf = audio_conf.as_ref().cloned().ok();
 
     let mut seq = Sequencer::new(false, 4);
     seq.set_sample_rate(sample_rate as f64);
@@ -757,6 +775,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
                     if frames_until_update == 0 {
                         let module = stream_module.lock().unwrap();
                         let mut player = stream_player.lock().unwrap();
+                        player.buffer_size = data.len() / 2;
                         player.frame(&module, update_interval);
                         frames_until_update = UPDATE_FRAMES;
                     }
@@ -772,7 +791,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
         )?)
     });
 
-    let mut app = App::new(global_fx, conf, sample_rate);
+    let mut app = App::new(global_fx, conf, sample_rate, cloned_conf);
 
     // ugly duplication, but error typing makes a nice solution difficult
     match &stream {
@@ -795,4 +814,18 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+/// Returns true if there was mouse or keyboard input.
+fn mouse_kb_input() -> bool {
+    !(get_keys_down().is_empty()
+        && !is_mouse_button_pressed(MouseButton::Left)
+        && !is_mouse_button_released(MouseButton::Left)
+        && !is_mouse_button_down(MouseButton::Left)
+        && !is_mouse_button_pressed(MouseButton::Right)
+        && !is_mouse_button_released(MouseButton::Right)
+        && !is_mouse_button_down(MouseButton::Right)
+        && mouse_wheel() == (0.0, 0.0)
+        && mouse_delta_position() == Vec2::ZERO
+        && !is_quit_requested())
 }
