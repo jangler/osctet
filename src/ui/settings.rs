@@ -108,9 +108,9 @@ fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi,
         ui.label("No MIDI device", Info::None);
     }
 
-    if let Some(d) = ui.combo_box("render_bit_depth", "Render bit depth", &format!("{} bits", cfg.render_bit_depth),
+    if let Some(d) = ui.combo_box("render_bit_depth", "Render bit depth", &format!("{} bits", cfg.render_bit_depth.unwrap_or(16)),
         Info::None, || vec!["16 bits".to_string(), "32 bits".to_string()]) {
-            cfg.render_bit_depth = 16 + 16*(d as u8);
+            cfg.render_bit_depth = Some(16 + 16*(d as u8));
     }
 }
 
