@@ -41,6 +41,7 @@ pub struct Config {
     pub smooth_playhead: bool,
     pub display_info: bool,
     pub desired_sample_rate: u32,
+    pub render_bit_depth: Option<u8>,
 }
 
 impl Config {
@@ -126,6 +127,7 @@ impl Default for Config {
             smooth_playhead: false,
             display_info: true,
             desired_sample_rate: 48000,
+            render_bit_depth: Some(16),
         }
     }
 }
