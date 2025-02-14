@@ -523,9 +523,17 @@ impl App {
                 match update {
                     RenderUpdate::Progress(f) =>
                         self.ui.notify(format!("Rendering: {}%", (f * 100.0).round())),
-                    RenderUpdate::Done(wav, path) => match wav.save_wav16(path) {
-                        Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
-                        Err(e) => self.ui.report(format!("Writing WAV failed: {e}")),
+                    RenderUpdate::Done(wav, path) => {
+                        let write_result = if self.config.render_bit_depth == 16 {
+                            wav.save_wav16(path)
+                        } else {
+                            wav.save_wav32(path)
+                        };
+
+                        match write_result {
+                            Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
+                            Err(e) => self.ui.report(format!("Writing WAV failed: {e}")),
+                        }
                     }
                 }
             }
