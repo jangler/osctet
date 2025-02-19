@@ -94,19 +94,19 @@ impl Module {
     /// mappings.
     pub fn map_input(&self,
         patch_index: Option<usize>, note: Note
-    ) -> Option<(&Patch, Note)> {
+    ) -> Option<(usize, Note)> {
         if let Some(index) = patch_index {
-            self.patches.get(index).map(|x| (x, note))
+            Some((index, note))
         } else {
             self.get_kit_patch(note)
         }
     }
 
     /// Returns the kit patch that `note` maps to, if any.
-    fn get_kit_patch(&self, note: Note) -> Option<(&Patch, Note)> {
+    fn get_kit_patch(&self, note: Note) -> Option<(usize, Note)> {
         self.kit.iter()
             .find(|x| x.input_note == note)
-            .and_then(|x| self.patches.get(x.patch_index).map(|p| (p, x.patch_note)))
+            .map(|x| (x.patch_index, x.patch_note))
     }
 
     /// Remove the patch at `index`.
@@ -192,12 +192,12 @@ impl Module {
     }
 
     /// Maps a note based on track index.
-    pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
+    pub fn map_note(&self, note: Note, track: usize) -> Option<(usize, Note)> {
         self.tracks.get(track).and_then(|track| {
             match track.target {
                 TrackTarget::None | TrackTarget::Global => None,
                 TrackTarget::Kit => self.get_kit_patch(note),
-                TrackTarget::Patch(i) => self.patches.get(i).map(|x| (x, note)),
+                TrackTarget::Patch(i) => Some((i, note)),
             }
         })
     }

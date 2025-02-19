@@ -11,8 +11,9 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use module::{EventData, Module, TrackTarget};
-use playback::{Player, RenderUpdate};
+use playback::{Player, PlayerShell, RenderUpdate};
 use rfd::FileDialog;
+use rtrb::RingBuffer;
 use synth::{Key, KeyOrigin};
 use macroquad::prelude::*;
 
@@ -29,6 +30,7 @@ mod timespan;
 
 use input::{Action, Hotkey, MidiEvent, Modifiers};
 use timespan::Timespan;
+use triple_buffer::triple_buffer;
 use ui::developer::DevState;
 use ui::general::GeneralState;
 use ui::info::Info;
@@ -135,11 +137,13 @@ struct App {
     save_path: Option<PathBuf>,
     render_channel: Option<Receiver<RenderUpdate>>,
     version: String,
+    player: PlayerShell,
+    stereo_width: Shared,
 }
 
 impl App {
     fn new(global_fx: GlobalFX, config: Config, sample_rate: u32,
-        audio_conf: Option<StreamConfig>
+        audio_conf: Option<StreamConfig>, player: PlayerShell, stereo_width: Shared,
     ) -> Self {
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
@@ -157,6 +161,8 @@ impl App {
             save_path: None,
             render_channel: None,
             version: format!("v{PKG_VERSION}"),
+            player,
+            stereo_width,
         }
     }
 
@@ -184,7 +190,7 @@ impl App {
     }
 
     /// Handle keyboard input.
-    fn handle_keys(&mut self, module: &mut Module, player: &mut Player) {
+    fn handle_keys(&mut self, module: &mut Module) {
         let (pressed, released) = (get_keys_pressed(), get_keys_released());
         let mods = Modifiers::current();
 
@@ -195,7 +201,7 @@ impl App {
             if note.is_some() {
                 let key = Key::new_from_keyboard(input::u8_from_key(key));
                 self.ui.note_queue.push((key.clone(), EventData::NoteOff));
-                player.note_off(self.keyjazz_track(), key);
+                self.player.note_off(self.keyjazz_track(), key);
             }
         }
 
@@ -213,38 +219,37 @@ impl App {
                         self.octave = self.octave.saturating_add(1),
                     Action::DecrementOctave =>
                         self.octave = self.octave.saturating_sub(1),
-                    Action::PlayFromStart =>
-                        player.toggle_play_from(Timespan::ZERO, module),
+                    Action::PlayFromStart => self.player.toggle_play_from(Timespan::ZERO),
                     Action::PlayFromScreen => {
                         let tick = self.pattern_editor.screen_beat_tick();
-                        player.toggle_play_from(tick, module)
+                        self.player.toggle_play_from(tick)
                     }
                     Action::PlayFromCursor =>
-                        player.toggle_play_from(self.pattern_editor.cursor_tick(), module),
-                    Action::StopPlayback => player.stop(),
+                        self.player.toggle_play_from(self.pattern_editor.cursor_tick()),
+                    Action::StopPlayback => self.player.stop(),
                     Action::NewSong => if module.has_unsaved_changes {
                         self.ui.confirm("Discard unsaved changes?", Action::NewSong);
                     } else {
-                        self.new_module(module, player)
+                        self.new_module(module)
                     },
                     Action::OpenSong=> if module.has_unsaved_changes {
                         self.ui.confirm("Discard unsaved changes?", Action::OpenSong);
                     } else {
-                        self.open_module(module, player)
+                        self.open_module(module)
                     },
-                    Action::SaveSong => self.save_module(module, player),
-                    Action::SaveSongAs => self.save_module_as(module, player),
-                    Action::RenderSong => self.render_and_save(module, player, false),
-                    Action::RenderTracks => self.render_and_save(module, player, true),
+                    Action::SaveSong => self.save_module(module),
+                    Action::SaveSongAs => self.save_module_as(module),
+                    Action::RenderSong => self.render_and_save(module, false),
+                    Action::RenderTracks => self.render_and_save(module, true),
                     Action::Undo => if module.undo() {
-                        player.update_synths(module.drain_track_history());
+                        self.player.update_synths(module.drain_track_history());
                         fix_patch_index(&mut self.instruments_state.patch_index,
                             module.patches.len());
                     } else {
                         self.ui.report("Nothing to undo");
                     },
                     Action::Redo => if module.redo() {
-                        player.update_synths(module.drain_track_history());
+                        self.player.update_synths(module.drain_track_history());
                         fix_patch_index(&mut self.instruments_state.patch_index,
                             module.patches.len());
                     } else {
@@ -252,9 +257,10 @@ impl App {
                     },
                     Action::NextTab => self.ui.next_tab(MAIN_TAB_ID, TABS.len()),
                     Action::PrevTab => self.ui.prev_tab(MAIN_TAB_ID, TABS.len()),
-                    Action::Panic => player.panic(),
+                    Action::Panic => self.player.panic(),
                     _ => if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
-                        self.pattern_editor.action(*action, module, &self.config, player);
+                        self.pattern_editor.action(*action, module, &self.config,
+                            &mut self.player);
                     },
                 }
             } else if let Some(action) = self.config.hotkey_action(&hk.without_shift()) {
@@ -267,7 +273,7 @@ impl App {
                         | Action::PatternStart | Action::PatternEnd
                         | Action::Delete | Action::NoteOff =>
                             self.pattern_editor
-                                .action(*action, module, &self.config, player),
+                                .action(*action, module, &self.config, &mut self.player),
                     _ => (),
                 }
             }
@@ -284,7 +290,7 @@ impl App {
                     if let Some((patch, note)) =
                         module.map_input(self.keyjazz_patch_index(module), note) {
                         let pitch = module.tuning.midi_pitch(&note);
-                        player.note_on(self.keyjazz_track(), key, pitch, None, patch);
+                        self.player.note_on(self.keyjazz_track(), key, pitch, None, patch);
                     }
                 }
             }
@@ -314,9 +320,9 @@ impl App {
     }
 
     /// Handle incoming MIDI messages.
-    fn handle_midi(&mut self, module: &Module, player: &mut Player) {
+    fn handle_midi(&mut self, module: &Module) {
         for evt in self.get_midi_events() {
-            self.handle_midi_event(evt, module, player);
+            self.handle_midi_event(evt, module);
         }
     }
 
@@ -336,11 +342,11 @@ impl App {
     }
 
     /// Handle an incoming MIDI message.
-    fn handle_midi_event(&mut self, evt: MidiEvent, module: &Module, player: &mut Player) {
+    fn handle_midi_event(&mut self, evt: MidiEvent, module: &Module) {
         match evt {
             MidiEvent::NoteOff { channel, key, .. } => {
                 let key = Key::new_from_midi(channel, key);
-                player.note_off(self.keyjazz_track(), key.clone());
+                self.player.note_off(self.keyjazz_track(), key.clone());
                 self.ui.note_queue.push((key, EventData::NoteOff));
             },
             MidiEvent::NoteOn { channel, key, velocity } => {
@@ -362,19 +368,19 @@ impl App {
                             } else {
                                 None
                             };
-                            player.note_on(self.keyjazz_track(),
+                            self.player.note_on(self.keyjazz_track(),
                                 key.clone(), pitch, pressure, patch);
                         }
                     }
                 } else {
-                    player.note_off(self.keyjazz_track(), key.clone());
+                    self.player.note_off(self.keyjazz_track(), key.clone());
                     self.ui.note_queue.push((key, EventData::NoteOff));
                 }
             },
             MidiEvent::PolyPressure { channel, key, pressure } => {
                 if self.config.midi_send_pressure == Some(true) {
                     let key = Key::new_from_midi(channel, key);
-                    player.poly_pressure(self.keyjazz_track(), key.clone(),
+                    self.player.poly_pressure(self.keyjazz_track(), key.clone(),
                         pressure as f32 / 127.0);
                     let v = EventData::digit_from_midi(pressure);
                     self.ui.note_queue.push((key, EventData::Pressure(v)));
@@ -384,7 +390,7 @@ impl App {
                 let norm_value = value as f32 / 127.0;
                 match controller {
                     input::CC_MODULATION | input::CC_MACRO_MIN..=input::CC_MACRO_MAX => {
-                        player.modulate(self.keyjazz_track(), channel, norm_value);
+                        self.player.modulate(self.keyjazz_track(), channel, norm_value);
                     },
                     input::CC_RPN_MSB => self.midi.rpn.0 = value,
                     input::CC_RPN_LSB => self.midi.rpn.1 = value,
@@ -405,7 +411,7 @@ impl App {
             },
             MidiEvent::ChannelPressure { channel, pressure } => {
                 if self.config.midi_send_pressure == Some(true) {
-                    player.channel_pressure(self.keyjazz_track(),
+                    self.player.channel_pressure(self.keyjazz_track(),
                         channel, pressure as f32 / 127.0);
                     let key = Key::new_from_midi(channel, 0);
                     let v = EventData::digit_from_midi(pressure);
@@ -414,7 +420,7 @@ impl App {
             },
             MidiEvent::Pitch { channel, bend } => {
                 let semitones = bend * self.midi.bend_range;
-                player.pitch_bend(self.keyjazz_track(), channel, semitones);
+                self.player.pitch_bend(self.keyjazz_track(), channel, semitones);
                 let key = Key::new_from_midi(channel, 0);
                 let data = EventData::Bend((semitones * 100.0).round() as i16);
                 self.ui.note_queue.push((key, data));
@@ -450,15 +456,16 @@ impl App {
     }
 
     /// Do 1 frame. Returns false if it's quitting time.
-    fn frame(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>) -> bool {
+    fn frame(&mut self, module: &Arc<Mutex<Module>>) -> bool {
         if self.dev_state.only_draw_on_input && !mouse_kb_input() {
             return true
         }
 
-        // block to scope mutexes
+        self.player.update();
+
+        // block to scope mutex
         {
             let mut module = module.lock().unwrap();
-            let mut player = player.lock().unwrap();
 
             if is_quit_requested() {
                 if module.has_unsaved_changes {
@@ -470,13 +477,13 @@ impl App {
             }
 
             if self.ui.accepting_keyboard_input() {
-                player.clear_notes_with_origin(KeyOrigin::Keyboard);
+                self.player.clear_notes_with_origin(KeyOrigin::Keyboard);
             } else {
-                self.handle_keys(&mut module, &mut player);
+                self.handle_keys(&mut module);
             }
 
             if self.ui.accepting_note_input() {
-                player.clear_notes_with_origin(KeyOrigin::Midi);
+                self.player.clear_notes_with_origin(KeyOrigin::Midi);
             }
 
             // ctrl+scroll. this is here instead of in pattern code because
@@ -493,20 +500,20 @@ impl App {
                 });
             }
 
-            if player.is_playing() {
+            if self.player.is_playing() {
                 let end_tick = module.last_event_tick().unwrap_or_default()
                     + Timespan::new(1, 1);
-                if player.get_tick() > end_tick {
-                    player.stop()
+                if self.player.get_tick() > end_tick {
+                    self.player.stop();
                 }
             }
 
-            self.handle_midi(&module, &mut player);
+            self.handle_midi(&module);
         }
 
         self.handle_render_updates();
         self.check_midi_reconnect();
-        self.process_ui(module, player)
+        self.process_ui(module)
     }
 
     /// Save config to disk, logging errors.
@@ -533,17 +540,15 @@ impl App {
     }
 
     /// Process the UI for 1 frame. Returns false if it's quitting time.
-    fn process_ui(&mut self, module: &Arc<Mutex<Module>>, player: &Arc<Mutex<Player>>
-    ) -> bool {
+    fn process_ui(&mut self, module: &Arc<Mutex<Module>>) -> bool {
         {
             let mut module = module.lock().unwrap();
-            let mut player = player.lock().unwrap();
 
             // process actions confirmed via dialog
             if let Some(action) = self.ui.start_frame(&self.config) {
                 match action {
-                    Action::NewSong => self.new_module(&mut module, &mut player),
-                    Action::OpenSong => self.open_module(&mut module, &mut player),
+                    Action::NewSong => self.new_module(&mut module),
+                    Action::OpenSong => self.open_module(&mut module),
                     Action::Quit => {
                         self.save_config();
                         return false
@@ -552,19 +557,20 @@ impl App {
                 }
             }
 
-            self.bottom_panel(&mut player);
+            self.bottom_panel();
 
             match self.ui.tab_menu(MAIN_TAB_ID, &TABS, &self.version) {
                 TAB_GENERAL => ui::general::draw(&mut self.ui, &mut module,
-                    &mut self.fx, &mut self.config, &mut player, &mut self.general_state),
+                    &mut self.fx, &mut self.config, &mut self.player,
+                    &mut self.general_state),
                 TAB_PATTERN => ui::pattern::draw(&mut self.ui, &mut module,
-                    &mut player, &mut self.pattern_editor, &self.config),
+                    &mut self.player, &mut self.pattern_editor, &self.config),
                 TAB_INSTRUMENTS => ui::instruments::draw(&mut self.ui, &mut module,
-                    &mut self.instruments_state, &mut self.config, &mut player),
+                    &mut self.instruments_state, &mut self.config, &mut self.player),
                 TAB_SETTINGS => ui::settings::draw(&mut self.ui, &mut self.config,
-                    &mut self.settings_state, &mut player, &mut self.midi),
+                    &mut self.settings_state, &mut self.player, &mut self.midi),
                 TAB_DEVELOPER => ui::developer::draw(&mut self.ui, &mut self.dev_state,
-                    &player),
+                    &self.player),
                 _ => panic!("bad tab value"),
             }
         }
@@ -575,7 +581,7 @@ impl App {
     }
 
     /// Draw the status panel at the bottom of the screen.
-    fn bottom_panel(&mut self, player: &mut Player) {
+    fn bottom_panel(&mut self) {
         self.ui.start_bottom_panel();
 
         if let Some(n) = self.ui.edit_box("Division", 3,
@@ -597,15 +603,15 @@ impl App {
         }
 
         self.ui.shared_slider("stereo_width", "Stereo width",
-            &player.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
+            &self.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
 
         self.ui.end_bottom_panel();
     }
 
     /// Browse for and start rendering a WAV file.
-    fn render_and_save(&mut self, module: &Module, player: &mut Player, tracks: bool) {
+    fn render_and_save(&mut self, module: &Module, tracks: bool) {
         if module.ends() {
-            let dialog = ui::new_file_dialog(player)
+            let dialog = ui::new_file_dialog(&mut self.player)
                 .add_filter("WAV file", &["wav"])
                 .set_directory(self.config.render_folder.clone()
                     .unwrap_or(String::from(".")))
@@ -627,13 +633,13 @@ impl App {
     }
 
     /// Handle the "new song" key command.
-    fn new_module(&mut self, module: &mut Module, player: &mut Player) {
-        self.load_module(module, Module::new(Default::default()), player);
+    fn new_module(&mut self, module: &mut Module) {
+        self.load_module(module, Module::new(Default::default()));
         self.save_path = None;
     }
 
     /// Handle the "save song" key command.
-    fn save_module(&mut self, module: &mut Module, player: &mut Player) {
+    fn save_module(&mut self, module: &mut Module) {
         if let Some(path) = &self.save_path {
             if let Err(e) = module.save(self.pattern_editor.beat_division, path) {
                 self.ui.report(format!("Error saving module: {e}"));
@@ -641,13 +647,13 @@ impl App {
                 self.ui.notify(String::from("Saved module."));
             }
         } else {
-            self.save_module_as(module, player);
+            self.save_module_as(module);
         }
     }
 
     /// Handle the "save song as" key command.
-    fn save_module_as(&mut self, module: &mut Module, player: &mut Player) {
-        let dialog = self.module_dialog(player).set_file_name(module.title.clone());
+    fn save_module_as(&mut self, module: &mut Module) {
+        let dialog = self.module_dialog().set_file_name(module.title.clone());
 
         if let Some(mut path) = dialog.save_file() {
             path.set_extension(MODULE_EXT);
@@ -662,12 +668,12 @@ impl App {
     }
 
     /// Handle the "open song" key command.
-    fn open_module(&mut self, module: &mut Module, player: &mut Player) {
-        if let Some(path) = self.module_dialog(player).pick_file() {
+    fn open_module(&mut self, module: &mut Module) {
+        if let Some(path) = self.module_dialog().pick_file() {
             self.config.module_folder = config::dir_as_string(&path);
             match Module::load(&path) {
                 Ok(new_module) => {
-                    self.load_module(module, new_module, player);
+                    self.load_module(module, new_module);
                     self.save_path = Some(path);
                 },
                 Err(e) => self.ui.report(format!("Error loading module: {e}")),
@@ -675,16 +681,16 @@ impl App {
         }
     }
 
-    fn module_dialog(&self, player: &mut Player) -> FileDialog {
+    fn module_dialog(&mut self) -> FileDialog {
         let dir = self.config.module_folder.clone().unwrap_or(String::from("."));
-        ui::new_file_dialog(player)
+        ui::new_file_dialog(&mut self.player)
             .add_filter(MODULE_FILETYPE_NAME, &[MODULE_EXT])
             .set_directory(dir)
     }
 
     /// Replace the current module with `module`, reinitializing state as
     /// needed.
-    fn load_module(&mut self, module: &mut Module, new_mod: Module, player: &mut Player) {
+    fn load_module(&mut self, module: &mut Module, new_mod: Module) {
         *module = new_mod;
         let follow = self.pattern_editor.follow;
         self.pattern_editor = PatternEditor::default();
@@ -695,7 +701,7 @@ impl App {
         } else {
             Some(0)
         };
-        player.reinit(module.tracks.len());
+        self.player.reinit();
         self.fx.reinit(&module.fx);
     }
 }
@@ -754,16 +760,17 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let mut backend = BlockRateAdapter::new(Box::new(global_fx.net.backend()));
 
     let module = Module::new(fx_settings);
-    let player = Player::new(seq, module.tracks.len(), sample_rate as f32);
+    let mut player = Player::new(seq, module.tracks.len(), sample_rate as f32);
+    let (player_cmd_producer, mut player_cmd_consumer) = RingBuffer::new(10);
+    let (mut player_state_input, player_state_output) = triple_buffer(&player.state());
     let module = Arc::new(Mutex::new(module));
-    let player = Arc::new(Mutex::new(player));
 
     const UPDATE_FRAMES: u32 = 64;
     let update_interval: f64 = UPDATE_FRAMES as f64 / sample_rate as f64;
     let mut frames_until_update = UPDATE_FRAMES;
 
     let stream_module = module.clone();
-    let stream_player = player.clone();
+    let stereo_width = player.stereo_width.clone();
 
     // audio callback
     let stream = audio_conf.and_then(|config| {
@@ -774,10 +781,13 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
                 while i < len {
                     if frames_until_update == 0 {
                         let module = stream_module.lock().unwrap();
-                        let mut player = stream_player.lock().unwrap();
+                        while let Ok(cmd) = player_cmd_consumer.pop() {
+                            player.handle_command(cmd, &module);
+                        }
                         player.buffer_size = data.len() / 2;
                         player.frame(&module, update_interval);
                         frames_until_update = UPDATE_FRAMES;
+                        player_state_input.write(player.state());
                     }
                     let (l, r) = backend.get_stereo();
                     data[i] = l;
@@ -791,7 +801,8 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
         )?)
     });
 
-    let mut app = App::new(global_fx, conf, sample_rate, cloned_conf);
+    let ps = PlayerShell::new(player_state_output, player_cmd_producer);
+    let mut app = App::new(global_fx, conf, sample_rate, cloned_conf, ps, stereo_width);
 
     // ugly duplication, but error typing makes a nice solution difficult
     match &stream {
@@ -803,13 +814,12 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
 
     if let Some(arg) = arg {
         match Module::load(&arg.into()) {
-            Ok(m) => app.load_module(
-                &mut module.lock().unwrap(), m, &mut player.lock().unwrap()),
+            Ok(m) => app.load_module(&mut module.lock().unwrap(), m),
             Err(e) => app.ui.report(format!("Error loading module: {e}")),
         }
     }
 
-    while app.frame(&module, &player) {
+    while app.frame(&module) {
         next_frame().await
     }
 

@@ -1,6 +1,8 @@
 use std::{path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, Mutex}, thread};
 
 use fundsp::hacker32::*;
+use rtrb::Producer;
+use triple_buffer::Output;
 
 use crate::{fx::GlobalFX, module::{Event, EventData, LocatedEvent, Module, TrackEdit, GLOBAL_COLUMN, MOD_COLUMN, NOTE_COLUMN, VEL_COLUMN}, synth::{Key, KeyOrigin, Patch, Synth, DEFAULT_PRESSURE}, timespan::Timespan};
 
@@ -8,6 +10,178 @@ pub const DEFAULT_TEMPO: f32 = 120.0;
 
 /// For rendering.
 const LOOP_FADEOUT_TIME: f64 = 10.0;
+
+/// Information for the UI thread sent from the audio thread.
+#[derive(Clone)]
+pub struct PlayerState {
+    pub playing: bool,
+    pub beat: f64,
+    pub buffer_size: usize,
+    pub tracks_muted: Vec<bool>,
+}
+
+impl PlayerState {
+    pub fn get_tick(&self) -> Timespan {
+        Timespan::approximate(self.beat)
+    }
+}
+
+/// Information for the audio thread sent from the UI thread.
+pub enum PlayerCommand {
+    PlayFrom(Timespan),
+    Stop,
+    Reinitialize,
+    Panic,
+    ClearNotesWithOrigin(KeyOrigin),
+    NoteOff {
+        track: usize,
+        key: Key,
+    },
+    UpdateSynths(Vec<TrackEdit>),
+    ToggleMute(usize),
+    ToggleSolo(usize),
+    UnmuteAll,
+    NoteOn {
+        track: usize,
+        key: Key,
+        pitch: f32,
+        pressure: Option<f32>,
+        patch: usize,
+    },
+    ResetMemory,
+    PolyPressure {
+        track: usize,
+        key: Key,
+        pressure: f32,
+    },
+    Modulate {
+        track: usize,
+        channel: u8,
+        value: f32,
+    },
+    ChannelPressure {
+        track: usize,
+        channel: u8,
+        pressure: f32,
+    },
+    PitchBend {
+        track: usize,
+        channel: u8,
+        semitones: f32,
+    }
+}
+
+/// Imitation of the Player API for the UI thread.
+pub struct PlayerShell {
+    state_output: Output<PlayerState>,
+    cmd_producer: Producer<PlayerCommand>,
+    state: PlayerState,
+}
+
+impl PlayerShell {
+    pub fn new(state_output: Output<PlayerState>, cmd_producer: Producer<PlayerCommand>
+    ) -> Self {
+        let mut state_output = state_output;
+        Self {
+            state: state_output.read().clone(),
+            state_output,
+            cmd_producer,
+        }
+    }
+
+    /// Update cached state.
+    pub fn update(&mut self) {
+        self.state = self.state_output.read().clone();
+    }
+
+    fn cmd(&mut self, cmd: PlayerCommand) {
+        if let Err(e) = self.cmd_producer.push(cmd) {
+            eprintln!("error pushing player command: {e}");
+        }
+    }
+
+    pub fn clear_notes_with_origin(&mut self, origin: KeyOrigin) {
+        self.cmd(PlayerCommand::ClearNotesWithOrigin(origin))
+    }
+
+    pub fn is_playing(&self) -> bool {
+        self.state.playing
+    }
+
+    pub fn get_tick(&self) -> Timespan {
+        Timespan::approximate(self.state.beat)
+    }
+
+    pub fn stop(&mut self) {
+        self.cmd(PlayerCommand::Stop)
+    }
+
+    pub fn reinit(&mut self) {
+        self.cmd(PlayerCommand::Reinitialize)
+    }
+
+    pub fn note_off(&mut self, track: usize, key: Key) {
+        self.cmd(PlayerCommand::NoteOff { track, key })
+    }
+
+    pub fn toggle_play_from(&mut self, tick: Timespan) {
+        self.cmd(PlayerCommand::PlayFrom(tick))
+    }
+
+    pub fn update_synths(&mut self, edits: Vec<TrackEdit>) {
+        self.cmd(PlayerCommand::UpdateSynths(edits))
+    }
+
+    pub fn panic(&mut self) {
+        self.cmd(PlayerCommand::Panic)
+    }
+
+    pub fn toggle_mute(&mut self, track: usize) {
+        self.cmd(PlayerCommand::ToggleMute(track))
+    }
+
+    pub fn toggle_solo(&mut self, track: usize) {
+        self.cmd(PlayerCommand::ToggleSolo(track))
+    }
+
+    pub fn unmute_all(&mut self) {
+        self.cmd(PlayerCommand::UnmuteAll)
+    }
+
+    pub fn track_muted(&mut self, track: usize) -> bool {
+        self.state.tracks_muted.get(track).cloned().unwrap_or_default()
+    }
+
+    pub fn note_on(&mut self, track: usize, key: Key, pitch: f32, pressure: Option<f32>,
+        patch: usize
+    ) {
+        self.cmd(PlayerCommand::NoteOn { track, key, pitch, pressure, patch })
+    }
+
+    pub fn reset_memory(&mut self) {
+        self.cmd(PlayerCommand::ResetMemory)
+    }
+
+    pub fn buffer_size(&self) -> usize {
+        self.state.buffer_size
+    }
+
+    pub fn poly_pressure(&mut self, track: usize, key: Key, pressure: f32) {
+        self.cmd(PlayerCommand::PolyPressure { track, key, pressure })
+    }
+
+    pub fn modulate(&mut self, track: usize, channel: u8, value: f32) {
+        self.cmd(PlayerCommand::Modulate { track, channel, value })
+    }
+
+    pub fn channel_pressure(&mut self, track: usize, channel: u8, pressure: f32) {
+        self.cmd(PlayerCommand::ChannelPressure { track, channel, pressure })
+    }
+
+    pub fn pitch_bend(&mut self, track: usize, channel: u8, semitones: f32) {
+        self.cmd(PlayerCommand::PitchBend { track, channel, semitones })
+    }
+}
 
 /// Handles module playback. In methods that take a `track` argument, 0 can
 /// safely be used for keyjazz events (since track 0 will never sequence).
@@ -37,6 +211,45 @@ impl Player {
             sample_rate,
             stereo_width: shared(1.0),
             buffer_size: 0,
+        }
+    }
+
+    pub fn state(&self) -> PlayerState {
+        PlayerState {
+            playing: self.playing,
+            beat: self.beat,
+            buffer_size: self.buffer_size,
+            tracks_muted: self.synths.iter().map(|x| x.muted).collect(),
+        }
+    }
+
+    pub fn handle_command(&mut self, cmd: PlayerCommand, module: &Module) {
+        match cmd {
+            PlayerCommand::PlayFrom(beat) => self.play_from(beat, module),
+            PlayerCommand::Stop => self.stop(),
+            PlayerCommand::Reinitialize => self.reinit(module.tracks.len()),
+            PlayerCommand::Panic => self.panic(),
+            PlayerCommand::ClearNotesWithOrigin(origin) =>
+                self.clear_notes_with_origin(origin),
+            PlayerCommand::NoteOff { track, key } => self.note_off(track, key),
+            PlayerCommand::UpdateSynths(edits) => self.update_synths(edits),
+            PlayerCommand::ToggleMute(track) => self.toggle_mute(module, track),
+            PlayerCommand::ToggleSolo(track) => self.toggle_solo(module, track),
+            PlayerCommand::UnmuteAll => self.unmute_all(module),
+            PlayerCommand::NoteOn { track, key, pitch, pressure, patch } =>
+                match module.patches.get(patch) {
+                    Some(patch) => self.note_on(track, key, pitch, pressure, patch),
+                    None => eprintln!("patch index out of bounds"),
+                },
+            PlayerCommand::ResetMemory => self.reset_memory(),
+            PlayerCommand::ChannelPressure { track, channel, pressure } =>
+                self.channel_pressure(track, channel, pressure),
+            PlayerCommand::Modulate { track, channel, value } =>
+                self.modulate(track, channel, value),
+            PlayerCommand::PitchBend { track, channel, semitones } =>
+                self.pitch_bend(track, channel, semitones),
+            PlayerCommand::PolyPressure { track, key, pressure } =>
+                self.poly_pressure(track, key, pressure),
         }
     }
 
@@ -292,7 +505,7 @@ impl Player {
                 match evt.data {
                     EventData::Pitch(note) => {
                         if let Some((patch, note)) = module.map_note(note, track_i) {
-                            if patch.sustains() {
+                            if module.patches[patch].sustains() {
                                 active_note = Some((patch, note));
                                 bend_offset = 0;
                             }
@@ -330,7 +543,7 @@ impl Player {
                     key: 0,
                 };
                 let pitch = module.tuning.midi_pitch(&note);
-                self.note_on(track_i, key, pitch, None, patch);
+                self.note_on(track_i, key, pitch, None, &module.patches[patch]);
                 self.pitch_bend(track_i, channel_i as u8, bend_offset as f32 / 100.0);
             }
         }
@@ -442,7 +655,7 @@ impl Player {
                     if channel.is_interpolated(NOTE_COLUMN, event.tick) {
                         self.bend_to(track, key, pitch);
                     } else {
-                        self.note_on(track, key, pitch, None, patch);
+                        self.note_on(track, key, pitch, None, &module.patches[patch]);
                     }
                 }
             }

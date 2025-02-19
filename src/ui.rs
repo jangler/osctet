@@ -13,7 +13,7 @@ use text::GlyphAtlas;
 use textedit::TextEditState;
 use theme::Theme;
 
-use crate::{config::Config, input::{Action, Hotkey, Modifiers}, module::EventData, pitch::Note, playback::Player, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
+use crate::{config::Config, input::{Action, Hotkey, Modifiers}, module::EventData, pitch::Note, playback::PlayerShell, synth::Key, MAIN_TAB_ID, TAB_PATTERN};
 
 pub mod general;
 pub mod pattern;
@@ -38,7 +38,7 @@ const INFO_DELAY: f32 = 0.1;
 pub const MAX_PATCH_NAME_CHARS: usize = 20;
 
 /// Return a new file dialog. Use this instead of using `rfd` directly.
-pub fn new_file_dialog(player: &mut Player) -> FileDialog {
+pub fn new_file_dialog(player: &mut PlayerShell) -> FileDialog {
     // macroquad currently doesn't handle focus lost events, which means that
     // whatever keys were pressed to open the file dialog will be considered
     // to be down until they're released *when the macroquad window has focus*.

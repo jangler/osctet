@@ -2,7 +2,7 @@ use lfo::{AR_RATE_MULTIPLIER, LFO, MAX_LFO_RATE, MIN_LFO_RATE};
 use macroquad::input::{KeyCode, is_key_pressed};
 use pcm::PcmData;
 
-use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
+use crate::{config::{self, Config}, module::{Edit, Module}, playback::PlayerShell, synth::*};
 
 use super::{info::Info, Layout, Ui};
 
@@ -27,7 +27,7 @@ impl InstrumentsState {
 }
 
 pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
-    cfg: &mut Config, player: &mut Player
+    cfg: &mut Config, player: &mut PlayerShell
 ) {
     if is_key_pressed(KeyCode::Up) {
         shift_patch_index(-1, &mut state.patch_index, module.patches.len());
@@ -60,7 +60,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
 }
 
 fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
-    cfg: &mut Config, player: &mut Player
+    cfg: &mut Config, player: &mut PlayerShell
 ) {
     ui.start_group();
 
@@ -173,7 +173,7 @@ pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
     }
 }
 
-fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
+fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut PlayerShell) {
     if !module.kit.is_empty() {
         ui.start_group();
         let mut removed_index = None;
@@ -213,10 +213,8 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
                 let label = format!("kit_{}_output", i);
                 let key = ui.note_input(&label, &mut entry.patch_note, Info::KitNoteOut);
                 if let Some(key) = key {
-                    if let Some(patch) = module.patches.get(entry.patch_index) {
-                        let pitch = module.tuning.midi_pitch(&entry.patch_note);
-                        player.note_on(0, key, pitch, None, patch);
-                    }
+                    let pitch = module.tuning.midi_pitch(&entry.patch_note);
+                    player.note_on(0, key, pitch, None, entry.patch_index);
                 }
             }
         });
@@ -240,7 +238,9 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
     }
 }
 
-fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
+fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
+    player: &mut PlayerShell
+) {
     ui.header("GENERAL", Info::None);
     ui.shared_slider("gain", "Level", &patch.gain.0, 0.0..=2.0, None, 2, true, Info::None);
     ui.formatted_shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, 1, true, Info::None,
@@ -274,7 +274,7 @@ fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut
 }
 
 fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
-    player: &mut Player
+    player: &mut PlayerShell
 ) {
     ui.header("GENERATORS", Info::Generators);
 
@@ -470,7 +470,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
 
 /// Browse for and load an audio file into `data`. Returns true if successful.
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
-    player: &mut Player
+    player: &mut PlayerShell
 ) -> bool {
     let dialog = super::new_file_dialog(player)
         .add_filter("Audio file", &PcmData::FILE_EXTENSIONS)

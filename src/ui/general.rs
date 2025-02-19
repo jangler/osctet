@@ -19,7 +19,7 @@ struct TableCache {
 }
 
 pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
-    player: &mut Player, state: &mut GeneralState
+    player: &mut PlayerShell, state: &mut GeneralState
 ) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
@@ -145,7 +145,7 @@ fn compression_controls(ui: &mut Ui, comp: &mut Compression, fx: &mut GlobalFX) 
 }
 
 fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
-    player: &mut Player, table_cache: &mut Option<TableCache>
+    player: &mut PlayerShell, table_cache: &mut Option<TableCache>
 ) {
     const OCTAVE_CHARS: usize = 7;
 
