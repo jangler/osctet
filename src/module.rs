@@ -3,6 +3,7 @@
 use std::{collections::HashSet, error::Error, fs::File, io::{BufReader, Read, Write}, path::PathBuf};
 
 use flate2::{bufread::GzDecoder, write::GzEncoder};
+use rtrb::Producer;
 use serde::{Deserialize, Serialize};
 
 use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch, timespan::Timespan};
@@ -503,6 +504,15 @@ impl Module {
 
         time
     }
+
+    pub fn handle_command(&mut self, cmd: ModuleCommand) {
+        match cmd {
+            ModuleCommand::FX(fx) => self.fx = fx,
+            ModuleCommand::Kit(kit) => self.kit = kit,
+            ModuleCommand::Load(module) => *self = module,
+            ModuleCommand::Tuning(tuning) => self.tuning = tuning,
+        }
+    }
 }
 
 /// Kit mapping.
@@ -796,6 +806,31 @@ impl LocatedEvent {
             track: self.track,
             channel: self.channel,
             column: self.event.data.logical_column(),
+        }
+    }
+}
+
+/// Module sync messages sent from UI thread to audio thread.
+pub enum ModuleCommand {
+    Load(Module),
+    Tuning(Tuning),
+    FX(FXSettings),
+    Kit(Vec<KitEntry>),
+}
+
+/// Wrapper for module sync handling.
+pub struct ModuleSync {
+    producer: Producer<ModuleCommand>,
+}
+
+impl ModuleSync {
+    pub fn new(producer: Producer<ModuleCommand>) -> Self {
+        Self { producer }
+    }
+
+    pub fn push(&mut self, cmd: ModuleCommand) {
+        if let Err(e) = self.producer.push(cmd) {
+            eprintln!("error pushing module command: {e}")
         }
     }
 }

@@ -225,7 +225,11 @@ impl Player {
 
     pub fn handle_command(&mut self, cmd: PlayerCommand, module: &Module) {
         match cmd {
-            PlayerCommand::PlayFrom(beat) => self.play_from(beat, module),
+            PlayerCommand::PlayFrom(beat) => if self.playing {
+                self.stop();
+            } else {
+                self.play_from(beat, module);
+            },
             PlayerCommand::Stop => self.stop(),
             PlayerCommand::Reinitialize => self.reinit(module.tracks.len()),
             PlayerCommand::Panic => self.panic(),

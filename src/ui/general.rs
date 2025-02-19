@@ -18,9 +18,10 @@ struct TableCache {
     table: Vec<Vec<String>>,
 }
 
+/// Return values are (fx_changed, tuning_changed).
 pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Config,
-    player: &mut PlayerShell, state: &mut GeneralState
-) {
+    player: &mut PlayerShell, state: &mut GeneralState,
+) -> (bool, bool) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
     ui.cursor_y -= state.scroll;
@@ -29,11 +30,12 @@ pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
 
     metadata_controls(ui, module);
     ui.vertical_space();
-    spatial_fx_controls(ui, &mut module.fx.spatial, fx);
+    let mut fx_changed = spatial_fx_controls(ui, &mut module.fx.spatial, fx);
     ui.vertical_space();
-    compression_controls(ui, &mut module.fx.comp, fx);
+    fx_changed |= compression_controls(ui, &mut module.fx.comp, fx);
     ui.vertical_space();
-    tuning_controls(ui, &mut module.tuning, cfg, player, &mut state.table_cache);
+    let tuning_changed =
+        tuning_controls(ui, &mut module.tuning, cfg, player, &mut state.table_cache);
     ui.vertical_space();
     interval_table(ui, &mut module.tuning, &mut state.table_cache);
 
@@ -42,6 +44,8 @@ pub fn draw(ui: &mut Ui, module: &mut Module, fx: &mut GlobalFX, cfg: &mut Confi
     ui.cursor_y = old_y;
     ui.vertical_scrollbar(&mut state.scroll,
         scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
+    
+    (fx_changed, tuning_changed)
 }
 
 fn metadata_controls(ui: &mut Ui, module: &mut Module) {
@@ -54,7 +58,8 @@ fn metadata_controls(ui: &mut Ui, module: &mut Module) {
     }
 }
 
-fn spatial_fx_controls(ui: &mut Ui, spatial: &mut SpatialFx, fx: &mut GlobalFX) {
+/// Returns true if changes were made.
+fn spatial_fx_controls(ui: &mut Ui, spatial: &mut SpatialFx, fx: &mut GlobalFX) -> bool {
     ui.header("SPATIAL FX", Info::None);
 
     let mut commit = false;
@@ -101,9 +106,11 @@ fn spatial_fx_controls(ui: &mut Ui, spatial: &mut SpatialFx, fx: &mut GlobalFX) 
     if commit {
         fx.commit_spatial(&spatial);
     }
+    commit
 }
 
-fn compression_controls(ui: &mut Ui, comp: &mut Compression, fx: &mut GlobalFX) {
+/// Returns true if changes were made.
+fn compression_controls(ui: &mut Ui, comp: &mut Compression, fx: &mut GlobalFX) -> bool {
     ui.header("COMPRESSION", Info::Compression);
 
     let mut commit = false;
@@ -142,11 +149,13 @@ fn compression_controls(ui: &mut Ui, comp: &mut Compression, fx: &mut GlobalFX) 
     if commit {
         fx.commit_comp(comp);
     }
+    commit
 }
 
+/// Returns true if changes were made.
 fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
     player: &mut PlayerShell, table_cache: &mut Option<TableCache>
-) {
+) -> bool {
     const OCTAVE_CHARS: usize = 7;
 
     ui.header("TUNING", Info::Tuning);
@@ -215,6 +224,8 @@ fn tuning_controls(ui: &mut Ui, tuning: &mut Tuning, cfg: &mut Config,
     }
     ui.offset_label("Scale root", Info::TuningRoot);
     ui.end_group();
+
+    table_cache.is_none()
 }
 
 fn interval_table(ui: &mut Ui, tuning: &mut Tuning, table_cache: &mut Option<TableCache>) {
