@@ -117,6 +117,9 @@ impl PlayerShell {
     }
 
     pub fn reinit(&mut self) {
+        // state override here fixes issue when loading module while song is
+        // playing and scroll lock is on
+        self.state.playing = false;
         self.cmd(PlayerCommand::Reinitialize)
     }
 
