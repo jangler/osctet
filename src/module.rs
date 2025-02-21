@@ -35,6 +35,10 @@ pub struct Module {
     track_history: Vec<TrackEdit>,
     #[serde(skip)]
     pub has_unsaved_changes: bool,
+    #[serde(skip)]
+    sync_stack: Vec<Edit>,
+    #[serde(skip)]
+    pub sync: bool,
 }
 
 /// Default beat division for serde.
@@ -60,6 +64,8 @@ impl Module {
             track_history: Vec::new(),
             has_unsaved_changes: false,
             division: default_division(),
+            sync_stack: Vec::new(),
+            sync: false,
         }
     }
 
@@ -257,6 +263,9 @@ impl Module {
 
     /// Performs an edit operation and returns its inverse.
     fn flip_edit(&mut self, edit: Edit) -> Edit {
+        if self.sync {
+            self.sync_stack.push(edit.clone());
+        }
         self.has_unsaved_changes = true;
         match edit {
             Edit::InsertTrack(index, track) => {
@@ -511,7 +520,13 @@ impl Module {
             ModuleCommand::Kit(kit) => self.kit = kit,
             ModuleCommand::Load(module) => *self = module,
             ModuleCommand::Tuning(tuning) => self.tuning = tuning,
+            ModuleCommand::Edit(edit) => { self.flip_edit(edit); },
         }
+    }
+
+    /// Returns edits that have been made since the last call.
+    pub fn sync_edits(&mut self) -> Vec<Edit> {
+        std::mem::take(&mut self.sync_stack)
     }
 }
 
@@ -816,6 +831,7 @@ pub enum ModuleCommand {
     Tuning(Tuning),
     FX(FXSettings),
     Kit(Vec<KitEntry>),
+    Edit(Edit),
 }
 
 /// Wrapper for module sync handling.

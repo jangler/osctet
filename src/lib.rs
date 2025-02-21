@@ -150,6 +150,8 @@ impl App {
     ) -> Self {
         let mut midi = Midi::new();
         midi.port_selection = config.default_midi_input.clone();
+        let mut module = module;
+        module.sync = true;
         App {
             octave: 3,
             midi,
@@ -516,7 +518,15 @@ impl App {
 
         self.handle_render_updates();
         self.check_midi_reconnect();
-        self.process_ui()
+        let quit = self.process_ui();
+        self.sync_edits();
+        quit
+    }
+
+    fn sync_edits(&mut self) {
+        for edit in self.module.sync_edits() {
+            self.module_sync.push(ModuleCommand::Edit(edit));
+        }
     }
 
     /// Save config to disk, logging errors.
@@ -702,6 +712,7 @@ impl App {
     fn load_module(&mut self, new_mod: Module) {
         self.module_sync.push(ModuleCommand::Load(new_mod.clone()));
         self.module = new_mod;
+        self.module.sync = true;
         let follow = self.pattern_editor.follow;
         self.pattern_editor = PatternEditor::default();
         self.pattern_editor.beat_division = self.module.division;
