@@ -3,6 +3,7 @@
 use std::{collections::HashSet, error::Error, fs::File, io::{BufReader, Read, Write}, path::PathBuf};
 
 use flate2::{bufread::GzDecoder, write::GzEncoder};
+use rmp_serde::{config::BytesMode, Serializer};
 use rtrb::Producer;
 use serde::{Deserialize, Serialize};
 
@@ -90,7 +91,10 @@ impl Module {
     /// editor stores the working beat division, not the module.
     pub fn save(&mut self, division: u8, path: &PathBuf) -> Result<(), Box<dyn Error>> {
         self.division = division;
-        let contents = rmp_serde::to_vec(self)?;
+        let mut contents = Vec::new();
+        let mut ser = Serializer::new(&mut contents)
+            .with_bytes(BytesMode::ForceIterables);
+        self.serialize(&mut ser)?;
         let file = File::create(path)?;
         GzEncoder::new(file, Default::default()).write_all(&contents)?;
         self.has_unsaved_changes = false;

@@ -10,6 +10,7 @@ use lfo::LFO;
 use pcm::PcmData;
 use rand::prelude::*;
 use fundsp::hacker32::*;
+use rmp_serde::{config::BytesMode, Serializer};
 use serde::{Deserialize, Serialize};
 
 use crate::{dsp::*, ui::MAX_PATCH_NAME_CHARS};
@@ -597,7 +598,10 @@ impl Patch {
 
     /// Save the patch to disk.
     pub fn save(&self, path: &Path) -> Result<(), Box<dyn Error>> {
-        let contents = rmp_serde::to_vec(self)?;
+        let mut contents = Vec::new();
+        let mut ser = Serializer::new(&mut contents)
+            .with_bytes(BytesMode::ForceIterables);
+        self.serialize(&mut ser)?;
         Ok(fs::write(path, contents)?)
     }
 
