@@ -66,6 +66,12 @@ const FM_DEPTH_MULTIPLIER: f32 = 20.0;
 #[serde(from = "f32", into = "f32")]
 pub struct Parameter(pub Shared);
 
+impl Parameter {
+    fn shared_clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl Clone for Parameter {
     fn clone(&self) -> Self {
         Self(shared(self.0.value()))
@@ -516,6 +522,24 @@ impl Patch {
         }
     }
 
+    pub fn shared_clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            gain: self.gain.shared_clone(),
+            fx_send: self.fx_send.shared_clone(),
+            distortion: self.distortion.shared_clone(),
+            oscs: self.oscs.iter().map(|x| x.shared_clone()).collect(),
+            envs: self.envs.clone(),
+            filters: self.filters.iter().map(|x| x.shared_clone()).collect(),
+            lfos: self.lfos.iter().map(|x| x.shared_clone()).collect(),
+            play_mode: self.play_mode,
+            glide_time: self.glide_time,
+            pan: self.pan.shared_clone(),
+            mod_matrix: self.mod_matrix.iter().map(|x| x.shared_clone()).collect(),
+            version: self.version,
+        }
+    }
+
     /// Initialize a loaded patch.
     pub fn init(&mut self) {
         // initialize PCM generators
@@ -944,6 +968,18 @@ impl Oscillator {
             },
         }
     }
+    
+    fn shared_clone(&self) -> Self {
+        Self {
+            level: self.level.shared_clone(),
+            tone: self.tone.shared_clone(),
+            freq_ratio: self.freq_ratio.shared_clone(),
+            fine_pitch: self.fine_pitch.shared_clone(),
+            waveform: self.waveform.clone(),
+            output: self.output,
+            oversample: self.oversample,
+        }
+    }
 }
 
 /// Destination for generator signals.
@@ -1040,6 +1076,15 @@ impl Filter {
             FilterType::Notch => Box::new(notch()),
         });
         (net | cutoff | reso) >> filter
+    }
+    
+    fn shared_clone(&self) -> Self {
+        Self {
+            filter_type: self.filter_type,
+            cutoff: self.cutoff.shared_clone(),
+            resonance: self.resonance.shared_clone(),
+            key_tracking: self.key_tracking,
+        }
     }
 }
 
@@ -1171,6 +1216,14 @@ impl Modulation {
             1.0 - depth * (1.0 - net)
         } else {
             1.0 + depth * net
+        }
+    }
+    
+    fn shared_clone(&self) -> Self {
+        Self {
+            source: self.source,
+            target: self.target,
+            depth: self.depth.shared_clone(),
         }
     }
 }

@@ -91,6 +91,15 @@ impl LFO {
             }),
         }
     }
+    
+    pub(crate) fn shared_clone(&self) -> Self {
+        Self {
+            waveform: self.waveform.clone(),
+            freq: self.freq.shared_clone(),
+            delay: self.delay,
+            audio_rate: self.audio_rate,
+        }
+    }
 }
 
 // not sure how to de-duplicate these, since closures aren't Clone

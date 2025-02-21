@@ -520,7 +520,8 @@ impl Module {
             ModuleCommand::Kit(kit) => self.kit = kit,
             ModuleCommand::Load(module) => *self = module,
             ModuleCommand::Tuning(tuning) => self.tuning = tuning,
-            ModuleCommand::Edit(edit) => { self.flip_edit(edit); },
+            ModuleCommand::Edit(edit) => { self.flip_edit(edit); }
+            ModuleCommand::Patch(index, patch) => self.patches[index] = patch,
         }
     }
 
@@ -832,6 +833,7 @@ pub enum ModuleCommand {
     FX(FXSettings),
     Kit(Vec<KitEntry>),
     Edit(Edit),
+    Patch(usize, Patch),
 }
 
 /// Wrapper for module sync handling.
