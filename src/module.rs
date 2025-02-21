@@ -529,6 +529,12 @@ impl Module {
     pub fn sync_edits(&mut self) -> Vec<Edit> {
         std::mem::take(&mut self.sync_stack)
     }
+
+    pub fn shared_clone(&self) -> Self {
+        let mut m = self.clone();
+        m.patches = self.patches.iter().map(|x| x.shared_clone()).collect();
+        m
+    }
 }
 
 /// Kit mapping.

@@ -749,7 +749,7 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) -> bool {
 }
 
 fn modulation_controls(ui: &mut Ui, patch: &mut Patch) -> bool {
-    let mut changed = true;
+    let mut changed = false;
     ui.header("MOD MATRIX", Info::ModMatrix);
 
     if !patch.mod_matrix.is_empty() {

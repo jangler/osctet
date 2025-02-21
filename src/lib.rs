@@ -10,7 +10,7 @@ use fx::{FXSettings, GlobalFX};
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
-use module::{EventData, Module, ModuleCommand, ModuleSync, TrackTarget};
+use module::{Edit, EventData, Module, ModuleCommand, ModuleSync, TrackTarget};
 use playback::{Player, PlayerShell, RenderUpdate};
 use rfd::FileDialog;
 use rtrb::RingBuffer;
@@ -525,7 +525,16 @@ impl App {
 
     fn sync_edits(&mut self) {
         for edit in self.module.sync_edits() {
+            let patch_index = if let Edit::InsertPatch(i, _) = edit {
+                Some(i)
+            } else {
+                None
+            };
             self.module_sync.push(ModuleCommand::Edit(edit));
+            if let Some(i) = patch_index {
+                self.module_sync.push(
+                    ModuleCommand::Patch(i, self.module.patches[i].shared_clone()));
+            }
         }
     }
 
@@ -711,7 +720,7 @@ impl App {
     /// Replace the current module with `module`, reinitializing state as
     /// needed.
     fn load_module(&mut self, new_mod: Module) {
-        self.module_sync.push(ModuleCommand::Load(new_mod.clone()));
+        self.module_sync.push(ModuleCommand::Load(new_mod.shared_clone()));
         self.module = new_mod;
         self.module.sync = true;
         let follow = self.pattern_editor.follow;
@@ -791,7 +800,7 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     let update_interval: f64 = UPDATE_FRAMES as f64 / sample_rate as f64;
     let mut frames_until_update = UPDATE_FRAMES;
 
-    let mut stream_module = module.clone();
+    let mut stream_module = module.shared_clone();
     let stereo_width = player.stereo_width.clone();
 
     // audio callback
