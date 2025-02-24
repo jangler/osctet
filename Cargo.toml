@@ -5,7 +5,7 @@ edition = "2021"
 license = "AGPL-3.0-only"
 
 [dependencies]
-cpal = { version = "0.15.3", features = ["jack"] }
+cpal = { git = "https://github.com/jangler/cpal.git", features = ["jack"] }
 fundsp = { git = "https://github.com/SamiPerttu/fundsp.git", rev = "a4f126b" }
 midir = "0.10.0"
 serde = { version = "1.0.214", features = ["derive"] }
@@ -21,6 +21,8 @@ pitch-detector = "0.3.1"
 bdf-reader = "0.1.2"
 flate2 = "1.0.35"
 memmem = "0.1.1"
+rtrb = "0.3.2"
+triple_buffer = "8.1.0"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

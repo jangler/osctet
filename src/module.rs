@@ -3,6 +3,7 @@
 use std::{collections::HashSet, error::Error, fs::File, io::{BufReader, Read, Write}, path::PathBuf};
 
 use flate2::{bufread::GzDecoder, write::GzEncoder};
+use rtrb::Producer;
 use serde::{Deserialize, Serialize};
 
 use crate::{fx::FXSettings, pitch::{Note, Tuning}, playback::{tick_interval, DEFAULT_TEMPO}, synth::Patch, timespan::Timespan};
@@ -34,6 +35,10 @@ pub struct Module {
     track_history: Vec<TrackEdit>,
     #[serde(skip)]
     pub has_unsaved_changes: bool,
+    #[serde(skip)]
+    sync_stack: Vec<Edit>,
+    #[serde(skip)]
+    pub sync: bool,
 }
 
 /// Default beat division for serde.
@@ -59,6 +64,8 @@ impl Module {
             track_history: Vec::new(),
             has_unsaved_changes: false,
             division: default_division(),
+            sync_stack: Vec::new(),
+            sync: false,
         }
     }
 
@@ -94,19 +101,19 @@ impl Module {
     /// mappings.
     pub fn map_input(&self,
         patch_index: Option<usize>, note: Note
-    ) -> Option<(&Patch, Note)> {
+    ) -> Option<(usize, Note)> {
         if let Some(index) = patch_index {
-            self.patches.get(index).map(|x| (x, note))
+            Some((index, note))
         } else {
             self.get_kit_patch(note)
         }
     }
 
     /// Returns the kit patch that `note` maps to, if any.
-    fn get_kit_patch(&self, note: Note) -> Option<(&Patch, Note)> {
+    fn get_kit_patch(&self, note: Note) -> Option<(usize, Note)> {
         self.kit.iter()
             .find(|x| x.input_note == note)
-            .and_then(|x| self.patches.get(x.patch_index).map(|p| (p, x.patch_note)))
+            .map(|x| (x.patch_index, x.patch_note))
     }
 
     /// Remove the patch at `index`.
@@ -192,12 +199,12 @@ impl Module {
     }
 
     /// Maps a note based on track index.
-    pub fn map_note(&self, note: Note, track: usize) -> Option<(&Patch, Note)> {
+    pub fn map_note(&self, note: Note, track: usize) -> Option<(usize, Note)> {
         self.tracks.get(track).and_then(|track| {
             match track.target {
                 TrackTarget::None | TrackTarget::Global => None,
                 TrackTarget::Kit => self.get_kit_patch(note),
-                TrackTarget::Patch(i) => self.patches.get(i).map(|x| (x, note)),
+                TrackTarget::Patch(i) => Some((i, note)),
             }
         })
     }
@@ -256,6 +263,9 @@ impl Module {
 
     /// Performs an edit operation and returns its inverse.
     fn flip_edit(&mut self, edit: Edit) -> Edit {
+        if self.sync {
+            self.sync_stack.push(edit.clone());
+        }
         self.has_unsaved_changes = true;
         match edit {
             Edit::InsertTrack(index, track) => {
@@ -502,6 +512,28 @@ impl Module {
         }
 
         time
+    }
+
+    pub fn handle_command(&mut self, cmd: ModuleCommand) {
+        match cmd {
+            ModuleCommand::FX(fx) => self.fx = fx,
+            ModuleCommand::Kit(kit) => self.kit = kit,
+            ModuleCommand::Load(module) => *self = module,
+            ModuleCommand::Tuning(tuning) => self.tuning = tuning,
+            ModuleCommand::Edit(edit) => { self.flip_edit(edit); }
+            ModuleCommand::Patch(index, patch) => self.patches[index] = patch,
+        }
+    }
+
+    /// Returns edits that have been made since the last call.
+    pub fn sync_edits(&mut self) -> Vec<Edit> {
+        std::mem::take(&mut self.sync_stack)
+    }
+
+    pub fn shared_clone(&self) -> Self {
+        let mut m = self.clone();
+        m.patches = self.patches.iter().map(|x| x.shared_clone()).collect();
+        m
     }
 }
 
@@ -796,6 +828,33 @@ impl LocatedEvent {
             track: self.track,
             channel: self.channel,
             column: self.event.data.logical_column(),
+        }
+    }
+}
+
+/// Module sync messages sent from UI thread to audio thread.
+pub enum ModuleCommand {
+    Load(Module),
+    Tuning(Tuning),
+    FX(FXSettings),
+    Kit(Vec<KitEntry>),
+    Edit(Edit),
+    Patch(usize, Patch),
+}
+
+/// Wrapper for module sync handling.
+pub struct ModuleSync {
+    producer: Producer<ModuleCommand>,
+}
+
+impl ModuleSync {
+    pub fn new(producer: Producer<ModuleCommand>) -> Self {
+        Self { producer }
+    }
+
+    pub fn push(&mut self, cmd: ModuleCommand) {
+        if let Err(e) = self.producer.push(cmd) {
+            eprintln!("error pushing module command: {e}")
         }
     }
 }

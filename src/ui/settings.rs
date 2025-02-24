@@ -1,6 +1,6 @@
 use palette::Lchuv;
 
-use crate::{config::{self, Config}, playback::Player, Midi};
+use crate::{config::{self, Config}, playback::PlayerShell, Midi};
 
 use super::{info::Info, text::{self, GlyphAtlas}, theme::Theme, Layout, Ui};
 
@@ -20,7 +20,7 @@ impl SettingsState {
 }
 
 pub fn draw(ui: &mut Ui, cfg: &mut Config, state: &mut SettingsState,
-    player: &mut Player, midi: &mut Midi
+    player: &mut PlayerShell, midi: &mut Midi
 ) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
@@ -58,7 +58,7 @@ fn general_controls(ui: &mut Ui, cfg: &mut Config) {
 }
 
 fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi,
-    player: &mut Player
+    player: &mut PlayerShell
 ) {
     ui.header("I/O", Info::None);
 
@@ -109,7 +109,7 @@ fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi,
     }
 }
 
-fn appearance_controls(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
+fn appearance_controls(ui: &mut Ui, cfg: &mut Config, player: &mut PlayerShell) {
     ui.header("APPEARANCE", Info::None);
 
     ui.start_group();
@@ -248,7 +248,7 @@ const THEME_FILTER_NAME: &str = "Osctet theme";
 const THEME_FILTER_EXT: &str = "oscthm";
 
 /// Browse and save a theme to disk.
-fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
+fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut PlayerShell) {
     if let Some(mut path) = super::new_file_dialog(player)
         .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
         .set_directory(cfg.theme_folder.clone().unwrap_or(String::from(".")))
@@ -262,7 +262,7 @@ fn save_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
 }
 
 /// Browse and load a theme from disk.
-fn load_theme(ui: &mut Ui, cfg: &mut Config, player: &mut Player) {
+fn load_theme(ui: &mut Ui, cfg: &mut Config, player: &mut PlayerShell) {
     if let Some(path) = super::new_file_dialog(player)
         .add_filter(THEME_FILTER_NAME, &[THEME_FILTER_EXT])
         .set_directory(cfg.theme_folder.clone().unwrap_or(String::from(".")))

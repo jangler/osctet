@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use fundsp::math::delerp;
 
-use crate::{config::Config, input::{self, Action}, module::*, playback::Player, synth::Patch, timespan::Timespan};
+use crate::{config::Config, input::{self, Action}, module::*, synth::Patch, timespan::Timespan};
 
 use super::*;
 
@@ -269,7 +269,7 @@ impl PatternEditor {
 
     /// Handles a pattern-editor-specific action.
     pub fn action(&mut self, action: Action, module: &mut Module, cfg: &Config,
-        player: &mut Player
+        player: &mut PlayerShell
     ) {
         match action {
             Action::Cut => self.cut(module),
@@ -336,9 +336,9 @@ impl PatternEditor {
             Action::IncrementValues => self.shift_values(1, module),
             Action::DecrementValues => self.shift_values(-1, module),
             Action::Interpolate => self.interpolate(module),
-            Action::MuteTrack => player.toggle_mute(module, self.cursor_track()),
-            Action::SoloTrack => player.toggle_solo(module, self.cursor_track()),
-            Action::UnmuteAllTracks => player.unmute_all(module),
+            Action::MuteTrack => player.toggle_mute(self.cursor_track()),
+            Action::SoloTrack => player.toggle_solo(self.cursor_track()),
+            Action::UnmuteAllTracks => player.unmute_all(),
             Action::CycleNotation => self.cycle_notation(module),
             Action::UseLastNote => self.use_last_note(module),
             _ => (),
@@ -1129,8 +1129,8 @@ fn parse_ctrl_text(s: &str) -> Option<EventData> {
     None
 }
 
-pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut Player, pe: &mut PatternEditor,
-    conf: &Config
+pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut PlayerShell,
+    pe: &mut PatternEditor, conf: &Config
 ) {
     // update tap tempo timekeeping
     if let Some(interval) = pe.pending_interval.as_mut() {
@@ -1309,7 +1309,7 @@ fn draw_beats(ui: &mut Ui, x: f32, beat_height: f32) {
 
 /// Returns x positions of each track, plus the position of the last track's
 /// right edge.
-fn draw_track_headers(ui: &mut Ui, module: &mut Module, player: &mut Player,
+fn draw_track_headers(ui: &mut Ui, module: &mut Module, player: &mut PlayerShell,
     pe: &mut PatternEditor
 ) -> Vec<f32> {
     let mut edit = None;

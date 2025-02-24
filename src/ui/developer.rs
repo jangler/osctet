@@ -1,7 +1,7 @@
 use cpal::StreamConfig;
 use macroquad::time::get_frame_time;
 
-use crate::playback::Player;
+use crate::playback::PlayerShell;
 
 use super::{info::Info, Layout, Ui};
 
@@ -28,7 +28,7 @@ impl DevState {
     }
 }
 
-pub fn draw(ui: &mut Ui, state: &mut DevState, player: &Player) {
+pub fn draw(ui: &mut Ui, state: &mut DevState, player: &PlayerShell) {
     ui.layout = Layout::Horizontal;
     let old_y = ui.cursor_y;
     ui.cursor_y -= state.scroll;
@@ -46,7 +46,7 @@ pub fn draw(ui: &mut Ui, state: &mut DevState, player: &Player) {
         scroll_h, ui.bounds.y + ui.bounds.h - ui.cursor_y, true);
 }
 
-fn draw_diagnostics(ui: &mut Ui, state: &mut DevState, player: &Player) {
+fn draw_diagnostics(ui: &mut Ui, state: &mut DevState, player: &PlayerShell) {
     ui.header("DIAGNOSTICS", Info::None);
 
     // FPS
@@ -62,7 +62,7 @@ fn draw_diagnostics(ui: &mut Ui, state: &mut DevState, player: &Player) {
         ui.label(&format!("{conf:?}"), Info::None);
     }
 
-    ui.label(&format!("Buffer size: {}", player.buffer_size), Info::None);
+    ui.label(&format!("Buffer size: {}", player.buffer_size()), Info::None);
 }
 
 fn draw_options(ui: &mut Ui, state: &mut DevState) {

@@ -2,7 +2,7 @@ use lfo::{AR_RATE_MULTIPLIER, LFO, MAX_LFO_RATE, MIN_LFO_RATE};
 use macroquad::input::{KeyCode, is_key_pressed};
 use pcm::PcmData;
 
-use crate::{config::{self, Config}, module::{Edit, Module}, playback::Player, synth::*};
+use crate::{config::{self, Config}, module::{Edit, Module, ModuleCommand, ModuleSync}, playback::PlayerShell, synth::*};
 
 use super::{info::Info, Layout, Ui};
 
@@ -27,7 +27,7 @@ impl InstrumentsState {
 }
 
 pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
-    cfg: &mut Config, player: &mut Player
+    cfg: &mut Config, player: &mut PlayerShell, module_sync: &mut ModuleSync,
 ) {
     if is_key_pressed(KeyCode::Up) {
         shift_patch_index(-1, &mut state.patch_index, module.patches.len());
@@ -45,10 +45,14 @@ pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
     ui.start_group();
     if let Some(index) = &state.patch_index {
         if let Some(patch) = module.patches.get_mut(*index) {
-            patch_controls(ui, patch, cfg, player);
+            if patch_controls(ui, patch, cfg, player) {
+                module_sync.push(ModuleCommand::Patch(*index, patch.shared_clone()));
+            }
         }
     } else {
-        kit_controls(ui, module, player);
+        if kit_controls(ui, module, player) {
+            module_sync.push(ModuleCommand::Kit(module.kit.clone()))
+        }
     }
 
     ui.cursor_z += 1;
@@ -60,7 +64,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, state: &mut InstrumentsState,
 }
 
 fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
-    cfg: &mut Config, player: &mut Player
+    cfg: &mut Config, player: &mut PlayerShell
 ) {
     ui.start_group();
 
@@ -173,7 +177,9 @@ pub fn fix_patch_index(index: &mut Option<usize>, len: usize) {
     }
 }
 
-fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
+fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut PlayerShell) -> bool {
+    let mut changed = false;
+
     if !module.kit.is_empty() {
         ui.start_group();
         let mut removed_index = None;
@@ -184,7 +190,8 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
             for (i, entry) in module.kit.iter_mut().enumerate() {
                 ui.start_group();
                 let label = format!("kit_{}_input", i);
-                ui.note_input(&label, &mut entry.input_note, Info::KitNoteIn);
+                changed |= ui.note_input(&label, &mut entry.input_note, Info::KitNoteIn)
+                    .is_some();
 
                 if notes.contains(&entry.input_note) {
                     ui.offset_label("*", Info::DuplicateKitEntry)
@@ -204,6 +211,7 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
                     Info::KitPatch,
                     || module.patches.iter().map(|x| x.name.clone()).collect()) {
                     entry.patch_index = j;
+                    changed = true;
                 }
             }
         });
@@ -213,10 +221,9 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
                 let label = format!("kit_{}_output", i);
                 let key = ui.note_input(&label, &mut entry.patch_note, Info::KitNoteOut);
                 if let Some(key) = key {
-                    if let Some(patch) = module.patches.get(entry.patch_index) {
-                        let pitch = module.tuning.midi_pitch(&entry.patch_note);
-                        player.note_on(0, key, pitch, None, patch);
-                    }
+                    let pitch = module.tuning.midi_pitch(&entry.patch_note);
+                    player.note_on(0, key, pitch, None, entry.patch_index);
+                    changed = true;
                 }
             }
         });
@@ -225,6 +232,7 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
             for i in 0..module.kit.len() {
                 if ui.button("X", true, Info::Remove("this mapping")) {
                     removed_index = Some(i);
+                    changed = true;
                 }
             }
         });
@@ -237,15 +245,23 @@ fn kit_controls(ui: &mut Ui, module: &mut Module, player: &mut Player) {
 
     if ui.button("+", !module.patches.is_empty(), Info::Add("a new mapping")) {
         module.kit.push(Default::default());
+        changed = true;
     }
+
+    changed
 }
 
-fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut Player) {
+fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
+    player: &mut PlayerShell
+) -> bool {
+    let mut changed = false;
+
     ui.header("GENERAL", Info::None);
-    ui.shared_slider("gain", "Level", &patch.gain.0, 0.0..=2.0, None, 2, true, Info::None);
-    ui.formatted_shared_slider("pan", "Pan", &patch.pan.0, -1.0..=1.0, 1, true, Info::None,
-        |f| format!("{f:+.2}"), |f| f);
-    ui.slider("glide_time", "Glide time", &mut patch.glide_time,
+    ui.shared_slider("gain", "Level", &patch.gain.0,
+        0.0..=2.0, None, 2, true, Info::None);
+    ui.formatted_shared_slider("pan", "Pan", &patch.pan.0,
+        -1.0..=1.0, 1, true, Info::None, |f| format!("{f:+.2}"), |f| f);
+    changed |= ui.slider("glide_time", "Glide time", &mut patch.glide_time,
         0.0..=0.5, Some("s"), 2, true, Info::GlideTime);
 
     // TODO: re-enable this if & when recording is implemented
@@ -258,28 +274,31 @@ fn patch_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config, player: &mut
 
     ui.formatted_shared_slider("distortion", "Distortion", &patch.distortion.0,
         0.0..=1.0, 1, true, Info::Distortion, |f| format!("{f:.2}"), |f| f);
-    ui.shared_slider("fx_send", "FX send",
-        &patch.fx_send.0, 0.0..=1.0, None, 1, true, Info::FxSend);
+    ui.shared_slider("fx_send", "FX send", &patch.fx_send.0,
+        0.0..=1.0, None, 1, true, Info::FxSend);
 
     ui.vertical_space();
-    generator_controls(ui, patch, cfg, player);
+    changed |= generator_controls(ui, patch, cfg, player);
     ui.vertical_space();
-    filter_controls(ui, patch);
+    changed |= filter_controls(ui, patch);
     ui.vertical_space();
-    envelope_controls(ui, patch);
+    changed |= envelope_controls(ui, patch);
     ui.vertical_space();
-    lfo_controls(ui, patch);
+    changed |= lfo_controls(ui, patch);
     ui.vertical_space();
-    modulation_controls(ui, patch);
+    changed |= modulation_controls(ui, patch);
+
+    changed
 }
 
 fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
-    player: &mut Player
-) {
+    player: &mut PlayerShell
+) -> bool {
     ui.header("GENERATORS", Info::Generators);
 
     ui.start_group();
     let mut removed_osc = None;
+    let mut changed = false;
 
     // the code for these controls is a little hairier because the PCM
     // controls use an extra line.
@@ -328,6 +347,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                             },
                             None => ui.report("Could not detect pitch"),
                         }
+                        changed = true;
                     }
 
                     let mut on = data.loop_point.is_some();
@@ -337,6 +357,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                         } else {
                             None
                         };
+                        changed = true;
                     }
 
                     if let Some(pt) = &mut data.loop_point {
@@ -347,6 +368,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                             Info::LoopPoint) {
                             *pt = (pt2 * sr).round() as usize;
                             data.fix_loop_point();
+                            changed = true;
                         }
                     }
 
@@ -356,6 +378,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                 }
 
                 if loaded_sample {
+                    changed = true;
                     if let Some(pitch) = data.as_ref().and_then(|d| d.midi_pitch) {
                         osc.freq_ratio.0.set(clamp_freq_ratio(
                             2.0_f32.powf((REF_PITCH as f32 - pitch) / 12.0)));
@@ -410,6 +433,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                 "", osc.waveform.name(), Info::Waveform,
                 || Waveform::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                 osc.waveform = Waveform::VARIANTS[i].clone();
+                changed = true;
             }
 
             if let Waveform::Pcm(_) = osc.waveform {
@@ -425,6 +449,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                 "", &osc.output.to_string(), Info::GenOutput,
                 || outputs.iter().map(|x| x.to_string()).collect()) {
                 osc.output = outputs[i];
+                changed = true;
             }
 
             if let Waveform::Pcm(_) = osc.waveform {
@@ -435,7 +460,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
 
     labeled_group(ui, "2X", Info::Oversample, |ui| {
         for osc in patch.oscs.iter_mut() {
-            ui.checkbox("", &mut osc.oversample,
+            changed |= ui.checkbox("", &mut osc.oversample,
                 osc.waveform.uses_oversampling(), Info::Oversample);
 
             if let Waveform::Pcm(_) = osc.waveform {
@@ -450,6 +475,7 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                 ui.offset_label("", Info::None); // can't delete the only osc
             } else if ui.button("X", true, Info::Remove("this generator")) {
                 removed_osc = Some(i);
+                changed = true;
             }
 
             if let Waveform::Pcm(_) = osc.waveform {
@@ -465,12 +491,15 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
 
     if ui.button("+", true, Info::Add("a generator")) {
         patch.oscs.push(Oscillator::default());
+        changed = true;
     }
+
+    changed
 }
 
 /// Browse for and load an audio file into `data`. Returns true if successful.
 fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
-    player: &mut Player
+    player: &mut PlayerShell
 ) -> bool {
     let dialog = super::new_file_dialog(player)
         .add_filter("Audio file", &PcmData::FILE_EXTENSIONS)
@@ -512,7 +541,9 @@ fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut Ui) -> bool {
     false
 }
 
-fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
+fn filter_controls(ui: &mut Ui, patch: &mut Patch) -> bool {
+    let mut changed = false;
+
     ui.header("FILTERS", Info::Filters);
 
     if !patch.filters.is_empty() {
@@ -527,6 +558,7 @@ fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
                     "", filter.filter_type.name(), Info::FilterType,
                     || FilterType::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                     filter.filter_type = FilterType::VARIANTS[i];
+                    changed = true;
                 }
             }
         });
@@ -553,6 +585,7 @@ fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
                     "", filter.key_tracking.name(), Info::FilterKeytrack,
                     || KeyTracking::VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                     filter.key_tracking = KeyTracking::VARIANTS[i];
+                    changed = true;
                 }
             }
         });
@@ -561,6 +594,7 @@ fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
             for i in 0..patch.filters.len() {
                 if ui.button("X", true, Info::Remove("this filter")) {
                     removed_filter = Some(i);
+                    changed = true;
                 }
             }
         });
@@ -573,10 +607,14 @@ fn filter_controls(ui: &mut Ui, patch: &mut Patch) {
 
     if ui.button("+", true, Info::Add("a filter")) {
         patch.filters.push(Filter::default());
+        changed = true;
     }
+
+    changed
 }
 
-fn envelope_controls(ui: &mut Ui, patch: &mut Patch) {
+fn envelope_controls(ui: &mut Ui, patch: &mut Patch) -> bool {
+    let mut changed = false;
     ui.header("ENVELOPES", Info::Envelopes);
 
     if !patch.envs.is_empty() {
@@ -587,29 +625,29 @@ fn envelope_controls(ui: &mut Ui, patch: &mut Patch) {
 
         labeled_group(ui, "Attack", Info::Attack, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
-                ui.slider(&format!("env_{}_A", i), "", &mut env.attack, 0.0..=10.0,
-                    Some("s"), 2, true, Info::Attack);
+                changed |= ui.slider(&format!("env_{}_A", i), "", &mut env.attack,
+                    0.0..=10.0, Some("s"), 2, true, Info::Attack);
             }
         });
 
         labeled_group(ui, "Decay", Info::Decay, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
-                ui.slider(&format!("env_{}_D", i), "", &mut env.decay, 0.01..=10.0,
-                    Some("s"), 2, true, Info::Decay);
+                changed |= ui.slider(&format!("env_{}_D", i), "", &mut env.decay,
+                    0.01..=10.0, Some("s"), 2, true, Info::Decay);
             }
         });
 
         labeled_group(ui, "Sustain", Info::Sustain, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
-                ui.slider(&format!("env_{}_S", i), "", &mut env.sustain, 0.0..=1.0,
-                    None, 1, true, Info::Sustain);
+                changed |= ui.slider(&format!("env_{}_S", i), "", &mut env.sustain,
+                    0.0..=1.0, None, 1, true, Info::Sustain);
             }
         });
 
         labeled_group(ui, "Release", Info::Release, |ui| {
             for (i, env) in patch.envs.iter_mut().enumerate() {
-                ui.slider(&format!("env_{}_R", i), "", &mut env.release, 0.01..=10.0,
-                    Some("s"), 2, true, Info::Release);
+                changed |= ui.slider(&format!("env_{}_R", i), "", &mut env.release,
+                    0.01..=10.0, Some("s"), 2, true, Info::Release);
             }
         });
 
@@ -617,6 +655,7 @@ fn envelope_controls(ui: &mut Ui, patch: &mut Patch) {
             for i in 0..patch.envs.len() {
                 if ui.button("X", true, Info::Remove("this envelope")) {
                     removed_env = Some(i);
+                    changed = true;
                 }
             }
         });
@@ -629,10 +668,14 @@ fn envelope_controls(ui: &mut Ui, patch: &mut Patch) {
 
     if ui.button("+", true, Info::Add("an envelope")) {
         patch.envs.push(ADSR::default());
+        changed = true;
     }
+
+    changed
 }
 
-fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
+fn lfo_controls(ui: &mut Ui, patch: &mut Patch) -> bool {
+    let mut changed = false;
     ui.header("LFOS", Info::Lfos);
 
     if !patch.lfos.is_empty() {
@@ -647,6 +690,7 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
                     "", lfo.waveform.name(), Info::Waveform,
                     || Waveform::LFO_VARIANTS.map(|x| x.name().to_owned()).to_vec()) {
                     lfo.waveform = Waveform::LFO_VARIANTS[i].clone();
+                    changed = true;
                 }
             }
         });
@@ -658,8 +702,8 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
                 } else {
                     1.0
                 };
-                ui.formatted_shared_slider(&format!("lfo_{}_rate", i), "", &lfo.freq.0,
-                    MIN_LFO_RATE..=MAX_LFO_RATE, 2, lfo.waveform.uses_freq(),
+                ui.formatted_shared_slider(&format!("lfo_{}_rate", i), "",
+                    &lfo.freq.0, MIN_LFO_RATE..=MAX_LFO_RATE, 2, lfo.waveform.uses_freq(),
                     Info::None, |f| format!("{:.2} Hz", f * scale),
                     |f| f / scale);
             }
@@ -667,15 +711,17 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
 
         labeled_group(ui, "Delay", Info::LfoDelay, |ui| {
             for (i, lfo) in patch.lfos.iter_mut().enumerate() {
-                ui.formatted_slider(&format!("lfo_{}_delay", i), "", &mut lfo.delay,
-                    0.0..=10.0, 2, true, Info::LfoDelay, |f| format!("{f:.2} s"), |f| f);
+                changed |= ui.formatted_slider(&format!("lfo_{}_delay", i), "",
+                    &mut lfo.delay, 0.0..=10.0, 2, true, Info::LfoDelay,
+                    |f| format!("{f:.2} s"), |f| f);
             }
         });
 
         labeled_group(ui, "AR", Info::LfoAudioRate, |ui| {
             for lfo in patch.lfos.iter_mut() {
                 let enabled = lfo.waveform.uses_freq();
-                ui.checkbox("", &mut lfo.audio_rate, enabled, Info::LfoAudioRate);
+                changed |=
+                    ui.checkbox("", &mut lfo.audio_rate, enabled, Info::LfoAudioRate);
             }
         });
 
@@ -683,6 +729,7 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
             for i in 0..patch.lfos.len() {
                 if ui.button("X", true, Info::Remove("this LFO")) {
                     removed_lfo = Some(i);
+                    changed = true;
                 }
             }
         });
@@ -695,10 +742,14 @@ fn lfo_controls(ui: &mut Ui, patch: &mut Patch) {
 
     if ui.button("+", true, Info::Add("an LFO")) {
         patch.lfos.push(LFO::default());
+        changed = true;
     }
+
+    changed
 }
 
-fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
+fn modulation_controls(ui: &mut Ui, patch: &mut Patch) -> bool {
+    let mut changed = false;
     ui.header("MOD MATRIX", Info::ModMatrix);
 
     if !patch.mod_matrix.is_empty() {
@@ -716,6 +767,7 @@ fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
                     "", &m.source.to_string(), Info::ModSource,
                     || sources.iter().map(|x| x.to_string()).collect()) {
                     m.source = sources[i];
+                    changed = true;
                 }
             }
         });
@@ -726,14 +778,15 @@ fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
                     "", &m.target.to_string(), Info::ModDest,
                     || targets.iter().map(|x| x.to_string()).collect()) {
                     m.target = targets[i];
+                    changed = true;
                 }
             }
         });
 
         labeled_group(ui, "Depth", Info::ModDepth, |ui| {
             for (i, m) in patch.mod_matrix.iter_mut().enumerate() {
-                ui.formatted_shared_slider(&format!("mod_{}_depth", i), "", &m.depth.0,
-                    -1.0..=1.0, 1, true, Info::ModDepth,
+                ui.formatted_shared_slider(&format!("mod_{}_depth", i), "",
+                    &m.depth.0, -1.0..=1.0, 1, true, Info::ModDepth,
                     display_mod(&m.target), convert_mod(&m.target));
             }
         });
@@ -742,6 +795,7 @@ fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
             for i in 0..patch.mod_matrix.len() {
                 if ui.button("X", true, Info::Remove("this modulation")) {
                     removed_mod = Some(i);
+                    changed = true;
                 }
             }
         });
@@ -755,7 +809,10 @@ fn modulation_controls(ui: &mut Ui, patch: &mut Patch) {
 
     if ui.button("+", true, Info::Add("a modulation")) {
         patch.mod_matrix.push(Modulation::default());
+        changed = true;
     }
+
+    changed
 }
 
 /// Draw a column of indices.
