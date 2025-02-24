@@ -17,7 +17,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install dependencies
-      run: sudo apt install libasound2-dev libjack-jackd2-dev libwayland-dev
+      run: sudo apt install libasound2-dev libjack-jackd2-dev libwayland-dev libdbus-1-dev
     - name: Build
       run: cargo build --release
     - run: mv target/release/osctet .
