@@ -88,6 +88,7 @@ pub enum Info {
     Oversample,
     DuplicateKitEntry,
     LfoAudioRate,
+    KeyjazzModulation,
 }
 
 impl Default for Info {
@@ -120,6 +121,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::KeyjazzModulation =>
+            text = "Modulation level used for keyboard notes.".to_string(),
         Info::DuplicateKitEntry =>
             text = "Another mapping already uses this note.".to_string(),
         Info::LfoAudioRate =>

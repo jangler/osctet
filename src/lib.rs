@@ -141,6 +141,7 @@ struct App {
     stereo_width: Shared,
     module: Module,
     module_sync: ModuleSync,
+    keyjazz_modulation: f32,
 }
 
 impl App {
@@ -170,6 +171,7 @@ impl App {
             stereo_width,
             module,
             module_sync,
+            keyjazz_modulation: 0.0,
         }
     }
 
@@ -613,15 +615,6 @@ impl App {
     fn bottom_panel(&mut self) {
         self.ui.start_bottom_panel();
 
-        if let Some(n) = self.ui.edit_box("Division", 3,
-            self.pattern_editor.beat_division.to_string(), Info::Division
-        ) {
-            match n.parse::<u8>() {
-                Ok(n) => self.pattern_editor.set_division(n),
-                Err(e) => self.ui.report(e),
-            }
-        }
-
         if let Some(n) = self.ui.edit_box("Octave", 2, self.octave.to_string(),
             Info::Octave
         ) {
@@ -633,6 +626,30 @@ impl App {
 
         self.ui.shared_slider("stereo_width", "Stereo width",
             &self.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
+        
+        match self.ui.get_tab(MAIN_TAB_ID) {
+            Some(TAB_PATTERN) => {
+                if let Some(n) = self.ui.edit_box("Division", 3,
+                    self.pattern_editor.beat_division.to_string(), Info::Division
+                ) {
+                    match n.parse::<u8>() {
+                        Ok(n) => self.pattern_editor.set_division(n),
+                        Err(e) => self.ui.report(e),
+                    }
+                }
+            }
+            _ => {
+                const MAX: f32 = EventData::DIGIT_MAX as f32;
+                if self.ui.formatted_slider("modulation", "Modulation",
+                    &mut self.keyjazz_modulation, 0.0..=MAX, 1, true,
+                    Info::KeyjazzModulation, |x| format!("{:X}", x.round() as u8),
+                    |x| x.round()
+                ) {
+                    self.player.modulate(self.keyjazz_track(), 0,
+                        self.keyjazz_modulation / MAX);
+                }
+            }
+        }
 
         self.ui.end_bottom_panel();
     }
