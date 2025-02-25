@@ -626,7 +626,7 @@ impl App {
 
         self.ui.shared_slider("stereo_width", "Stereo width",
             &self.stereo_width, -1.0..=1.0, None, 1, true, Info::StereoWidth);
-        
+
         match self.ui.get_tab(MAIN_TAB_ID) {
             Some(TAB_PATTERN) => {
                 if let Some(n) = self.ui.edit_box("Division", 3,
@@ -637,6 +637,9 @@ impl App {
                         Err(e) => self.ui.report(e),
                     }
                 }
+
+                self.ui.checkbox("Follow", &mut self.pattern_editor.follow, true,
+                    Info::FollowCheckbox);
             }
             _ => {
                 const MAX: f32 = EventData::DIGIT_MAX as f32;

@@ -89,6 +89,7 @@ pub enum Info {
     DuplicateKitEntry,
     LfoAudioRate,
     KeyjazzModulation,
+    FollowCheckbox,
 }
 
 impl Default for Info {
@@ -121,6 +122,10 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::FollowCheckbox => {
+            text = "Toggle whether the pattern view tracks the playhead.".to_string();
+            actions.push(Action::ToggleFollow);
+        }
         Info::KeyjazzModulation =>
             text = "Modulation level used for keyboard notes.".to_string(),
         Info::DuplicateKitEntry =>
