@@ -319,7 +319,10 @@ impl Player {
             match edit {
                 TrackEdit::Insert(i) =>
                     self.synths.insert(i, Synth::new(self.sample_rate)),
-                TrackEdit::Remove(i) => { self.synths.remove(i); }
+                TrackEdit::Remove(i) => {
+                    self.synths[i].clear_all_notes(&mut self.seq);
+                    self.synths.remove(i);
+                }
             }
         }
     }
