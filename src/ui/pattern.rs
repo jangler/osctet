@@ -341,11 +341,27 @@ impl PatternEditor {
             Action::UnmuteAllTracks => player.unmute_all(),
             Action::CycleNotation => self.cycle_notation(module),
             Action::UseLastNote => self.use_last_note(module),
+            Action::ShiftTrackLeft => self.shift_track(-1, module, player),
+            Action::ShiftTrackRight => self.shift_track(1, module, player),
             _ => (),
         }
 
         if action != Action::TapTempo {
             self.clear_tap_tempo_state();
+        }
+    }
+
+    fn shift_track(&mut self, offset: isize,
+        module: &mut Module, player: &mut PlayerShell
+    ) {
+        let src_track = self.cursor_track();
+        let dst_track = src_track.saturating_add_signed(offset);
+        if src_track > 1 && dst_track > 1 && dst_track < module.tracks.len() {
+            module.push_edit(Edit::ShiftTrack(src_track, offset));
+            player.update_synths(module.drain_track_history());
+            self.edit_start.track = self.edit_start.track.wrapping_add_signed(offset);
+            self.edit_end.track = self.edit_end.track.wrapping_add_signed(offset);
+            fix_cursors(&mut self.edit_start, &mut self.edit_end, &module.tracks);
         }
     }
 

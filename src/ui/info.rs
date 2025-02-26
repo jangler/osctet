@@ -321,6 +321,10 @@ no effect.".to_string(),
         Info::KitNoteOut =>
             text = "The pitch that this kit mapping plays at.".to_string(),
         Info::Action(action) => match action {
+            Action::ShiftTrackLeft =>
+                text = "Move the selected track to the left.".to_string(),
+            Action::ShiftTrackRight =>
+                text = "Move the selected track to the right.".to_string(),
             Action::RenderTracks => text =
 "Render each track to WAV. Compression will be
 applied on a per-track basis.".to_string(),

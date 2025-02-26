@@ -282,6 +282,16 @@ impl Module {
                 self.track_history.push(TrackEdit::Remove(index));
                 Edit::InsertTrack(index, track)
             }
+            Edit::ShiftTrack(index, offset) => {
+                // this could be implemented with insert + remove, but that
+                // means multiple undo items and more memory usage
+                let dst = index.saturating_add_signed(offset);
+                let track = self.tracks.remove(index);
+                self.tracks.insert(dst, track);
+                self.track_history.push(TrackEdit::Remove(index));
+                self.track_history.push(TrackEdit::Insert(dst));
+                Edit::ShiftTrack(dst, -offset)
+            }
             Edit::RemapTrack(index, target) => {
                 let target = std::mem::replace(&mut self.tracks[index].target, target);
                 Edit::RemapTrack(index, target)
@@ -773,6 +783,7 @@ impl Position {
 pub enum Edit {
     InsertTrack(usize, Track),
     RemoveTrack(usize),
+    ShiftTrack(usize, isize),
     RemapTrack(usize, TrackTarget),
     AddChannel(usize, Channel),
     RemoveChannel(usize),

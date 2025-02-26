@@ -219,6 +219,8 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::None, KeyCode::Insert), Action::InsertRows),
         (Hotkey::new(Modifiers::None, KeyCode::Backspace), Action::DeleteRows),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::P), Action::PlaceEvenly),
+        (Hotkey::new(Modifiers::CtrlAlt, KeyCode::Left), Action::ShiftTrackLeft),
+        (Hotkey::new(Modifiers::CtrlAlt, KeyCode::Right), Action::ShiftTrackRight),
     ];
 
     if cfg!(target_os = "macos") {

@@ -643,6 +643,8 @@ pub enum Action {
     Panic,
     UseLastNote,
     Quit,
+    ShiftTrackLeft,
+    ShiftTrackRight,
 }
 
 impl Action {
@@ -717,6 +719,8 @@ impl Action {
             Self::Panic => "Panic",
             Self::UseLastNote => "Use last note",
             Self::Quit => "Quit",
+            Self::ShiftTrackLeft => "Shift track left",
+            Self::ShiftTrackRight => "Shift track right",
         }
     }
 }
