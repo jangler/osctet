@@ -833,9 +833,9 @@ impl PatternEditor {
         let scroll = self.scroll(ui);
         ui.cursor_z -= 1;
         let color = if track_boundary {
-            ui.style.theme.control_bg()
+            ui.style.theme.panel_bg_hover()
         } else {
-            ui.style.theme.panel_bg()
+            ui.style.theme.control_bg()
         };
         ui.push_line(ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll,
             ui.cursor_x + LINE_THICKNESS * 0.5, ui.cursor_y + scroll + ui.bounds.h,
