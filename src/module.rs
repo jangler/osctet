@@ -275,7 +275,7 @@ impl Module {
             Edit::InsertTrack(index, track) => {
                 self.tracks.insert(index, track);
                 self.track_history.push(TrackEdit::Insert(index));
-                Edit::RemoveTrack(self.tracks.len() - 1)
+                Edit::RemoveTrack(index)
             }
             Edit::RemoveTrack(index) => {
                 let track = self.tracks.remove(index);
