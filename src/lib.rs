@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use std::sync::Arc;
 
-use config::Config;
+use config::{Config, RenderFormat};
 use cpal::SampleRate;
 use fx::{FXSettings, GlobalFX};
 use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
@@ -555,12 +555,10 @@ impl App {
                     RenderUpdate::Progress(f) =>
                         self.ui.notify(format!("Rendering: {}%", (f * 100.0).round())),
                     RenderUpdate::Done(wav, path) => {
-                        let write_result = if self.config.render_bit_depth == Some(32) {
-                            wav.save_wav32(path)
-                        } else {
-                            wav.save_wav16(path)
+                        let write_result = match self.config.render_format {
+                            RenderFormat::Wav16 => wav.save_wav16(path),
+                            RenderFormat::Wav32 => wav.save_wav32(path),
                         };
-
                         match write_result {
                             Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
                             Err(e) => self.ui.report(format!("Writing WAV failed: {e}")),

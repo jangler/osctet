@@ -90,6 +90,7 @@ pub enum Info {
     LfoAudioRate,
     KeyjazzModulation,
     FollowCheckbox,
+    RenderFormat,
 }
 
 impl Default for Info {
@@ -122,6 +123,9 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::RenderFormat => text =
+"Format to use for audio renders. 16-bit uses integer
+encoding; 32-bit uses float encoding.".to_string(),
         Info::FollowCheckbox => {
             text = "Toggle whether the pattern view tracks the playhead.".to_string();
             actions.push(Action::ToggleFollow);

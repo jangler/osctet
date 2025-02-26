@@ -1,4 +1,4 @@
-use std::{collections::HashSet, error::Error, path::{Path, PathBuf}};
+use std::{collections::HashSet, error::Error, fmt, path::{Path, PathBuf}};
 
 use macroquad::input::KeyCode;
 use serde::{Deserialize, Serialize};
@@ -41,7 +41,8 @@ pub struct Config {
     pub smooth_playhead: bool,
     pub display_info: bool,
     pub desired_sample_rate: u32,
-    pub render_bit_depth: Option<u8>,
+    #[serde(default)]
+    pub render_format: RenderFormat,
 }
 
 impl Config {
@@ -127,7 +128,7 @@ impl Default for Config {
             smooth_playhead: false,
             display_info: true,
             desired_sample_rate: 48000,
-            render_bit_depth: Some(16),
+            render_format: RenderFormat::Wav16,
         }
     }
 }
@@ -232,4 +233,24 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
     }
 
     keys
+}
+
+#[derive(Default, Serialize, Deserialize, Clone, Copy)]
+pub enum RenderFormat {
+    #[default]
+    Wav16,
+    Wav32,
+}
+
+impl RenderFormat {
+    pub const VARIANTS: [Self; 2] = [Self::Wav16, Self::Wav32];
+}
+
+impl fmt::Display for RenderFormat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            Self::Wav16 => "16-bit",
+            Self::Wav32 => "32-bit",
+        })
+    }
 }
