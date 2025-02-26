@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::{mpsc::{self, Receiver}, Arc, Mutex}, thread};
+use std::{path::PathBuf, sync::{mpsc::{self, Sender}, Arc, Mutex}, thread};
 
 use fundsp::hacker32::*;
 use rtrb::Producer;
@@ -712,18 +712,19 @@ pub fn tick_interval(dtick: Timespan, tempo: f32) -> f64 {
     dtick.as_f64() / tempo as f64 * 60.0
 }
 
-/// Used to communicate between the render thread and main thread.
-pub enum RenderUpdate {
+/// Used to communicate between async threads and the main thread.
+pub enum StatusUpdate {
     Progress(f64),
     Done(Wave, PathBuf),
+    Autosave,
+    AutosaveError(String),
 }
 
 /// Renders module to PCM. Loops forever if module is missing End!
 /// If `track` is some, solo that track for rendering.
-pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
-) -> Receiver<RenderUpdate> {
-    let (tx, rx) = mpsc::channel();
-
+pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>,
+    tx: Sender<StatusUpdate>
+) {
     thread::spawn(move || {
         const SAMPLE_RATE: f64 = 44100.0;
         const BLOCK_SIZE: i32 = 64;
@@ -765,58 +766,56 @@ pub fn render(module: Arc<Module>, path: PathBuf, track: Option<usize>
             let progress = playtime / render_time;
             if progress - prev_progress >= 0.01 {
                 prev_progress = progress;
-                if let Err(e) = tx.send(RenderUpdate::Progress(progress)) {
+                if let Err(e) = tx.send(StatusUpdate::Progress(progress)) {
                     eprintln!("{e}");
                 }
             }
         }
 
-        if let Err(e) = tx.send(RenderUpdate::Done(wave, path)) {
+        if let Err(e) = tx.send(StatusUpdate::Done(wave, path)) {
             eprintln!("{e}");
         }
     });
-
-    rx
 }
 
 /// Renders each track to its own WAV file.
-pub fn render_tracks(module: Arc<Module>, path: PathBuf) -> Receiver<RenderUpdate> {
-    let (tx, rx) = mpsc::channel();
+pub fn render_tracks(module: Arc<Module>, path: PathBuf, final_tx: Sender<StatusUpdate>) {
     let track_range = 1..module.tracks.len();
     let progress = Arc::new(Mutex::new(
         track_range.clone().map(|_| 0.0).collect::<Vec<_>>()
     ));
 
     for i in track_range {
+        let (tx, rx) = mpsc::channel();
+        let final_tx = final_tx.clone();
         let path = path
             .with_file_name(format!("{}_{}",
                 path.file_stem().and_then(|s| s.to_str()).unwrap_or_default(), i))
             .with_extension("wav");
-        let track_rx = render(module.clone(), path, Some(i));
-        let tx = tx.clone();
+        render(module.clone(), path, Some(i), tx);
         let progress = progress.clone();
 
         thread::spawn(move || {
-            for msg in track_rx {
+            for msg in rx {
                 match msg {
-                    RenderUpdate::Progress(f) => {
+                    StatusUpdate::Progress(f) => {
                         let mut progress = progress.lock().unwrap();
                         progress[i - 1] = f;
                         let total_progress = progress.iter().sum::<f64>()
                             / progress.len() as f64;
-                        if let Err(e) = tx.send(RenderUpdate::Progress(total_progress)) {
+                        let update = StatusUpdate::Progress(total_progress);
+                        if let Err(e) = final_tx.send(update) {
                             eprintln!("{e}")
                         }
                     }
-                    RenderUpdate::Done(..) => if let Err(e) = tx.send(msg) {
+                    StatusUpdate::Done(..) => if let Err(e) = final_tx.send(msg) {
                         eprintln!("{e}")
                     }
+                    _ => panic!("unexpected update type in render thread"),
                 }
             }
         });
     }
-
-    rx
 }
 
 /// Calculates interpolated event data.

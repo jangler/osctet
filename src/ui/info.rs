@@ -91,6 +91,7 @@ pub enum Info {
     KeyjazzModulation,
     FollowCheckbox,
     RenderFormat,
+    Autosave,
 }
 
 impl Default for Info {
@@ -123,6 +124,10 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::Autosave => text =
+"Automatically save the working module to the
+program directory every 5 minutes if changes have
+been made.".to_string(),
         Info::RenderFormat => text =
 "Format to use for audio renders. 16-bit uses integer
 encoding; 32-bit uses float encoding.".to_string(),

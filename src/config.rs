@@ -15,14 +15,14 @@ fn config_path() -> PathBuf {
 
 fn default_font_size() -> usize { 1 }
 
-fn default_midi_send_velocity() -> bool { true }
+fn default_true() -> bool { true }
 
 /// Stores local configuration.
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub default_midi_input: Option<String>,
     pub midi_send_pressure: Option<bool>,
-    #[serde(default = "default_midi_send_velocity")]
+    #[serde(default = "default_true")]
     pub midi_send_velocity: bool,
     pub theme: Option<Theme>,
     pub module_folder: Option<String>,
@@ -43,6 +43,8 @@ pub struct Config {
     pub desired_sample_rate: u32,
     #[serde(default)]
     pub render_format: RenderFormat,
+    #[serde(default = "default_true")]
+    pub autosave: bool,
 }
 
 impl Config {
@@ -114,7 +116,7 @@ impl Default for Config {
         Self {
             default_midi_input: None,
             midi_send_pressure: Some(true),
-            midi_send_velocity: default_midi_send_velocity(),
+            midi_send_velocity: default_true(),
             theme: None,
             module_folder: None,
             patch_folder: None,
@@ -129,6 +131,7 @@ impl Default for Config {
             display_info: true,
             desired_sample_rate: 48000,
             render_format: RenderFormat::Wav16,
+            autosave: default_true(),
         }
     }
 }

@@ -1,8 +1,9 @@
-use std::env;
+use std::{env, thread};
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::mpsc::{channel, Sender, Receiver};
+use std::sync::mpsc::{self, channel, Receiver, Sender};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use config::{Config, RenderFormat};
 use cpal::SampleRate;
@@ -11,7 +12,7 @@ use midir::{InitError, MidiInput, MidiInputConnection, MidiInputPort};
 use fundsp::hacker32::*;
 use cpal::{traits::{DeviceTrait, HostTrait, StreamTrait}, StreamConfig};
 use module::{Edit, EventData, Module, ModuleCommand, ModuleSync, TrackTarget};
-use playback::{Player, PlayerShell, RenderUpdate};
+use playback::{Player, PlayerShell, StatusUpdate};
 use rfd::FileDialog;
 use rtrb::RingBuffer;
 use synth::{Key, KeyOrigin};
@@ -135,16 +136,20 @@ struct App {
     settings_state: SettingsState,
     dev_state: DevState,
     save_path: Option<PathBuf>,
-    render_channel: Option<Receiver<RenderUpdate>>,
+    update_tx: Sender<StatusUpdate>,
+    update_rx: Receiver<StatusUpdate>,
     version: String,
     player: PlayerShell,
     stereo_width: Shared,
     module: Module,
     module_sync: ModuleSync,
     keyjazz_modulation: f32,
+    last_autosave_time: Instant,
 }
 
 impl App {
+    const AUTOSAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
+
     fn new(global_fx: GlobalFX, config: Config, sample_rate: u32,
         audio_conf: Option<StreamConfig>, player: PlayerShell, stereo_width: Shared,
         module: Module, module_sync: ModuleSync
@@ -153,6 +158,7 @@ impl App {
         midi.port_selection = config.default_midi_input.clone();
         let mut module = module;
         module.sync = true;
+        let (update_tx, update_rx) = mpsc::channel();
         App {
             octave: 3,
             midi,
@@ -165,13 +171,15 @@ impl App {
             settings_state: SettingsState::new(sample_rate),
             dev_state: DevState::new(audio_conf),
             save_path: None,
-            render_channel: None,
+            update_tx,
+            update_rx,
             version: format!("v{PKG_VERSION}"),
             player,
             stereo_width,
             module,
             module_sync,
             keyjazz_modulation: 0.0,
+            last_autosave_time: Instant::now(),
         }
     }
 
@@ -484,6 +492,12 @@ impl App {
             }
         }
 
+        if self.config.autosave
+            && self.module.has_unsaved_changes
+            && self.last_autosave_time.elapsed() > Self::AUTOSAVE_INTERVAL {
+            self.autosave();
+        }
+
         if self.ui.accepting_keyboard_input() {
             self.player.clear_notes_with_origin(KeyOrigin::Keyboard);
         } else {
@@ -518,7 +532,7 @@ impl App {
 
         self.handle_midi();
 
-        self.handle_render_updates();
+        self.handle_async_updates();
         self.check_midi_reconnect();
         let quit = self.process_ui();
         self.sync_edits();
@@ -547,24 +561,25 @@ impl App {
         }
     }
 
-    /// Handle incoming render status updates.
-    fn handle_render_updates(&mut self) {
-        if let Some(rx) = &self.render_channel {
-            while let Ok(update) = rx.try_recv() {
-                match update {
-                    RenderUpdate::Progress(f) =>
-                        self.ui.notify(format!("Rendering: {}%", (f * 100.0).round())),
-                    RenderUpdate::Done(wav, path) => {
-                        let write_result = match self.config.render_format {
-                            RenderFormat::Wav16 => wav.save_wav16(path),
-                            RenderFormat::Wav32 => wav.save_wav32(path),
-                        };
-                        match write_result {
-                            Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
-                            Err(e) => self.ui.report(format!("Writing WAV failed: {e}")),
-                        }
+    /// Handle incoming async status updates.
+    fn handle_async_updates(&mut self) {
+        while let Ok(update) = self.update_rx.try_recv() {
+            match update {
+                StatusUpdate::Progress(f) =>
+                    self.ui.notify(format!("Rendering: {}%", (f * 100.0).round())),
+                StatusUpdate::Done(wav, path) => {
+                    let write_result = match self.config.render_format {
+                        RenderFormat::Wav16 => wav.save_wav16(path),
+                        RenderFormat::Wav32 => wav.save_wav32(path),
+                    };
+                    match write_result {
+                        Ok(_) => self.ui.notify(String::from("Wrote WAV.")),
+                        Err(e) => self.ui.report(format!("Writing WAV failed: {e}")),
                     }
                 }
+                StatusUpdate::Autosave => self.ui.notify(String::from("Autosaved module.")),
+                StatusUpdate::AutosaveError(e) =>
+                    self.ui.notify(format!("Autosave error: {e}")),
             }
         }
     }
@@ -676,11 +691,12 @@ impl App {
                 path.set_extension("wav");
                 self.config.render_folder = config::dir_as_string(&path);
                 let module = Arc::new(self.module.clone());
-                self.render_channel = Some(if tracks {
-                    playback::render_tracks(module, path)
+                let tx = self.update_tx.clone();
+                if tracks {
+                    playback::render_tracks(module, path, tx)
                 } else {
-                    playback::render(module, path, None)
-                });
+                    playback::render(module, path, None, tx)
+                };
             }
         } else {
             self.ui.report("Module must have End event to export")
@@ -720,6 +736,22 @@ impl App {
                 self.ui.notify(String::from("Saved module."));
             }
         }
+    }
+
+    /// Autosave in a separate thread.
+    fn autosave(&mut self) {
+        self.last_autosave_time = Instant::now();
+        let path = exe_relative_path(&format!("autosave.{}", MODULE_EXT));
+        let mut module = self.module.clone();
+        let tx = self.update_tx.clone();
+        let div = self.pattern_editor.beat_division;
+        thread::spawn(move || {
+            if let Err(e) = module.save(div, &path) {
+                tx.send(StatusUpdate::AutosaveError(e.to_string()))
+            } else {
+                tx.send(StatusUpdate::Autosave)
+            }
+        });
     }
 
     /// Handle the "open song" key command.
