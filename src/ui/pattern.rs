@@ -379,7 +379,7 @@ impl PatternEditor {
                 column: clip.end.column,
                 ..self.edit_start.add_channels(channel_offset, &module.tracks)
                     .unwrap_or(Position {
-                        track: module.tracks.len(),
+                        track: module.tracks.len() - 1,
                         channel: module.tracks.last().unwrap().channels.len() - 1,
                         tick: Timespan::ZERO,
                         column: 0,
