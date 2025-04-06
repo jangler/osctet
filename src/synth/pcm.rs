@@ -74,9 +74,11 @@ impl PcmData {
     pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
         let path = path.parent().and_then(|p| {
             fs::read_dir(p).ok().and_then(|entries| {
-                let entries: Vec<_> = entries.flatten()
+                let mut entries: Vec<_> = entries.flatten()
                     .filter(|e| Self::can_load_path(&e.path()))
                     .collect();
+                // on some platforms, entries are unsorted by default
+                entries.sort_by_key(|e| e.file_name());
                 entries.iter().position(|e| e.path() == *path).map(|i| {
                     let i = (i as isize + offset)
                         .rem_euclid(entries.len() as isize) as usize;
