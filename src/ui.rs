@@ -1674,6 +1674,10 @@ impl Ui {
     /// Focus the control with the given ID.
     pub fn focus(&mut self, id: &str) {
         self.pending_focus = Some(id.to_owned());
+
+        // on linux, focusing a text box using a keyboard shortcut can also
+        // input the shortcut character, so drain the character queue
+        while get_char_pressed().is_some() {};
     }
 
     fn set_focus(&mut self, focus: Focus) {
