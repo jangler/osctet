@@ -1102,7 +1102,7 @@ impl PatternEditor {
         }
 
         let note = module.tracks[cursor.track].channels[cursor.channel]
-            .prev_event(cursor.column, cursor.tick);
+            .prev_note(cursor.tick);
 
         if let Some(note) = note {
             module.insert_event(cursor.track, cursor.channel, Event {

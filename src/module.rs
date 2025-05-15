@@ -646,10 +646,10 @@ impl Channel {
         glide
     }
 
-    /// Returns the last event before `tick` in `column`.
-    pub fn prev_event(&self, column: u8, tick: Timespan) -> Option<&Event> {
+    /// Returns the last note event before `tick`.
+    pub fn prev_note(&self, tick: Timespan) -> Option<&Event> {
         self.events.iter()
-            .filter(|e| e.tick < tick && e.data.logical_column() == column)
+            .filter(|e| e.tick < tick && matches!(e.data, EventData::Pitch(_)))
             .last()
     }
 }
