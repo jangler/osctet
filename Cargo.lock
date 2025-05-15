@@ -1501,8 +1501,8 @@ dependencies = [
 
 [[package]]
 name = "macroquad"
-version = "0.4.13"
-source = "git+https://github.com/jangler/macroquad.git#a9865632daa2e73e21f6d0bf87fb60b18e47d5ea"
+version = "0.4.14"
+source = "git+https://github.com/jangler/macroquad.git#f0c29e7216c49f82237d6ad4ce7f5067c8cf7e77"
 dependencies = [
  "fontdue",
  "glam 0.27.0",
@@ -1515,7 +1515,7 @@ dependencies = [
 [[package]]
 name = "macroquad_macro"
 version = "0.1.8"
-source = "git+https://github.com/jangler/macroquad.git#a9865632daa2e73e21f6d0bf87fb60b18e47d5ea"
+source = "git+https://github.com/jangler/macroquad.git#f0c29e7216c49f82237d6ad4ce7f5067c8cf7e77"
 
 [[package]]
 name = "malloc_buf"
@@ -1592,13 +1592,12 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniquad"
-version = "0.4.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df742c016aff7c852d639e93a87846c098ca4c7d95b9da11e61b58423cd363d0"
+version = "0.4.8"
+source = "git+https://github.com/jangler/miniquad.git#52bdf3f4f7b3f4c91f2228d0057b818fa0dd29dc"
 dependencies = [
  "libc",
  "ndk-sys 0.2.2",
- "objc",
+ "objc-rs",
  "winapi",
 ]
 
@@ -1765,10 +1764,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "objc"
-version = "0.2.7"
+name = "objc-rs"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "915b1b472bc21c53464d6c8461c9d3af805ba1ef837e1cac254428f4a77177b1"
+checksum = "64a1e7069a2525126bf12a9f1f7916835fafade384fb27cabf698e745e2a1eb8"
 dependencies = [
  "malloc_buf",
 ]
