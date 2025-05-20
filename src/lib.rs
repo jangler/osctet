@@ -705,8 +705,7 @@ impl App {
 
     /// Handle the "new song" key command.
     fn new_module(&mut self) {
-        self.load_module(Module::new(Default::default()));
-        self.save_path = None;
+        self.load_module(Module::new(Default::default()), None);
     }
 
     /// Handle the "save song" key command.
@@ -759,10 +758,7 @@ impl App {
         if let Some(path) = self.module_dialog().pick_file() {
             self.config.module_folder = config::dir_as_string(&path);
             match Module::load(&path) {
-                Ok(new_module) => {
-                    self.load_module(new_module);
-                    self.save_path = Some(path);
-                },
+                Ok(new_module) => self.load_module(new_module, Some(path)),
                 Err(e) => self.ui.report(format!("Error loading module: {e}")),
             }
         }
@@ -777,7 +773,8 @@ impl App {
 
     /// Replace the current module with `module`, reinitializing state as
     /// needed.
-    fn load_module(&mut self, new_mod: Module) {
+    fn load_module(&mut self, new_mod: Module, save_path: Option<PathBuf>) {
+        self.save_path = save_path;
         self.module_sync.push(ModuleCommand::Load(new_mod.shared_clone()));
         self.module = new_mod;
         self.module.sync = true;
@@ -905,8 +902,9 @@ pub async fn run(arg: Option<String>) -> Result<(), Box<dyn Error>> {
     };
 
     if let Some(arg) = arg {
-        match Module::load(&arg.into()) {
-            Ok(m) => app.load_module(m),
+        let p = arg.into();
+        match Module::load(&p) {
+            Ok(m) => app.load_module(m, Some(p)),
             Err(e) => app.ui.report(format!("Error loading module: {e}")),
         }
     }
