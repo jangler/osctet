@@ -212,11 +212,11 @@ fn trim_wave(wave: &mut Wave) -> usize {
     let mut end = wave.len();
     let len = end;
 
-    while start < end && wave.at(0, start) < threshold {
+    while start < end && wave.at(0, start).abs() < threshold {
         start += 1;
     }
 
-    while end > start && wave.at(0, end - 1) < threshold {
+    while end > start && wave.at(0, end - 1).abs() < threshold {
         end -= 1;
     }
 
