@@ -138,7 +138,7 @@ fn patch_list(ui: &mut Ui, module: &mut Module, patch_index: &mut Option<usize>,
                 {
                     Patch::load(path)
                 } else {
-                    Patch::load_sample(path)
+                    Patch::load_sample(path, cfg.trim_samples)
                 };
                 match patch {
                     Ok(p) => {
@@ -331,10 +331,10 @@ fn generator_controls(ui: &mut Ui, patch: &mut Patch, cfg: &mut Config,
                 if let Some(data) = data {
                     if data.path.is_some() {
                         if ui.button("Prev", true, Info::PrevSample) {
-                            loaded_sample |= load_pcm_offset(data, -1, ui);
+                            loaded_sample |= load_pcm_offset(data, -1, ui, cfg.trim_samples);
                         }
                         if ui.button("Next", true, Info::NextSample) {
-                            loaded_sample |= load_pcm_offset(data, 1, ui);
+                            loaded_sample |= load_pcm_offset(data, 1, ui, cfg.trim_samples);
                         }
                     }
 
@@ -508,7 +508,7 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
 
     if let Some(path) = dialog.pick_file() {
         cfg.sample_folder = config::dir_as_string(&path);
-        match PcmData::load(path) {
+        match PcmData::load(path, cfg.trim_samples) {
             Ok(result) => {
                 *data = Some(result);
                 return true
@@ -522,9 +522,9 @@ fn load_pcm(data: &mut Option<PcmData>, ui: &mut Ui, cfg: &mut Config,
 
 /// Load the previous/next audio file from `data`'s directory. Returns true if
 /// successful.
-fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut Ui) -> bool {
+fn load_pcm_offset(data: &mut PcmData, offset: isize, ui: &mut Ui, trim: bool) -> bool {
     if let Some(path) = &data.path {
-        match PcmData::load_offset(path, offset) {
+        match PcmData::load_offset(path, offset, trim) {
             Ok(result) => {
                 *data = result;
                 if let Some(s) = data.path.as_ref()

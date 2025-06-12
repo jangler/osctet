@@ -116,6 +116,7 @@ fn io_controls(ui: &mut Ui, cfg: &mut Config, sample_rate: u32, midi: &mut Midi,
     }
 
     ui.checkbox("Autosave", &mut cfg.autosave, true, Info::Autosave);
+    ui.checkbox("Trim samples", &mut cfg.trim_samples, true, Info::TrimSamples);
 }
 
 fn appearance_controls(ui: &mut Ui, cfg: &mut Config, player: &mut PlayerShell) {

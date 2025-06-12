@@ -2,7 +2,7 @@
 
 use std::{error::Error, fs, ops::RangeInclusive, path::{Path, PathBuf}, sync::Arc};
 
-use fundsp::wave::Wave;
+use fundsp::{math::db_amp, wave::Wave};
 use memmem::{Searcher, TwoWaySearcher};
 use ordered_float::OrderedFloat;
 use pitch_detector::pitch::{HannedFftDetector, PitchDetector};
@@ -43,16 +43,23 @@ impl PcmData {
     }
 
     /// Load PCM from an audio file.
-    pub fn load(path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
+    pub fn load(path: impl AsRef<Path>, trim: bool) -> Result<Self, Box<dyn Error>> {
         let data = fs::read(&path)?;
         // TODO: it'd be great not to have to clone the whole wave
         let mut wave = Wave::load_slice(data.clone())?;
         wave.normalize();
 
+        let trim_offset = if trim {
+            trim_wave(&mut wave)
+        } else {
+            0
+        };
+
         let smpl = SmplData::from_wave(&data);
         let loop_point = smpl.as_ref().and_then(|smpl|
             smpl.sample_loops.first().map(|lp|
-                (*lp.start()).min(wave.len().saturating_sub(1))));
+                (*lp.start() - trim_offset)
+                .min(wave.len().saturating_sub(1))));
         let midi_pitch = smpl.as_ref().map(|smpl| smpl.midi_pitch);
         let filename = path.as_ref().file_name()
             .and_then(|s| s.to_str())
@@ -71,7 +78,7 @@ impl PcmData {
 
     /// Loads the audio file with position offset by `offset` in the file's
     /// directory.
-    pub fn load_offset(path: &PathBuf, offset: isize) -> Result<Self, Box<dyn Error>> {
+    pub fn load_offset(path: &PathBuf, offset: isize, trim: bool) -> Result<Self, Box<dyn Error>> {
         let path = path.parent().and_then(|p| {
             fs::read_dir(p).ok().and_then(|entries| {
                 let mut entries: Vec<_> = entries.flatten()
@@ -88,7 +95,7 @@ impl PcmData {
         });
 
         match path {
-            Some(path) => Self::load(path),
+            Some(path) => Self::load(path, trim),
             None => Err("could not find path".into()),
         }
     }
@@ -193,6 +200,29 @@ impl SmplData {
 fn read_u32(data: &[u8], offset: usize) -> Option<u32> {
     let bytes = data.get(offset..(offset + 4))?;
     Some(u32::from_le_bytes(bytes.try_into().ok()?))
+}
+
+/// Trim leading and trailing silence from the wave.
+/// Returns the total count of samples trimmed.
+fn trim_wave(wave: &mut Wave) -> usize {
+    // 80 dB is the difference between a loudish listening volume and the limit
+    // of perception, so we can consider anything below -80 dB to be silence
+    let threshold = db_amp(-80.0);
+    let mut start = 0;
+    let mut end = wave.len();
+    let len = end;
+
+    while start < end && wave.at(0, start) < threshold {
+        start += 1;
+    }
+
+    while end > start && wave.at(0, end - 1) < threshold {
+        end -= 1;
+    }
+
+    wave.retain(start as isize, end - start);
+
+    start + len - end
 }
 
 #[cfg(test)]

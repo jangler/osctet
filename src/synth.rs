@@ -581,8 +581,8 @@ impl Patch {
     }
 
     /// Create a new patch by loading a sample from disk.
-    pub fn load_sample(path: &Path) -> Result<Self, Box<dyn Error>> {
-        let data = PcmData::load(path)?;
+    pub fn load_sample(path: &Path, trim: bool) -> Result<Self, Box<dyn Error>> {
+        let data = PcmData::load(path, trim)?;
         let mut patch = Patch::new("Sample".into());
         patch.set_name_from_path(path);
         patch.oscs[0].waveform = Waveform::Pcm(Some(data));

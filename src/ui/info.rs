@@ -92,6 +92,7 @@ pub enum Info {
     FollowCheckbox,
     RenderFormat,
     Autosave,
+    TrimSamples,
 }
 
 impl Default for Info {
@@ -124,6 +125,9 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::TrimSamples => text =
+"Trim leading & trailing silence when loading PCM
+samples.".to_string(),
         Info::Autosave => text =
 "Automatically save the working module to the
 program directory every 5 minutes if changes have

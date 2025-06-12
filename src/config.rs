@@ -17,6 +17,8 @@ fn default_font_size() -> usize { 1 }
 
 fn default_true() -> bool { true }
 
+fn default_false() -> bool { false }
+
 /// Stores local configuration.
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -45,6 +47,8 @@ pub struct Config {
     pub render_format: RenderFormat,
     #[serde(default = "default_true")]
     pub autosave: bool,
+    #[serde(default = "default_false")]
+    pub trim_samples: bool,
 }
 
 impl Config {
@@ -132,6 +136,7 @@ impl Default for Config {
             desired_sample_rate: 48000,
             render_format: RenderFormat::Wav16,
             autosave: default_true(),
+            trim_samples: default_false(),
         }
     }
 }
