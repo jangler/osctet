@@ -856,8 +856,7 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
             EventData::Tempo(b) => {
                 let a = match prev {
                     Some(EventData::Tempo(a)) => *a,
-                    Some(EventData::RationalTempo(..)) => module.tempo_at(start),
-                    _ => DEFAULT_TEMPO,
+                    _ => module.tempo_at(start),
                 };
                 let m = tempo_ratio_between(start,
                     Timespan::approximate(time as f64), module);
@@ -866,8 +865,7 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
             EventData::RationalTempo(n, d) => {
                 let a = match prev {
                     Some(EventData::Tempo(a)) => *a,
-                    Some(EventData::RationalTempo(..)) => module.tempo_at(start),
-                    _ => DEFAULT_TEMPO,
+                    _ => module.tempo_at(start),
                 };
                 let b = a * n as f32 / d as f32;
                 let m = tempo_ratio_between(start,
