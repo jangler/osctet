@@ -818,6 +818,26 @@ pub fn render_tracks(module: Arc<Module>, path: PathBuf, final_tx: Sender<Status
     }
 }
 
+/// Calculates the total rational tempo change between 2 points.
+fn tempo_ratio_between(start: Timespan, end: Timespan, module: &Module) -> f32 {
+    let mut m = 1.0f32;
+
+    for chan in &module.tracks[0].channels {
+        for evt in &chan.events {
+            match evt.data {
+                EventData::RationalTempo(a, b) => {
+                    if evt.tick > start && evt.tick < end {
+                        m *= a as f32 / b as f32;
+                    }
+                }
+                _ => (),
+            }
+        }
+    }
+
+    m
+}
+
 /// Calculates interpolated event data.
 fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
     start: Timespan, time: f32, module: &Module
@@ -839,7 +859,9 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
                     Some(EventData::RationalTempo(..)) => module.tempo_at(start),
                     _ => DEFAULT_TEMPO,
                 };
-                Some(EventData::Tempo(lerp(a, b, t)))
+                let m = tempo_ratio_between(start,
+                    Timespan::approximate(time as f64), module);
+                Some(EventData::Tempo(lerp(a, b, t) * m))
             }
             EventData::RationalTempo(n, d) => {
                 let a = match prev {
@@ -848,7 +870,9 @@ fn interpolate_events(prev: Option<&EventData>, next: Option<&Event>,
                     _ => DEFAULT_TEMPO,
                 };
                 let b = a * n as f32 / d as f32;
-                Some(EventData::Tempo(lerp(a, b, t)))
+                let m = tempo_ratio_between(start,
+                    Timespan::approximate(time as f64), module);
+                Some(EventData::Tempo(lerp(a, b, t) * m))
             }
             EventData::Pressure(b) => {
                 let a = if let Some(EventData::Pressure(a)) = prev {
