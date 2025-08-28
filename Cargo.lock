@@ -1502,7 +1502,7 @@ dependencies = [
 [[package]]
 name = "macroquad"
 version = "0.4.14"
-source = "git+https://github.com/jangler/macroquad.git#f0c29e7216c49f82237d6ad4ce7f5067c8cf7e77"
+source = "git+https://github.com/jangler/macroquad.git#fe80b482d9e6bd136fac300244e8982b36775e1f"
 dependencies = [
  "fontdue",
  "glam 0.27.0",
@@ -1515,7 +1515,7 @@ dependencies = [
 [[package]]
 name = "macroquad_macro"
 version = "0.1.8"
-source = "git+https://github.com/jangler/macroquad.git#f0c29e7216c49f82237d6ad4ce7f5067c8cf7e77"
+source = "git+https://github.com/jangler/macroquad.git#fe80b482d9e6bd136fac300244e8982b36775e1f"
 
 [[package]]
 name = "malloc_buf"
@@ -1593,7 +1593,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "miniquad"
 version = "0.4.8"
-source = "git+https://github.com/jangler/miniquad.git#52bdf3f4f7b3f4c91f2228d0057b818fa0dd29dc"
+source = "git+https://github.com/jangler/miniquad.git#a7f5c962d59c2569abaa543788998c985c808e5e"
 dependencies = [
  "libc",
  "ndk-sys 0.2.2",
@@ -1928,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "osctet"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "bdf-reader",
  "cpal",
