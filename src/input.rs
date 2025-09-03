@@ -645,6 +645,7 @@ pub enum Action {
     Quit,
     ShiftTrackLeft,
     ShiftTrackRight,
+    FocusEditStep,
 }
 
 impl Action {
@@ -721,6 +722,7 @@ impl Action {
             Self::Quit => "Quit",
             Self::ShiftTrackLeft => "Shift track left",
             Self::ShiftTrackRight => "Shift track right",
+            Self::FocusEditStep => "Focus step",
         }
     }
 }

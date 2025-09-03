@@ -486,6 +486,7 @@ track channels.".to_string(),
             Action::PrevTab => text = "View the previous UI tab.".to_string(),
             Action::UnmuteAllTracks => text = "Unmute all muted tracks.".to_string(),
             Action::Quit => text = "Close the program.".to_string(),
+            Action::FocusEditStep => text = "Focus the step field.".to_string(),
         }
         Info::GlobalTrack =>
             text = "Holds control events like tempo, loop, and end.".to_string(),

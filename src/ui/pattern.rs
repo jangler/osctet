@@ -271,7 +271,7 @@ impl PatternEditor {
 
     /// Handles a pattern-editor-specific action.
     pub fn action(&mut self, action: Action, module: &mut Module, cfg: &Config,
-        player: &mut PlayerShell
+        player: &mut PlayerShell, ui: &mut Ui
     ) {
         match action {
             Action::Cut => self.cut(module),
@@ -345,6 +345,8 @@ impl PatternEditor {
             Action::UseLastNote => self.use_last_note(module),
             Action::ShiftTrackLeft => self.shift_track(-1, module, player),
             Action::ShiftTrackRight => self.shift_track(1, module, player),
+            Action::FocusDivision => ui.focus("Division"),
+            Action::FocusEditStep => ui.focus("Step"),
             _ => (),
         }
 
@@ -1312,7 +1314,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut PlayerShell,
             pe.enter_ctrl_text(s, module, ui);
         }
         if let Some(action) = action {
-            pe.action(*action, module, conf, player);
+            pe.action(*action, module, conf, player, ui);
         }
     }
 

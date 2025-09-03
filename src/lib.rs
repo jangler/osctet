@@ -232,7 +232,6 @@ impl App {
                     Action::DecrementDivision => self.pattern_editor.dec_division(),
                     Action::DoubleDivision => self.pattern_editor.double_division(),
                     Action::HalveDivision => self.pattern_editor.halve_division(),
-                    Action::FocusDivision => self.ui.focus("Division"),
                     Action::IncrementOctave =>
                         self.octave = self.octave.saturating_add(1),
                     Action::DecrementOctave =>
@@ -278,7 +277,7 @@ impl App {
                     Action::Panic => self.player.panic(),
                     _ => if self.ui.get_tab(MAIN_TAB_ID) == Some(TAB_PATTERN) {
                         self.pattern_editor.action(*action, &mut self.module, &self.config,
-                            &mut self.player);
+                            &mut self.player, &mut self.ui);
                     },
                 }
             } else if let Some(action) = self.config.hotkey_action(&hk.without_shift()) {
@@ -290,8 +289,8 @@ impl App {
                         | Action::NextEvent | Action::PrevEvent
                         | Action::PatternStart | Action::PatternEnd
                         | Action::Delete | Action::NoteOff =>
-                            self.pattern_editor.action(
-                                *action, &mut self.module, &self.config, &mut self.player),
+                            self.pattern_editor.action(*action, &mut self.module,
+                                &self.config, &mut self.player, &mut self.ui),
                     _ => (),
                 }
             }

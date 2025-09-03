@@ -170,6 +170,7 @@ fn default_keys() -> Vec<(Hotkey, Action)> {
         (Hotkey::new(Modifiers::Shift, KeyCode::Key9), Action::DecrementOctave),
         (Hotkey::new(Modifiers::Shift, KeyCode::Key0), Action::IncrementOctave),
         (Hotkey::new(Modifiers::Ctrl, KeyCode::D), Action::FocusDivision),
+        (Hotkey::new(Modifiers::Alt, KeyCode::S), Action::FocusEditStep),
 
         // pattern nav
         (Hotkey::new(Modifiers::None, KeyCode::Up), Action::PrevRow),
