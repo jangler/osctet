@@ -1114,7 +1114,7 @@ impl PatternEditor {
     }
 
     /// Handle the "use last note" key command.
-    fn use_last_note(&self, module: &mut Module) {
+    fn use_last_note(&mut self, module: &mut Module) {
         let cursor = self.edit_start;
 
         if cursor.track == 0 || cursor.column != NOTE_COLUMN {
@@ -1129,6 +1129,7 @@ impl PatternEditor {
                 tick: cursor.tick,
                 data: note.data.clone(),
             });
+            self.translate_cursor(self.step_timespan());
         }
     }
 
