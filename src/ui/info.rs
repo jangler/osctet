@@ -126,8 +126,10 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
-        Info::EditStep => text =
-"How many rows to move after pattern input.".to_string(),
+        Info::EditStep => {
+            text = "How many rows to move after pattern input.".to_string();
+            actions.push(Action::FocusEditStep);
+        },
         Info::TrimSamples => text =
 "Trim leading & trailing silence when loading PCM
 samples.".to_string(),
@@ -223,7 +225,7 @@ Ctrl+Scroll - Inc/dec division
 Ctrl+Alt+Scroll - Double/halve division".to_string();
             custom_actions = true;
             actions = vec![Action::IncrementDivision, Action::DecrementDivision,
-                Action::HalveDivision, Action::DoubleDivision];
+                Action::HalveDivision, Action::DoubleDivision, Action::FocusDivision];
         },
         Info::Octave => {
             text = "Current octave for note input.".to_string();
