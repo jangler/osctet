@@ -661,6 +661,15 @@ impl App {
 
                 self.ui.checkbox("Follow", &mut self.pattern_editor.follow, true,
                     Info::FollowCheckbox);
+
+                if let Some(n) = self.ui.edit_box("Step", 3,
+                    self.pattern_editor.edit_step.to_string(), Info::EditStep
+                ) {
+                    match n.parse::<u8>() {
+                        Ok(n) => self.pattern_editor.edit_step = n,
+                        Err(e) => self.ui.report(e),
+                    }
+                }
             }
             _ => {
                 const MAX: f32 = EventData::DIGIT_MAX as f32;

@@ -32,6 +32,7 @@ pub struct PatternEditor {
     edit_start: Position,
     edit_end: Position,
     pub beat_division: u8,
+    pub edit_step: u8,
     beat_scroll: Timespan,
     h_scroll: f32,
     tap_tempo_intervals: Vec<f32>,
@@ -80,6 +81,7 @@ impl Default for PatternEditor {
             edit_start: edit_cursor,
             edit_end: edit_cursor,
             beat_division: 4,
+            edit_step: 0,
             beat_scroll: Timespan::ZERO,
             h_scroll: 0.0,
             tap_tempo_intervals: Vec::new(),
@@ -282,8 +284,10 @@ impl PatternEditor {
                 self.paste(module, PasteMode::Normal);
             },
             Action::StretchPaste => self.paste(module, PasteMode::Stretch),
-            Action::PrevRow => self.translate_cursor(-self.row_timespan()),
-            Action::NextRow => self.translate_cursor(self.row_timespan()),
+            Action::PrevRow => self.translate_cursor(
+                -self.step_timespan().max(self.row_timespan())),
+            Action::NextRow => self.translate_cursor(
+                self.step_timespan().max(self.row_timespan())),
             Action::PrevColumn => shift_column_left(
                 &mut self.edit_start, &mut self.edit_end, &module.tracks),
             Action::NextColumn => shift_column_right(
@@ -301,10 +305,8 @@ impl PatternEditor {
                 }
             },
             Action::NoteOff => self.input_note_off(module, is_shift_down()),
-            Action::End =>
-                insert_event_at_cursor(module, &self.edit_start, EventData::End, false),
-            Action::Loop =>
-                insert_event_at_cursor(module, &self.edit_start, EventData::Loop, false),
+            Action::End => self.input_and_step(module, EventData::End, false),
+            Action::Loop => self.input_and_step(module, EventData::Loop, false),
             Action::TapTempo => self.tap_tempo(module),
             Action::InsertRows => self.push_rows(module),
             Action::DeleteRows => self.pull_rows(module),
@@ -349,6 +351,21 @@ impl PatternEditor {
         if action != Action::TapTempo {
             self.clear_tap_tempo_state();
         }
+    }
+
+    fn input_and_step(&mut self, module: &mut Module, data: EventData, all_channels: bool) {
+        if insert_event_at_cursor(module, &self.edit_start, data, all_channels) {
+            self.translate_cursor(self.step_timespan());
+
+            // in this case, autostep creates a selection we don't want
+            if all_channels && self.edit_step > 0 {
+                self.edit_start = self.edit_end;
+            }
+        }
+    }
+
+    fn step_timespan(&self) -> Timespan {
+        self.row_timespan() * Timespan::new(self.edit_step.into(), 1)
     }
 
     fn shift_track(&mut self, offset: isize,
@@ -702,10 +719,10 @@ impl PatternEditor {
             };
 
             match self.edit_start.column {
-                VEL_COLUMN => insert_event_at_cursor(module, &self.edit_start,
-                    EventData::Pressure(value), is_shift_down()),
-                MOD_COLUMN => insert_event_at_cursor(module, &self.edit_start,
-                    EventData::Modulation(value), is_shift_down()),
+                VEL_COLUMN => self.input_and_step(
+                    module, EventData::Pressure(value), is_shift_down()),
+                MOD_COLUMN => self.input_and_step(
+                    module, EventData::Modulation(value), is_shift_down()),
                 GLOBAL_COLUMN => if self.edit_start.track == 0 && value < 10 {
                     self.text_position = Some(self.edit_start);
                     ui.focus_text(CTRL_COLUMN_TEXT_ID.into(), value.to_string());
@@ -959,11 +976,11 @@ impl PatternEditor {
     }
 
     /// Handle the "note off" key command.
-    fn input_note_off(&self, module: &mut Module, all_channels: bool) {
+    fn input_note_off(&mut self, module: &mut Module, all_channels: bool) {
         let (start, end) = self.selection_corners();
 
         if start == end && start.column == NOTE_COLUMN {
-            insert_event_at_cursor(module, &start, EventData::NoteOff, all_channels);
+            self.input_and_step(module, EventData::NoteOff, all_channels);
         } else {
             let (start_tuple, end_tuple) = (start.x_tuple(), end.x_tuple());
             let mut add = Vec::new();
@@ -988,6 +1005,7 @@ impl PatternEditor {
                 remove: add.iter().map(|e| e.position()).collect(),
                 add,
             });
+            self.translate_cursor(self.step_timespan());
         }
     }
 
@@ -1172,7 +1190,7 @@ pub fn draw(ui: &mut Ui, module: &mut Module, player: &mut PlayerShell,
         while let Some((_, data)) = ui.note_queue.pop() {
             match data {
                 EventData::NoteOff => (),
-                _ => insert_event_at_cursor(module, &cursor, data, false),
+                _ => pe.input_and_step(module, data, false),
             }
         }
     }
@@ -1416,19 +1434,20 @@ fn nudge_notes(module: &mut Module, (start, end): (Position, Position), cfg: &Co
     module.push_edit(Edit::ReplaceEvents(replacements));
 }
 
+/// Returns true if an event was inserted.
 fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventData,
     all_channels: bool
-) {
+) -> bool {
     // only write control data in control columns
     if !data.goes_in_track(cursor.track) {
-        return
+        return false
     }
 
     // midi pitch bend can only overwrite midi pitch bend
     if matches!(data, EventData::Bend(_))
         && !matches!(module.event_at(cursor).map(|e| &e.data),
             Some(EventData::Bend(_)) | None) {
-        return
+        return false
     }
 
     let n = module.tracks[cursor.track].channels.len();
@@ -1451,6 +1470,8 @@ fn insert_event_at_cursor(module: &mut Module, cursor: &Position, data: EventDat
             data,
         });
     }
+
+    return true
 }
 
 /// Returns the UI display string for a track.

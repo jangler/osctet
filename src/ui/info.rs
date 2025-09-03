@@ -93,6 +93,7 @@ pub enum Info {
     RenderFormat,
     Autosave,
     TrimSamples,
+    EditStep,
 }
 
 impl Default for Info {
@@ -125,6 +126,8 @@ pub fn text(info: &Info, ctrl: &ControlInfo, conf: &Config) -> String {
     // keep max line width around 50 chars
     match info {
         Info::None => (),
+        Info::EditStep => text =
+"How many rows to move after pattern input.".to_string(),
         Info::TrimSamples => text =
 "Trim leading & trailing silence when loading PCM
 samples.".to_string(),
