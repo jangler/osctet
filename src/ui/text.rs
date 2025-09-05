@@ -107,6 +107,11 @@ impl GlyphAtlas {
         let mut x = initial_x;
 
         for char in text.chars() {
+            let char = if self.map.contains_key(&char) {
+                char
+            } else {
+                '?'
+            };
             if let Some(texture) = self.map.get(&char) {
                 if let Some(glyph) = self.font.glyph(char) {
                     let bbox = glyph.bounding_box();

@@ -106,7 +106,11 @@ impl TextEditState {
                 s
             }
         };
-        self.text.insert_str(self.cursor, s);
+        let index = self.text.char_indices()
+            .nth(self.cursor)
+            .map(|(i, _)| i)
+            .unwrap_or(self.text.len());
+        self.text.insert_str(index, s);
         self.cursor += s.chars().count();
         self.anchor = self.cursor;
     }
